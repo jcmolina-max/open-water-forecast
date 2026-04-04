@@ -160,8 +160,8 @@ export default function App() {
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. 
       Indica claramente si es seguro meterse a nadar hoy y a qué debe prestar atención (corrientes, picado, etc). Usa un tono cercano.`;
 
-      // CORRECCIÓN FINAL: Usamos "gemini-pro", el modelo universal desbloqueado en todas las cuentas
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+      // CORRECCIÓN: Usamos la versión v1 (estable) y el modelo gemini-1.5-flash
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -174,13 +174,21 @@ export default function App() {
       }
 
       const result = await response.json();
-      
-      console.log("Respuesta cruda de Gemini:", result);
+
+      // CÓDIGO DETECTIVE: Si Google da error, le pedimos la lista de modelos permitidos
+      if (!response.ok) {
+         try {
+             const checkModels = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
+             const modelsList = await checkModels.json();
+             console.log("👉 MODELOS PERMITIDOS EN TU CUENTA:", modelsList);
+         } catch (e) {
+             console.log("No se pudo obtener la lista de modelos.");
+         }
+         throw new Error(result.error?.message || "Error interno de la API de Google");
+      }
 
       if (result.candidates && result.candidates[0] && result.candidates[0].content) {
         setExpertAdvice(result.candidates[0].content.parts[0].text);
-      } else if (result.error) {
-        throw new Error(result.error.message || "Error interno de la API de Google");
       } else {
         throw new Error("El formato de respuesta de la IA no es el esperado");
       }
@@ -188,7 +196,7 @@ export default function App() {
       if (err.message.includes("Límite de peticiones")) {
           setExpertAdvice("El socorrista virtual está saturado de peticiones en este momento. Por favor, espera un minuto y recarga la página.");
       } else {
-          setExpertAdvice(`Error del experto: ${err.message}. Revisa la consola (F12) para detalles.`);
+          setExpertAdvice(`Error del experto: ${err.message}. Abre la consola (F12) para ver la lista de modelos compatibles.`);
       }
       console.error("Detalle completo del error:", err);
     } finally {
