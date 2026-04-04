@@ -175,9 +175,12 @@ export default function App() {
       } else {
         throw new Error("Respuesta inválida de la IA");
       }
+    // ... código anterior ...
     } catch (err) {
-      setExpertAdvice("No se ha podido contactar con el experto en este momento. Revisa la configuración de tu API Key o inténtalo más tarde.");
+      setExpertAdvice(`Error de conexión con Google: ${err.message}. Comprueba la consola del navegador para más detalles.`);
+      console.error("Detalle completo del error:", err);
     } finally {
+// ... código posterior ...
       setIsAiLoading(false);
     }
   };
