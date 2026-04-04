@@ -88,8 +88,12 @@ export default function App() {
           hourScore = Math.max(0, Math.min(100, hourScore));
           totalScore += hourScore;
 
+          // --- CORRECCIÓN DE LA HORA ---
+          const displayHour = i % 24; // Esto hace que 24 se convierta en 0, 25 en 1, etc.
+          const formattedTime = `${displayHour.toString().padStart(2, '0')}:00`;
+
           translatedHourlyData.push({
-            time: `${i.toString().padStart(2, '0')}:00`,
+            time: formattedTime,
             swellH: waveHeight.toFixed(2),
             period: period.toFixed(1),
             windS: windKnots,
@@ -156,7 +160,6 @@ export default function App() {
 
       const result = await response.json();
 
-      // HEMOS QUITADO EL FILTRO: Ahora si falla, te mostrará la VERDADERA razón de Google
       if (!response.ok) {
          console.error("GOOGLE API ERROR:", result);
          throw new Error(result.error?.message || `Error ${response.status} de la API de Google`);
@@ -168,7 +171,6 @@ export default function App() {
         throw new Error("La IA no devolvió el formato esperado.");
       }
     } catch (err) {
-      // Mostramos el error tal cual lo manda Google
       setExpertAdvice(`Error de Google: ${err.message}`);
       console.error("Detalle completo:", err);
     } finally {
