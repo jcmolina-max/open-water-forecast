@@ -62,7 +62,6 @@ export default function App() {
           const windKnots = Math.round(windKmh / 1.852);
           const gustKnots = Math.round((weatherJson.hourly.wind_gusts_10m[i] || 0) / 1.852);
           
-          // --- CÁLCULOS: ENERGÍA Y RESACA ---
           const waveEnergy = Math.round(Math.pow(waveHeight, 2) * period * 100);
           
           let ripRisk = "Nulo";
@@ -78,19 +77,15 @@ export default function App() {
             ripColor = "text-blue-600 font-medium";
           }
 
-          // --- NUEVO ALGORITMO DE SEGURIDAD PARA NADADORES ---
           let hourScore = 100;
           
           if (waveHeight > 0.2) hourScore -= (waveHeight * 20);
           if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25);
-          
           if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
-          
           if (period < 4.5 && waveHeight > 0.3) hourScore -= 15;
           if (period < 3.5 && waveHeight > 0.4) hourScore -= 25;
 
           hourScore = Math.max(0, Math.min(100, hourScore));
-          
           totalScore += hourScore;
 
           translatedHourlyData.push({
@@ -114,10 +109,7 @@ export default function App() {
         const unifiedData = {
           name: beach.name,
           score: avgScore,
-          temps: { 
-            air: Math.round(weatherJson.hourly.temperature_2m[currentHour]), 
-            water: 15
-          },
+          temps: { air: Math.round(weatherJson.hourly.temperature_2m[currentHour]), water: 15 },
           hourly: translatedHourlyData
         };
 
@@ -141,10 +133,8 @@ export default function App() {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     
     if (!apiKey || apiKey === "") {
-        setTimeout(() => {
-            setExpertAdvice("Todo subido correctamente. Vercel necesita que hagas un Redeploy para inyectar la variable VITE_GEMINI_API_KEY.");
-            setIsAiLoading(false);
-        }, 1000);
+        setExpertAdvice("Falta la API Key de Gemini en Vercel.");
+        setIsAiLoading(false);
         return;
     }
 
@@ -156,7 +146,6 @@ export default function App() {
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. 
       Indica claramente si es seguro meterse a nadar hoy y a qué debe prestar atención (corrientes, picado, etc). Usa un tono cercano.`;
 
-      // 🏆 SOLUCIÓN FINAL: Usamos exactamente el modelo que tu cuenta nos ha dicho que permite.
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -165,38 +154,23 @@ export default function App() {
         })
       });
 
-      if (response.status === 429) {
-          throw new Error("Límite de peticiones alcanzado (Too Many Requests)");
-      }
-
       const result = await response.json();
 
+      // HEMOS QUITADO EL FILTRO: Ahora si falla, te mostrará la VERDADERA razón de Google
       if (!response.ok) {
-         try {
-             const checkModels = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-             const modelsList = await checkModels.json();
-             if (modelsList.models) {
-                 const available = modelsList.models.map(m => m.name.replace('models/', '')).join(', ');
-                 console.log("👉 MODELOS PERMITIDOS EXACTOS:", available);
-             }
-         } catch (e) {
-             console.log("No se pudo obtener la lista de modelos.");
-         }
-         throw new Error(result.error?.message || "Error interno de la API de Google");
+         console.error("GOOGLE API ERROR:", result);
+         throw new Error(result.error?.message || `Error ${response.status} de la API de Google`);
       }
 
       if (result.candidates && result.candidates[0] && result.candidates[0].content) {
         setExpertAdvice(result.candidates[0].content.parts[0].text);
       } else {
-        throw new Error("El formato de respuesta de la IA no es el esperado");
+        throw new Error("La IA no devolvió el formato esperado.");
       }
     } catch (err) {
-      if (err.message.includes("Límite de peticiones")) {
-          setExpertAdvice("El socorrista virtual está saturado de peticiones en este momento. Por favor, espera un minuto y recarga la página.");
-      } else {
-          setExpertAdvice(`Error del experto: ${err.message}. Revisa la consola (F12).`);
-      }
-      console.error("Detalle completo del error:", err);
+      // Mostramos el error tal cual lo manda Google
+      setExpertAdvice(`Error de Google: ${err.message}`);
+      console.error("Detalle completo:", err);
     } finally {
       setIsAiLoading(false);
     }
@@ -259,10 +233,9 @@ export default function App() {
         ) : beachData && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            {/* PANEL IZQUIERDO (Información General) */}
+            {/* PANEL IZQUIERDO */}
             <div className="lg:col-span-4 space-y-6">
               
-              {/* Tarjeta 1: Score de Seguridad */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
                 <h2 className="text-slate-500 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
                   <Activity size={18} className="text-blue-500"/> Seguridad Media (12h)
@@ -285,10 +258,8 @@ export default function App() {
                 <p className={`mt-5 font-black text-lg ${beachData.score > 70 ? 'text-emerald-600' : beachData.score > 40 ? 'text-amber-600' : 'text-red-600'}`}>
                   {beachData.score > 70 ? 'Nado Seguro' : beachData.score > 40 ? 'Precaución: Mar Agitado' : 'No Recomendado Nadar'}
                 </p>
-                <p className="text-xs text-slate-400 mt-2 font-medium">Algoritmo propio: Penaliza oleaje picado y vientos fuertes.</p>
               </div>
 
-              {/* Tarjeta 2: Temperaturas */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Thermometer size={24}/></div>
@@ -307,7 +278,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Tarjeta 3: Consejo del Socorrista Virtual */}
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-5">
                   <Bot size={80} />
@@ -330,7 +300,7 @@ export default function App() {
 
             </div>
 
-            {/* PANEL DERECHO: Tabla de previsiones por hora */}
+            {/* PANEL DERECHO */}
             <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                 <h3 className="font-bold text-slate-800 text-lg">Evolución del mar (Próximas 12h)</h3>
@@ -349,8 +319,7 @@ export default function App() {
                       <th className="px-5 py-4 font-bold text-center">Energía</th>
                       <th className="px-5 py-4 font-bold text-center">Resaca</th>
                       <th className="px-5 py-4 font-bold">Viento (Nudos)</th>
-                      <th className="px-5 py-4 font-bold text-center">Dirección</th>
-                      <th className="px-5 py-4 font-bold text-center">UV</th>
+                      <th className="px-5 py-4 font-bold text-center">Dir.</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm">
@@ -376,18 +345,15 @@ export default function App() {
                               {hour.swellH}m
                             </span>
                             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                              Periodo: {hour.period}s
+                              P: {hour.period}s
                             </span>
                           </div>
                         </td>
 
                         <td className="px-5 py-4 text-center">
-                          <div className="flex flex-col items-center justify-center">
-                            <span className={`font-black text-base ${hour.waveEnergy > 50 ? 'text-orange-500' : 'text-slate-700'}`}>
-                              {hour.waveEnergy}
-                            </span>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">Kj</span>
-                          </div>
+                          <span className={`font-black text-base ${hour.waveEnergy > 50 ? 'text-orange-500' : 'text-slate-700'}`}>
+                            {hour.waveEnergy}
+                          </span>
                         </td>
 
                         <td className="px-5 py-4 text-center">
@@ -401,23 +367,12 @@ export default function App() {
                             <span className={`font-black text-base ${hour.windS > 15 ? 'text-amber-500' : 'text-slate-700'}`}>
                               {hour.windS} kts
                             </span>
-                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                              Ráfagas: {hour.gust}
-                            </span>
                           </div>
                         </td>
 
                         <td className="px-5 py-4 text-center">
-                          <div className="inline-flex items-center justify-center bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 group-hover:bg-white transition-colors">
-                            <span className="font-bold text-slate-700 text-xs flex items-center gap-1">
-                              {getWindDirection(hour.windDir)}
-                            </span>
-                          </div>
-                        </td>
-
-                        <td className="px-5 py-4 text-center">
-                          <span className={`font-black ${hour.uv > 5 ? 'text-orange-500' : 'text-slate-400'}`}>
-                            {hour.uv}
+                          <span className="font-bold text-slate-700 text-xs">
+                            {getWindDirection(hour.windDir)}
                           </span>
                         </td>
 
