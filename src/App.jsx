@@ -62,11 +62,9 @@ export default function App() {
           const windKnots = Math.round(windKmh / 1.852);
           const gustKnots = Math.round((weatherJson.hourly.wind_gusts_10m[i] || 0) / 1.852);
           
-          // --- CÁLCULOS AÑADIDOS: ENERGÍA Y RESACA ---
-          // 1. Cálculo de Energía (Kj): Fórmula basada en Altura al cuadrado * Periodo
+          // --- CÁLCULOS: ENERGÍA Y RESACA ---
           const waveEnergy = Math.round(Math.pow(waveHeight, 2) * period * 100);
           
-          // 2. Cálculo de Riesgo de Resaca: Basado en tamaño de ola y periodo
           let ripRisk = "Nulo";
           let ripColor = "text-slate-400";
           if (waveHeight >= 1.0 || (waveHeight >= 0.8 && period > 6)) {
@@ -79,12 +77,22 @@ export default function App() {
             ripRisk = "Bajo";
             ripColor = "text-blue-600 font-medium";
           }
-          // ------------------------------------------
 
-          // Fórmula de seguridad para nadadores
-          let hourScore = 100 - (waveHeight * 40) - (windKnots * 1.5);
-          if (period < 4) hourScore -= 10;
-          hourScore = Math.max(0, Math.min(100, hourScore));
+          // --- NUEVO ALGORITMO DE SEGURIDAD PARA NADADORES ---
+          let hourScore = 100;
+          
+          // Castigo por altura de ola (Exponencial: a partir de 0.6m penaliza mucho)
+          if (waveHeight > 0.2) hourScore -= (waveHeight * 20);
+          if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25);
+          
+          // Castigo por viento
+          if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
+          
+          // Castigo por "Choppy" (Periodo corto + ola)
+          if (period < 4.5 && waveHeight > 0.3) hourScore -= 15;
+          if (period < 3.5 && waveHeight > 0.4) hourScore -= 25; // Muy incómodo para nadar
+
+          hourScore = Math.max(0, Math.min(100, hourScore)); // Mantener entre 0 y 100
           
           totalScore += hourScore;
 
@@ -111,7 +119,7 @@ export default function App() {
           score: avgScore,
           temps: { 
             air: Math.round(weatherJson.hourly.temperature_2m[currentHour]), 
-            water: 15 // Temperatura fija temporal
+            water: 15 // Temperatura fija temporal (requiere API premium para datos reales del mar)
           },
           hourly: translatedHourlyData
         };
@@ -132,13 +140,15 @@ export default function App() {
 
   const fetchExpertAdvice = async (data) => {
     setIsAiLoading(true);
-    // IMPORTANTE: Recuerda usar Variables de Entorno en Vercel (ej: import.meta.env.VITE_GEMINI_KEY)
-    // No pegues tu API Key real aquí si el código es público.
-    const apiKey = "";
     
-    if (!apiKey && typeof apiKey === 'string') {
+    // --- SEGURIDAD: LECTURA DE LA VARIABLE DE ENTORNO ---
+    // En Vercel (usando Vite), leerá la clave configurada en el panel.
+    // Si estás en desarrollo local, leerá de tu archivo .env
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    
+    if (!apiKey || apiKey === "") {
         setTimeout(() => {
-            setExpertAdvice("El experto está descansando o falta la API Key. Añade la llave en tu servidor para generar predicciones con IA.");
+            setExpertAdvice("El experto está descansando. Configura la variable VITE_GEMINI_API_KEY en Vercel para activar el análisis por IA.");
             setIsAiLoading(false);
         }, 1000);
         return;
@@ -147,10 +157,10 @@ export default function App() {
     try {
       const prompt = `Eres un experto nadador de aguas abiertas y socorrista en Málaga. 
       Analiza los siguientes datos de hoy para la playa ${data.name}:
-      Puntuación de seguridad: ${data.score}/100.
+      Puntuación de seguridad para nadadores: ${data.score}/100.
       Olas medias: ${data.hourly[0].swellH}m. Viento: ${data.hourly[0].windS} nudos.
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. 
-      Indica si es seguro nadar y a qué debe prestar atención (corrientes, picado, etc). Usa un tono cercano.`;
+      Indica claramente si es seguro meterse a nadar hoy y a qué debe prestar atención (corrientes, picado, etc). Usa un tono cercano.`;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
         method: 'POST',
@@ -167,7 +177,7 @@ export default function App() {
         throw new Error("Respuesta inválida de la IA");
       }
     } catch (err) {
-      setExpertAdvice("No se ha podido contactar con el experto en este momento. Revisa tu conexión o inténtalo más tarde.");
+      setExpertAdvice("No se ha podido contactar con el experto en este momento. Revisa la configuración de tu API Key o inténtalo más tarde.");
     } finally {
       setIsAiLoading(false);
     }
@@ -256,9 +266,10 @@ export default function App() {
                 <p className={`mt-5 font-black text-lg ${beachData.score > 70 ? 'text-emerald-600' : beachData.score > 40 ? 'text-amber-600' : 'text-red-600'}`}>
                   {beachData.score > 70 ? 'Nado Seguro' : beachData.score > 40 ? 'Precaución: Mar Agitado' : 'No Recomendado Nadar'}
                 </p>
+                <p className="text-xs text-slate-400 mt-2 font-medium">Algoritmo propio: Penaliza oleaje picado y vientos fuertes.</p>
               </div>
 
-              {/* Tarjeta 2: Temperaturas (Recuperado del diseño original) */}
+              {/* Tarjeta 2: Temperaturas */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Thermometer size={24}/></div>
@@ -332,7 +343,7 @@ export default function App() {
                           <span className="font-bold text-slate-800 text-base">{hour.time}</span>
                         </td>
 
-                        {/* Score Horario (NUEVO) */}
+                        {/* Score Horario */}
                         <td className="px-5 py-4 text-center">
                           <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-xs
                             ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
