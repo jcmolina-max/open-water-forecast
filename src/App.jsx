@@ -141,15 +141,13 @@ export default function App() {
   const fetchExpertAdvice = async (data) => {
     setIsAiLoading(true);
     
-    // --- SEGURIDAD: LECTURA DE LA VARIABLE DE ENTORNO ---
-    // En Vercel (usando Vite), leerá la clave configurada en el panel.
-    // Si estás en desarrollo local, leerá de tu archivo .env
+    // Forma robusta de buscar la clave para Create React App
     const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
-    
     
     if (!apiKey || apiKey === "") {
         setTimeout(() => {
-            setExpertAdvice("El experto está descansando. Configura la variable VITE_GEMINI_API_KEY en Vercel para activar el análisis por IA.");
+            // MENSAJE NUEVO PARA COMPROBAR QUE ESTE CÓDIGO HA SUBIDO A VERCEL
+            setExpertAdvice("El experto está descansando. POR FAVOR COMPRUEBA QUE LA VARIABLE REACT_APP_GEMINI_API_KEY ESTÁ CREADA.");
             setIsAiLoading(false);
         }, 1000);
         return;
