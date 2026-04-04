@@ -90,9 +90,9 @@ export default function App() {
           
           // Castigo por "Choppy" (Periodo corto + ola)
           if (period < 4.5 && waveHeight > 0.3) hourScore -= 15;
-          if (period < 3.5 && waveHeight > 0.4) hourScore -= 25; // Muy incómodo para nadar
+          if (period < 3.5 && waveHeight > 0.4) hourScore -= 25;
 
-          hourScore = Math.max(0, Math.min(100, hourScore)); // Mantener entre 0 y 100
+          hourScore = Math.max(0, Math.min(100, hourScore));
           
           totalScore += hourScore;
 
@@ -119,7 +119,7 @@ export default function App() {
           score: avgScore,
           temps: { 
             air: Math.round(weatherJson.hourly.temperature_2m[currentHour]), 
-            water: 15 // Temperatura fija temporal (requiere API premium para datos reales del mar)
+            water: 15
           },
           hourly: translatedHourlyData
         };
@@ -141,13 +141,13 @@ export default function App() {
   const fetchExpertAdvice = async (data) => {
     setIsAiLoading(true);
     
-    // Forma robusta de buscar la clave para Create React App
-    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+    // El comando correcto para Vite:
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     
     if (!apiKey || apiKey === "") {
         setTimeout(() => {
-            // MENSAJE NUEVO PARA COMPROBAR QUE ESTE CÓDIGO HA SUBIDO A VERCEL
-            setExpertAdvice("El experto está descansando. POR FAVOR COMPRUEBA QUE LA VARIABLE REACT_APP_GEMINI_API_KEY ESTÁ CREADA.");
+            // Mensaje final. Si ves esto, Vercel no está asociando la variable en el Build.
+            setExpertAdvice("Todo subido correctamente. Vercel necesita que hagas un Redeploy para inyectar la variable VITE_GEMINI_API_KEY.");
             setIsAiLoading(false);
         }, 1000);
         return;
@@ -337,12 +337,10 @@ export default function App() {
                     {beachData.hourly.map((hour, idx) => (
                       <tr key={idx} className="hover:bg-blue-50/50 transition-colors group">
                         
-                        {/* Hora */}
                         <td className="px-5 py-4">
                           <span className="font-bold text-slate-800 text-base">{hour.time}</span>
                         </td>
 
-                        {/* Score Horario */}
                         <td className="px-5 py-4 text-center">
                           <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-xs
                             ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
@@ -352,7 +350,6 @@ export default function App() {
                           </span>
                         </td>
                         
-                        {/* Oleaje */}
                         <td className="px-5 py-4">
                           <div className="flex flex-col">
                             <span className={`font-black text-base ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
@@ -364,7 +361,6 @@ export default function App() {
                           </div>
                         </td>
 
-                        {/* Energía (Kj) */}
                         <td className="px-5 py-4 text-center">
                           <div className="flex flex-col items-center justify-center">
                             <span className={`font-black text-base ${hour.waveEnergy > 50 ? 'text-orange-500' : 'text-slate-700'}`}>
@@ -374,14 +370,12 @@ export default function App() {
                           </div>
                         </td>
 
-                        {/* Resaca (Riesgo) */}
                         <td className="px-5 py-4 text-center">
                           <span className={`text-xs ${hour.ripColor}`}>
                             {hour.ripRisk}
                           </span>
                         </td>
 
-                        {/* Viento */}
                         <td className="px-5 py-4">
                           <div className="flex flex-col">
                             <span className={`font-black text-base ${hour.windS > 15 ? 'text-amber-500' : 'text-slate-700'}`}>
@@ -393,7 +387,6 @@ export default function App() {
                           </div>
                         </td>
 
-                        {/* Dirección Viento */}
                         <td className="px-5 py-4 text-center">
                           <div className="inline-flex items-center justify-center bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 group-hover:bg-white transition-colors">
                             <span className="font-bold text-slate-700 text-xs flex items-center gap-1">
@@ -402,7 +395,6 @@ export default function App() {
                           </div>
                         </td>
 
-                        {/* Índice UV */}
                         <td className="px-5 py-4 text-center">
                           <span className={`font-black ${hour.uv > 5 ? 'text-orange-500' : 'text-slate-400'}`}>
                             {hour.uv}
