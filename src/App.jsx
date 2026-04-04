@@ -146,7 +146,6 @@ export default function App() {
     
     if (!apiKey || apiKey === "") {
         setTimeout(() => {
-            // Mensaje final. Si ves esto, Vercel no está asociando la variable en el Build.
             setExpertAdvice("Todo subido correctamente. Vercel necesita que hagas un Redeploy para inyectar la variable VITE_GEMINI_API_KEY.");
             setIsAiLoading(false);
         }, 1000);
@@ -161,8 +160,8 @@ export default function App() {
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. 
       Indica claramente si es seguro meterse a nadar hoy y a qué debe prestar atención (corrientes, picado, etc). Usa un tono cercano.`;
 
-      // CAMBIO 1: Usamos la versión estable 1.5 Flash que es más fiable para producción
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
+      // CORRECCIÓN EXACTA AQUÍ: "gemini-1.5-flash"
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -170,20 +169,17 @@ export default function App() {
         })
       });
 
-      // CAMBIO 2: Comprobamos si Google nos bloquea por límite de peticiones
       if (response.status === 429) {
           throw new Error("Límite de peticiones alcanzado (Too Many Requests)");
       }
 
       const result = await response.json();
       
-      // CAMBIO 3: Imprimimos el resultado crudo en consola por si sigue fallando
       console.log("Respuesta cruda de Gemini:", result);
 
       if (result.candidates && result.candidates[0] && result.candidates[0].content) {
         setExpertAdvice(result.candidates[0].content.parts[0].text);
       } else if (result.error) {
-        // Si Google devuelve un error con formato JSON, lo lanzamos
         throw new Error(result.error.message || "Error interno de la API de Google");
       } else {
         throw new Error("El formato de respuesta de la IA no es el esperado");
