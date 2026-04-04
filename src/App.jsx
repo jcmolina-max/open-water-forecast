@@ -144,7 +144,8 @@ export default function App() {
     // --- SEGURIDAD: LECTURA DE LA VARIABLE DE ENTORNO ---
     // En Vercel (usando Vite), leerá la clave configurada en el panel.
     // Si estás en desarrollo local, leerá de tu archivo .env
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+    
     
     if (!apiKey || apiKey === "") {
         setTimeout(() => {
