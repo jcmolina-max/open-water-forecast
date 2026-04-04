@@ -160,8 +160,8 @@ export default function App() {
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. 
       Indica claramente si es seguro meterse a nadar hoy y a qué debe prestar atención (corrientes, picado, etc). Usa un tono cercano.`;
 
-      // CORRECCIÓN EXACTA AQUÍ: "gemini-1.5-flash"
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      // CORRECCIÓN FINAL: Usamos "gemini-pro", el modelo universal desbloqueado en todas las cuentas
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
