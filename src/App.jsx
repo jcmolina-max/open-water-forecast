@@ -161,7 +161,8 @@ export default function App() {
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. 
       Indica claramente si es seguro meterse a nadar hoy y a qué debe prestar atención (corrientes, picado, etc). Usa un tono cercano.`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+      // CAMBIO 1: Usamos la versión estable 1.5 Flash que es más fiable para producción
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -169,18 +170,32 @@ export default function App() {
         })
       });
 
-      const result = await response.json();
-      if (result.candidates && result.candidates[0]) {
-        setExpertAdvice(result.candidates[0].content.parts[0].text);
-      } else {
-        throw new Error("Respuesta inválida de la IA");
+      // CAMBIO 2: Comprobamos si Google nos bloquea por límite de peticiones
+      if (response.status === 429) {
+          throw new Error("Límite de peticiones alcanzado (Too Many Requests)");
       }
-    // ... código anterior ...
+
+      const result = await response.json();
+      
+      // CAMBIO 3: Imprimimos el resultado crudo en consola por si sigue fallando
+      console.log("Respuesta cruda de Gemini:", result);
+
+      if (result.candidates && result.candidates[0] && result.candidates[0].content) {
+        setExpertAdvice(result.candidates[0].content.parts[0].text);
+      } else if (result.error) {
+        // Si Google devuelve un error con formato JSON, lo lanzamos
+        throw new Error(result.error.message || "Error interno de la API de Google");
+      } else {
+        throw new Error("El formato de respuesta de la IA no es el esperado");
+      }
     } catch (err) {
-      setExpertAdvice(`Error de conexión con Google: ${err.message}. Comprueba la consola del navegador para más detalles.`);
+      if (err.message.includes("Límite de peticiones")) {
+          setExpertAdvice("El socorrista virtual está saturado de peticiones en este momento. Por favor, espera un minuto y recarga la página.");
+      } else {
+          setExpertAdvice(`Error del experto: ${err.message}. Revisa la consola (F12) para detalles.`);
+      }
       console.error("Detalle completo del error:", err);
     } finally {
-// ... código posterior ...
       setIsAiLoading(false);
     }
   };
