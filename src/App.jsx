@@ -62,7 +62,9 @@ export default function App() {
           const windKnots = Math.round(windKmh / 1.852);
           const gustKnots = Math.round((weatherJson.hourly.wind_gusts_10m[i] || 0) / 1.852);
           
-          const waveEnergy = Math.round(Math.pow(waveHeight, 2) * period * 100);
+          // --- CÁLCULOS: ENERGÍA Y RESACA ---
+          // Corrección: Usamos la constante 6.25 para ajustarnos al estándar KJ de las apps de surf
+          const waveEnergy = Math.round(Math.pow(waveHeight, 2) * period * 6.25);
           
           let ripRisk = "Nulo";
           let ripColor = "text-slate-400";
