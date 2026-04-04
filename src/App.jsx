@@ -81,14 +81,11 @@ export default function App() {
           // --- NUEVO ALGORITMO DE SEGURIDAD PARA NADADORES ---
           let hourScore = 100;
           
-          // Castigo por altura de ola (Exponencial: a partir de 0.6m penaliza mucho)
           if (waveHeight > 0.2) hourScore -= (waveHeight * 20);
           if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25);
           
-          // Castigo por viento
           if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
           
-          // Castigo por "Choppy" (Periodo corto + ola)
           if (period < 4.5 && waveHeight > 0.3) hourScore -= 15;
           if (period < 3.5 && waveHeight > 0.4) hourScore -= 25;
 
@@ -141,7 +138,6 @@ export default function App() {
   const fetchExpertAdvice = async (data) => {
     setIsAiLoading(true);
     
-    // El comando correcto para Vite:
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     
     if (!apiKey || apiKey === "") {
@@ -160,8 +156,8 @@ export default function App() {
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. 
       Indica claramente si es seguro meterse a nadar hoy y a qué debe prestar atención (corrientes, picado, etc). Usa un tono cercano.`;
 
-      // SOLUCIÓN DEFINITIVA: Usamos el modelo universal gemini-pro en la versión v1beta
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+      // COMBINACIÓN GANADORA: v1beta + gemini-1.5-flash
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -175,12 +171,15 @@ export default function App() {
 
       const result = await response.json();
 
-      // CÓDIGO DETECTIVE: Si Google da error, le pedimos la lista de modelos permitidos
+      // CÓDIGO DETECTIVE MEJORADO: Extrae los nombres de los modelos si hay error
       if (!response.ok) {
          try {
-             const checkModels = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
+             const checkModels = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
              const modelsList = await checkModels.json();
-             console.log("👉 MODELOS PERMITIDOS EN TU CUENTA:", modelsList);
+             if (modelsList.models) {
+                 const available = modelsList.models.map(m => m.name.replace('models/', '')).join(', ');
+                 console.log("👉 MODELOS PERMITIDOS EXACTOS:", available);
+             }
          } catch (e) {
              console.log("No se pudo obtener la lista de modelos.");
          }
@@ -196,7 +195,7 @@ export default function App() {
       if (err.message.includes("Límite de peticiones")) {
           setExpertAdvice("El socorrista virtual está saturado de peticiones en este momento. Por favor, espera un minuto y recarga la página.");
       } else {
-          setExpertAdvice(`Error del experto: ${err.message}. Abre la consola (F12) para ver la lista de modelos compatibles.`);
+          setExpertAdvice(`Error del experto: ${err.message}. Revisa la consola (F12).`);
       }
       console.error("Detalle completo del error:", err);
     } finally {
