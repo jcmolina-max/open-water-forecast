@@ -63,7 +63,7 @@ export default function App() {
           const gustKnots = Math.round((weatherJson.hourly.wind_gusts_10m[i] || 0) / 1.852);
           
           // --- CÁLCULOS: ENERGÍA Y RESACA ---
-          // Corrección: Usamos la constante 6.25 para ajustarnos al estándar KJ de las apps de surf
+          // Usamos la constante 6.25 para ajustarnos al estándar KJ de las apps de surf
           const waveEnergy = Math.round(Math.pow(waveHeight, 2) * period * 6.25);
           
           let ripRisk = "Nulo";
@@ -91,7 +91,7 @@ export default function App() {
           totalScore += hourScore;
 
           // --- CORRECCIÓN DE LA HORA ---
-          const displayHour = i % 24; // Esto hace que 24 se convierta en 0, 25 en 1, etc.
+          const displayHour = i % 24; // Esto hace que 24 se convierta en 0, 25 en 1...
           const formattedTime = `${displayHour.toString().padStart(2, '0')}:00`;
 
           translatedHourlyData.push({
@@ -324,6 +324,7 @@ export default function App() {
                       <th className="px-5 py-4 font-bold text-center">Resaca</th>
                       <th className="px-5 py-4 font-bold">Viento (Nudos)</th>
                       <th className="px-5 py-4 font-bold text-center">Dir.</th>
+                      <th className="px-5 py-4 font-bold text-center">UV</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm">
@@ -355,9 +356,12 @@ export default function App() {
                         </td>
 
                         <td className="px-5 py-4 text-center">
-                          <span className={`font-black text-base ${hour.waveEnergy > 50 ? 'text-orange-500' : 'text-slate-700'}`}>
-                            {hour.waveEnergy}
-                          </span>
+                          <div className="flex flex-col items-center justify-center">
+                            <span className={`font-black text-base ${hour.waveEnergy > 50 ? 'text-orange-500' : 'text-slate-700'}`}>
+                              {hour.waveEnergy}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Kj</span>
+                          </div>
                         </td>
 
                         <td className="px-5 py-4 text-center">
@@ -371,12 +375,21 @@ export default function App() {
                             <span className={`font-black text-base ${hour.windS > 15 ? 'text-amber-500' : 'text-slate-700'}`}>
                               {hour.windS} kts
                             </span>
+                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                              Rachas: {hour.gust}
+                            </span>
                           </div>
                         </td>
 
                         <td className="px-5 py-4 text-center">
                           <span className="font-bold text-slate-700 text-xs">
                             {getWindDirection(hour.windDir)}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4 text-center">
+                          <span className={`font-black ${hour.uv > 5 ? 'text-orange-500' : 'text-slate-400'}`}>
+                            {hour.uv}
                           </span>
                         </td>
 
