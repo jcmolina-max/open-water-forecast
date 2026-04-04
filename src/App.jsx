@@ -62,6 +62,25 @@ export default function App() {
           const windKnots = Math.round(windKmh / 1.852);
           const gustKnots = Math.round((weatherJson.hourly.wind_gusts_10m[i] || 0) / 1.852);
           
+          // --- CÁLCULOS AÑADIDOS: ENERGÍA Y RESACA ---
+          // 1. Cálculo de Energía (Kj): Fórmula basada en Altura al cuadrado * Periodo
+          const waveEnergy = Math.round(Math.pow(waveHeight, 2) * period * 100);
+          
+          // 2. Cálculo de Riesgo de Resaca: Basado en tamaño de ola y periodo
+          let ripRisk = "Nulo";
+          let ripColor = "text-slate-400";
+          if (waveHeight >= 1.0 || (waveHeight >= 0.8 && period > 6)) {
+            ripRisk = "Alto";
+            ripColor = "text-red-600 font-bold bg-red-50 px-2 py-1 rounded";
+          } else if (waveHeight >= 0.6) {
+            ripRisk = "Medio";
+            ripColor = "text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded";
+          } else if (waveHeight >= 0.3) {
+            ripRisk = "Bajo";
+            ripColor = "text-blue-600 font-medium";
+          }
+          // ------------------------------------------
+
           // Fórmula de seguridad para nadadores
           let hourScore = 100 - (waveHeight * 40) - (windKnots * 1.5);
           if (period < 4) hourScore -= 10;
@@ -78,7 +97,10 @@ export default function App() {
             windDir: weatherJson.hourly.wind_direction_10m[i] || 0,
             uv: weatherJson.hourly.uv_index[i] || 0,
             rain: weatherJson.hourly.precipitation_probability[i] || 0,
-            hourScore: Math.round(hourScore)
+            hourScore: Math.round(hourScore),
+            waveEnergy: waveEnergy,
+            ripRisk: ripRisk,
+            ripColor: ripColor
           });
         }
 
@@ -294,6 +316,8 @@ export default function App() {
                       <th className="px-5 py-4 font-bold">Hora</th>
                       <th className="px-5 py-4 font-bold text-center">Score</th>
                       <th className="px-5 py-4 font-bold">Oleaje (m / s)</th>
+                      <th className="px-5 py-4 font-bold text-center">Energía</th>
+                      <th className="px-5 py-4 font-bold text-center">Resaca</th>
                       <th className="px-5 py-4 font-bold">Viento (Nudos)</th>
                       <th className="px-5 py-4 font-bold text-center">Dirección</th>
                       <th className="px-5 py-4 font-bold text-center">UV</th>
@@ -328,6 +352,23 @@ export default function App() {
                               Periodo: {hour.period}s
                             </span>
                           </div>
+                        </td>
+
+                        {/* Energía (Kj) */}
+                        <td className="px-5 py-4 text-center">
+                          <div className="flex flex-col items-center justify-center">
+                            <span className={`font-black text-base ${hour.waveEnergy > 50 ? 'text-orange-500' : 'text-slate-700'}`}>
+                              {hour.waveEnergy}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Kj</span>
+                          </div>
+                        </td>
+
+                        {/* Resaca (Riesgo) */}
+                        <td className="px-5 py-4 text-center">
+                          <span className={`text-xs ${hour.ripColor}`}>
+                            {hour.ripRisk}
+                          </span>
                         </td>
 
                         {/* Viento */}
