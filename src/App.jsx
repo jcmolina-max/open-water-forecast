@@ -450,7 +450,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* NUEVO: Tarjeta 5: Riesgo de Medusas */}
+                {/* Tarjeta 5: Riesgo de Medusas */}
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                   <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-4">
                     <AlertCircle size={16} className="text-purple-500"/> Riesgo de Medusas
@@ -459,8 +459,8 @@ export default function App() {
                     <span className={`font-black uppercase text-sm ${currentDayData.jellyfish.color}`}>
                       Nivel {currentDayData.jellyfish.risk}
                     </span>
-                    <a href="https://infomedusa.es/" target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-500 hover:text-blue-700 underline underline-offset-2">
-                      Ver Infomedusa
+                    <a href="https://oceanaria.es/" target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-500 hover:text-blue-700 underline underline-offset-2 text-right">
+                      Oceanaria - Andalucía
                     </a>
                   </div>
                   <p className="text-[10px] text-slate-400 mt-3 font-medium leading-tight">
