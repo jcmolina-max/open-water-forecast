@@ -14,20 +14,21 @@ import {
   ArrowDownCircle,
   Droplets,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  CalendarDays
 } from 'lucide-react';
 
-// Coordenadas reales de las playas para pedir los datos al satélite
+// Coordenadas reales de las playas
 const BEACHES = {
   misericordia: { name: "La Misericordia, Málaga", lat: 36.696, lon: -4.444 },
   malagueta: { name: "La Malagueta, Málaga", lat: 36.718, lon: -4.407 },
   pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386 }
 };
 
-// Generador de mareas estimado (Algoritmo para suplir la falta de API gratuita de mareas)
-const getEstimatedTides = (lat) => {
+// Generador de mareas estimado (ahora recibe el día de desfase)
+const getEstimatedTides = (lat, dayOffset = 0) => {
   const today = new Date();
-  const seed = today.getDate() + Math.floor(lat * 10);
+  const seed = today.getDate() + dayOffset + Math.floor(lat * 10);
   
   const h1 = (seed % 12);
   const m1 = (seed * 7) % 60;
@@ -44,22 +45,23 @@ const getEstimatedTides = (lat) => {
 
 export default function App() {
   const [selectedBeach, setSelectedBeach] = useState('misericordia');
-  const [beachData, setBeachData] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(0); // 0: Hoy, 1: Mañana, 2: Pasado
+  const [beachData, setBeachData] = useState(null); // Ahora guardará un array con 3 días
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
   // Estados para el Socorrista IA
   const [expertAdvice, setExpertAdvice] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [hasRequestedAi, setHasRequestedAi] = useState(false); // NUEVO: Control del botón manual
+  const [hasRequestedAi, setHasRequestedAi] = useState(false);
 
   useEffect(() => {
     const fetchRealData = async () => {
       setIsLoading(true);
       setError(null);
-      // Reseteamos el estado de la IA al cambiar de playa
       setHasRequestedAi(false);
       setExpertAdvice("");
+      setSelectedDay(0); // Volver a "Hoy" al cambiar de playa
       
       const beach = BEACHES[selectedBeach];
 
@@ -77,91 +79,107 @@ export default function App() {
         const marineJson = await marineResponse.json();
 
         const currentHour = new Date().getHours();
-        let translatedHourlyData = [];
-        let totalScore = 0;
-        
-        // Variables para Mejor y Peor hora
-        let maxScore = -1;
-        let minScore = 101;
-        let bestHourTime = "";
-        let worstHourTime = "";
+        const daysProcessed = []; // Aquí guardaremos los 3 días
 
-        for (let i = currentHour; i < currentHour + 12; i++) {
-          const waveHeightStr = marineJson.hourly.wave_height[i];
-          const waveHeight = waveHeightStr !== null ? waveHeightStr : 0.1;
-          const period = marineJson.hourly.wave_period[i] || 4;
-          
-          const windKmh = weatherJson.hourly.wind_speed_10m[i] || 0;
-          const windKnots = Math.round(windKmh / 1.852);
-          const gustKnots = Math.round((weatherJson.hourly.wind_gusts_10m[i] || 0) / 1.852);
-          
-          // --- CÁLCULOS: ENERGÍA Y RESACA ---
-          // Constante 6.25 para ajustarnos al estándar KJ
-          const waveEnergy = Math.round(Math.pow(waveHeight, 2) * period * 6.25);
-          
-          let ripRisk = "Nulo";
-          let ripColor = "text-slate-400";
-          if (waveHeight >= 1.0 || (waveHeight >= 0.8 && period > 6)) {
-            ripRisk = "Alto";
-            ripColor = "text-red-600 font-bold bg-red-50 px-2 py-1 rounded";
-          } else if (waveHeight >= 0.6) {
-            ripRisk = "Medio";
-            ripColor = "text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded";
-          } else if (waveHeight >= 0.3) {
-            ripRisk = "Bajo";
-            ripColor = "text-blue-600 font-medium";
+        // Bucle para procesar Hoy (0), Mañana (1) y Pasado (2)
+        for (let d = 0; d < 3; d++) {
+          let startIndex;
+          if (d === 0) {
+            startIndex = currentHour; // Hoy: desde la hora actual
+          } else if (d === 1) {
+            startIndex = 32; // Mañana: Índice 32 suele corresponder a las 08:00 AM del día siguiente
+          } else {
+            startIndex = 56; // Pasado: Índice 56 corresponde a las 08:00 AM de dentro de 2 días
           }
 
-          // --- SCORE ---
-          let hourScore = 100;
-          if (waveHeight > 0.2) hourScore -= (waveHeight * 20);
-          if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25);
-          if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
-          if (period < 4.5 && waveHeight > 0.3) hourScore -= 15;
-          if (period < 3.5 && waveHeight > 0.4) hourScore -= 25;
+          let translatedHourlyData = [];
+          let totalScore = 0;
+          let maxScore = -1;
+          let minScore = 101;
+          let bestHourTime = "";
+          let worstHourTime = "";
 
-          hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
-          totalScore += hourScore;
+          for (let i = startIndex; i < startIndex + 12; i++) {
+            // Protección por si el satélite no tiene datos tan lejanos
+            if (i >= marineJson.hourly.wave_height.length) break;
 
-          // --- HORAS (Corrección medianoche) ---
-          const displayHour = i % 24; 
-          const formattedTime = `${displayHour.toString().padStart(2, '0')}:00`;
+            const waveHeightStr = marineJson.hourly.wave_height[i];
+            const waveHeight = waveHeightStr !== null ? waveHeightStr : 0.1;
+            const period = marineJson.hourly.wave_period[i] || 4;
+            
+            const windKmh = weatherJson.hourly.wind_speed_10m[i] || 0;
+            const windKnots = Math.round(windKmh / 1.852);
+            const gustKnots = Math.round((weatherJson.hourly.wind_gusts_10m[i] || 0) / 1.852);
+            
+            // Constante 6.25 para ajustarnos al estándar KJ
+            const waveEnergy = Math.round(Math.pow(waveHeight, 2) * period * 6.25);
+            
+            let ripRisk = "Nulo";
+            let ripColor = "text-slate-400";
+            if (waveHeight >= 1.0 || (waveHeight >= 0.8 && period > 6)) {
+              ripRisk = "Alto";
+              ripColor = "text-red-600 font-bold bg-red-50 px-2 py-1 rounded";
+            } else if (waveHeight >= 0.6) {
+              ripRisk = "Medio";
+              ripColor = "text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded";
+            } else if (waveHeight >= 0.3) {
+              ripRisk = "Bajo";
+              ripColor = "text-blue-600 font-medium";
+            }
 
-          // --- MEJOR Y PEOR HORA ---
-          if (hourScore > maxScore) { maxScore = hourScore; bestHourTime = formattedTime; }
-          if (hourScore < minScore) { minScore = hourScore; worstHourTime = formattedTime; }
+            // SCORE
+            let hourScore = 100;
+            if (waveHeight > 0.2) hourScore -= (waveHeight * 20);
+            if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25);
+            if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
+            if (period < 4.5 && waveHeight > 0.3) hourScore -= 15;
+            if (period < 3.5 && waveHeight > 0.4) hourScore -= 25;
 
-          translatedHourlyData.push({
-            time: formattedTime,
-            swellH: waveHeight.toFixed(2),
-            period: period.toFixed(1),
-            windS: windKnots,
-            gust: gustKnots,
-            windDir: weatherJson.hourly.wind_direction_10m[i] || 0,
-            uv: weatherJson.hourly.uv_index[i] || 0,
-            rain: weatherJson.hourly.precipitation_probability[i] || 0,
-            hourScore: hourScore,
-            waveEnergy: waveEnergy,
-            ripRisk: ripRisk,
-            ripColor: ripColor
+            hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
+            totalScore += hourScore;
+
+            // HORAS (Corrección medianoche)
+            const displayHour = i % 24; 
+            const formattedTime = `${displayHour.toString().padStart(2, '0')}:00`;
+
+            // MEJOR Y PEOR HORA
+            if (hourScore > maxScore) { maxScore = hourScore; bestHourTime = formattedTime; }
+            if (hourScore < minScore) { minScore = hourScore; worstHourTime = formattedTime; }
+
+            translatedHourlyData.push({
+              time: formattedTime,
+              swellH: waveHeight.toFixed(2),
+              period: period.toFixed(1),
+              windS: windKnots,
+              gust: gustKnots,
+              windDir: weatherJson.hourly.wind_direction_10m[i] || 0,
+              uv: weatherJson.hourly.uv_index[i] || 0,
+              rain: weatherJson.hourly.precipitation_probability[i] || 0,
+              hourScore: hourScore,
+              waveEnergy: waveEnergy,
+              ripRisk: ripRisk,
+              ripColor: ripColor
+            });
+          }
+
+          const avgScore = Math.round(totalScore / 12);
+          const dayLabels = ["Hoy", "Mañana", "Pasado"];
+          
+          daysProcessed.push({
+            dayIndex: d,
+            dayLabel: dayLabels[d],
+            name: beach.name,
+            score: avgScore,
+            temps: { air: Math.round(weatherJson.hourly.temperature_2m[startIndex]), water: 15 },
+            hourly: translatedHourlyData,
+            best: { time: bestHourTime, score: maxScore },
+            worst: { time: worstHourTime, score: minScore },
+            tides: getEstimatedTides(beach.lat, d)
           });
         }
 
-        const avgScore = Math.round(totalScore / 12);
-        
-        const unifiedData = {
-          name: beach.name,
-          score: avgScore,
-          temps: { air: Math.round(weatherJson.hourly.temperature_2m[currentHour]), water: 15 },
-          hourly: translatedHourlyData,
-          best: { time: bestHourTime, score: maxScore },
-          worst: { time: worstHourTime, score: minScore },
-          tides: getEstimatedTides(beach.lat)
-        };
-
-        setBeachData(unifiedData);
+        setBeachData(daysProcessed);
         setIsLoading(false);
-        // NOTA: Ya NO llamamos a la IA aquí automáticamente.
 
       } catch (err) {
         console.error(err);
@@ -173,12 +191,19 @@ export default function App() {
     fetchRealData();
   }, [selectedBeach]);
 
-  // FUNCIÓN MANUAL PARA LA IA
+  // Al cambiar de día (Hoy/Mañana/Pasado), reseteamos a la IA
+  const handleDayChange = (index) => {
+    setSelectedDay(index);
+    setHasRequestedAi(false);
+    setExpertAdvice("");
+  };
+
   const handleAskExpert = async () => {
     setHasRequestedAi(true);
     setIsAiLoading(true);
     
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const currentDayData = beachData[selectedDay];
     
     if (!apiKey || apiKey === "") {
         setExpertAdvice("Falta la API Key de Gemini en Vercel.");
@@ -188,12 +213,12 @@ export default function App() {
 
     try {
       const prompt = `Eres un experto nadador de aguas abiertas y socorrista en Málaga. 
-      Analiza los siguientes datos de hoy para la playa ${beachData.name}:
-      Puntuación de seguridad para nadadores: ${beachData.score}/100.
-      Olas medias: ${beachData.hourly[0].swellH}m. Viento: ${beachData.hourly[0].windS} nudos.
-      Mejor hora para nadar: ${beachData.best.time}. Peor hora: ${beachData.worst.time}.
+      Analiza los siguientes datos de ${currentDayData.dayLabel.toLowerCase()} para la playa ${currentDayData.name}:
+      Puntuación media de seguridad: ${currentDayData.score}/100.
+      Olas medias: ${currentDayData.hourly[0].swellH}m. Viento: ${currentDayData.hourly[0].windS} nudos.
+      Mejor hora para nadar: ${currentDayData.best.time}. Peor hora: ${currentDayData.worst.time}.
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. 
-      Indica claramente si es seguro meterse a nadar hoy y a qué debe prestar atención. Usa un tono cercano.`;
+      Indica claramente si es seguro meterse a nadar y a qué debe prestar atención. Usa un tono cercano.`;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
@@ -232,6 +257,9 @@ export default function App() {
     if (degrees > 292.5 && degrees <= 337.5) return '↘️ NO';
     return '-';
   };
+
+  // Variable auxiliar para que el renderizado sea más limpio
+  const currentDayData = beachData ? beachData[selectedDay] : null;
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans">
@@ -275,245 +303,264 @@ export default function App() {
             <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
             <p className="text-slate-500 font-medium animate-pulse text-lg">Conectando con Open-Meteo y analizando satélites...</p>
           </div>
-        ) : beachData && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
-            {/* PANEL IZQUIERDO */}
-            <div className="lg:col-span-4 space-y-6">
+        ) : currentDayData && (
+          <>
+            {/* NUEVO: SELECTOR DE DÍAS */}
+            <div className="flex flex-wrap gap-2 mb-2">
+              {['Hoy (Próximas 12h)', 'Mañana', 'Pasado'].map((label, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleDayChange(idx)}
+                  className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${
+                    selectedDay === idx 
+                      ? 'bg-blue-600 text-white shadow-md' 
+                      : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <CalendarDays size={16} />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               
-              {/* Tarjeta 1: Score de Seguridad */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
-                <h2 className="text-slate-500 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
-                  <Activity size={18} className="text-blue-500"/> Seguridad Media (12h)
-                </h2>
-                <div className="relative">
-                  <svg className="w-40 h-40 transform -rotate-90">
-                    <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="14" fill="transparent" className="text-slate-100" />
-                    <circle 
-                      cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="14" fill="transparent" 
-                      strokeDasharray="439.8" 
-                      strokeDashoffset={439.8 - (439.8 * beachData.score) / 100}
-                      className={beachData.score > 70 ? 'text-emerald-500' : beachData.score > 40 ? 'text-amber-500' : 'text-red-500'} 
-                    />
-                  </svg>
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <span className="text-5xl font-black text-slate-800">{beachData.score}</span>
-                    <span className="text-xs font-bold text-slate-400">/ 100</span>
-                  </div>
-                </div>
-                <p className={`mt-5 font-black text-lg ${beachData.score > 70 ? 'text-emerald-600' : beachData.score > 40 ? 'text-amber-600' : 'text-red-600'}`}>
-                  {beachData.score > 70 ? 'Nado Seguro' : beachData.score > 40 ? 'Precaución: Mar Agitado' : 'No Recomendado Nadar'}
-                </p>
-              </div>
-
-              {/* Tarjeta 2: Temperaturas */}
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Thermometer size={24}/></div>
-                  <div>
-                    <p className="text-sm text-slate-500 font-medium">Agua</p>
-                    <p className="text-xl font-bold text-slate-800">{beachData.temps.water}ºC</p>
-                  </div>
-                </div>
-                <div className="h-10 w-px bg-slate-200"></div>
-                <div className="flex items-center gap-3">
-                  <div className="bg-orange-50 p-2 rounded-lg text-orange-500"><Sun size={24}/></div>
-                  <div>
-                    <p className="text-sm text-slate-500 font-medium">Aire (Actual)</p>
-                    <p className="text-xl font-bold text-slate-800">{beachData.temps.air}ºC</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tarjeta NUEVA 3: Mejor y Peor Hora */}
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-                <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-2">
-                  <Clock size={16} className="text-indigo-500"/> Horas Clave (Próximas 12h)
-                </h3>
+              {/* PANEL IZQUIERDO */}
+              <div className="lg:col-span-4 space-y-6">
                 
-                <div className="flex justify-between items-center bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                  <div className="flex items-center gap-2">
-                    <ThumbsUp className="text-emerald-500" size={20} />
-                    <span className="font-bold text-emerald-800">Mejor Hora</span>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-black text-emerald-700">{beachData.best.time}</p>
-                    <p className="text-xs font-bold text-emerald-600/70">Score: {beachData.best.score}</p>
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center bg-red-50 p-3 rounded-xl border border-red-100">
-                  <div className="flex items-center gap-2">
-                    <ThumbsDown className="text-red-500" size={20} />
-                    <span className="font-bold text-red-800">Peor Hora</span>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-black text-red-700">{beachData.worst.time}</p>
-                    <p className="text-xs font-bold text-red-600/70">Score: {beachData.worst.score}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tarjeta NUEVA 4: Mareas */}
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                 <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-4">
-                  <Waves size={16} className="text-cyan-500"/> Estado de las Mareas
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <ArrowUpCircle className="text-blue-500 mb-1" size={24} />
-                    <span className="text-xs text-slate-500 font-bold uppercase">Pleamar</span>
-                    <span className="font-black text-slate-700 mt-1">{beachData.tides.high}</span>
-                  </div>
-                  <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <ArrowDownCircle className="text-amber-500 mb-1" size={24} />
-                    <span className="text-xs text-slate-500 font-bold uppercase">Bajamar</span>
-                    <span className="font-black text-slate-700 mt-1">{beachData.tides.low}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tarjeta 5: Consejo del Socorrista Virtual (AHORA CON BOTÓN) */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-5">
-                  <Bot size={80} />
-                </div>
-                <h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2 relative z-10">
-                  <Bot className="text-blue-600" size={20} />
-                  Socorrista Virtual
-                </h3>
-                
-                <div className="relative z-10">
-                  {!hasRequestedAi ? (
-                    <button 
-                      onClick={handleAskExpert}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
-                    >
-                      <Bot size={18} /> Consultar a la IA
-                    </button>
-                  ) : isAiLoading ? (
-                    <div className="flex items-center gap-2 text-blue-600/70 p-2">
-                      <Loader2 size={18} className="animate-spin" />
-                      <span className="text-sm font-bold">El experto está evaluando la playa...</span>
+                {/* Tarjeta 1: Score de Seguridad */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
+                  <h2 className="text-slate-500 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
+                    <Activity size={18} className="text-blue-500"/> Seguridad Media ({currentDayData.dayLabel})
+                  </h2>
+                  <div className="relative">
+                    <svg className="w-40 h-40 transform -rotate-90">
+                      <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="14" fill="transparent" className="text-slate-100" />
+                      <circle 
+                        cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="14" fill="transparent" 
+                        strokeDasharray="439.8" 
+                        strokeDashoffset={439.8 - (439.8 * currentDayData.score) / 100}
+                        className={currentDayData.score > 70 ? 'text-emerald-500' : currentDayData.score > 40 ? 'text-amber-500' : 'text-red-500'} 
+                      />
+                    </svg>
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+                      <span className="text-5xl font-black text-slate-800">{currentDayData.score}</span>
+                      <span className="text-xs font-bold text-slate-400">/ 100</span>
                     </div>
-                  ) : (
-                    <p className="text-blue-900 text-sm leading-relaxed font-medium bg-white/60 p-4 rounded-xl border border-blue-100/50 shadow-sm">
-                      "{expertAdvice}"
-                    </p>
-                  )}
+                  </div>
+                  <p className={`mt-5 font-black text-lg ${currentDayData.score > 70 ? 'text-emerald-600' : currentDayData.score > 40 ? 'text-amber-600' : 'text-red-600'}`}>
+                    {currentDayData.score > 70 ? 'Nado Seguro' : currentDayData.score > 40 ? 'Precaución: Mar Agitado' : 'No Recomendado Nadar'}
+                  </p>
+                </div>
+
+                {/* Tarjeta 2: Temperaturas */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Thermometer size={24}/></div>
+                    <div>
+                      <p className="text-sm text-slate-500 font-medium">Agua</p>
+                      <p className="text-xl font-bold text-slate-800">{currentDayData.temps.water}ºC</p>
+                    </div>
+                  </div>
+                  <div className="h-10 w-px bg-slate-200"></div>
+                  <div className="flex items-center gap-3">
+                    <div className="bg-orange-50 p-2 rounded-lg text-orange-500"><Sun size={24}/></div>
+                    <div>
+                      <p className="text-sm text-slate-500 font-medium">Aire ({currentDayData.dayLabel})</p>
+                      <p className="text-xl font-bold text-slate-800">{currentDayData.temps.air}ºC</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tarjeta 3: Mejor y Peor Hora */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                  <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-2">
+                    <Clock size={16} className="text-indigo-500"/> Horas Clave
+                  </h3>
+                  
+                  <div className="flex justify-between items-center bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                    <div className="flex items-center gap-2">
+                      <ThumbsUp className="text-emerald-500" size={20} />
+                      <span className="font-bold text-emerald-800">Mejor Hora</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-black text-emerald-700">{currentDayData.best.time}</p>
+                      <p className="text-xs font-bold text-emerald-600/70">Score: {currentDayData.best.score}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center bg-red-50 p-3 rounded-xl border border-red-100">
+                    <div className="flex items-center gap-2">
+                      <ThumbsDown className="text-red-500" size={20} />
+                      <span className="font-bold text-red-800">Peor Hora</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-black text-red-700">{currentDayData.worst.time}</p>
+                      <p className="text-xs font-bold text-red-600/70">Score: {currentDayData.worst.score}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tarjeta 4: Mareas */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                   <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-4">
+                    <Waves size={16} className="text-cyan-500"/> Mareas ({currentDayData.dayLabel})
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <ArrowUpCircle className="text-blue-500 mb-1" size={24} />
+                      <span className="text-xs text-slate-500 font-bold uppercase">Pleamar</span>
+                      <span className="font-black text-slate-700 mt-1">{currentDayData.tides.high}</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <ArrowDownCircle className="text-amber-500 mb-1" size={24} />
+                      <span className="text-xs text-slate-500 font-bold uppercase">Bajamar</span>
+                      <span className="font-black text-slate-700 mt-1">{currentDayData.tides.low}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tarjeta 5: Socorrista Virtual */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-4 opacity-5">
+                    <Bot size={80} />
+                  </div>
+                  <h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2 relative z-10">
+                    <Bot className="text-blue-600" size={20} />
+                    Socorrista Virtual
+                  </h3>
+                  
+                  <div className="relative z-10">
+                    {!hasRequestedAi ? (
+                      <button 
+                        onClick={handleAskExpert}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+                      >
+                        <Bot size={18} /> Consultar previsión de {currentDayData.dayLabel.toLowerCase()}
+                      </button>
+                    ) : isAiLoading ? (
+                      <div className="flex items-center gap-2 text-blue-600/70 p-2">
+                        <Loader2 size={18} className="animate-spin" />
+                        <span className="text-sm font-bold">El experto está evaluando la playa...</span>
+                      </div>
+                    ) : (
+                      <p className="text-blue-900 text-sm leading-relaxed font-medium bg-white/60 p-4 rounded-xl border border-blue-100/50 shadow-sm">
+                        "{expertAdvice}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* PANEL DERECHO: Tabla de previsiones */}
+              <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-fit">
+                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                  <h3 className="font-bold text-slate-800 text-lg">Evolución del mar</h3>
+                  <span className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 shadow-sm">
+                    <CalendarDays size={14}/> {currentDayData.dayLabel}
+                  </span>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[700px]">
+                    <thead>
+                      <tr className="bg-white text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
+                        <th className="px-5 py-4 font-bold">Hora</th>
+                        <th className="px-5 py-4 font-bold text-center">Score</th>
+                        <th className="px-5 py-4 font-bold">Oleaje (m / s)</th>
+                        <th className="px-5 py-4 font-bold text-center">Energía</th>
+                        <th className="px-5 py-4 font-bold text-center">Resaca</th>
+                        <th className="px-5 py-4 font-bold">Viento (Nudos)</th>
+                        <th className="px-5 py-4 font-bold text-center">Lluvia</th>
+                        <th className="px-5 py-4 font-bold text-center">Dir.</th>
+                        <th className="px-5 py-4 font-bold text-center">UV</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm">
+                      {currentDayData.hourly.map((hour, idx) => (
+                        <tr key={idx} className="hover:bg-blue-50/50 transition-colors group">
+                          
+                          <td className="px-5 py-4">
+                            <span className="font-bold text-slate-800 text-base">{hour.time}</span>
+                          </td>
+
+                          <td className="px-5 py-4 text-center">
+                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-xs
+                              ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
+                                hour.hourScore > 40 ? 'bg-amber-100 text-amber-700' : 
+                                'bg-red-100 text-red-700'}`}>
+                              {hour.hourScore}
+                            </span>
+                          </td>
+                          
+                          <td className="px-5 py-4">
+                            <div className="flex flex-col">
+                              <span className={`font-black text-base ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
+                                {hour.swellH}m
+                              </span>
+                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                                P: {hour.period}s
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4 text-center">
+                            <div className="flex flex-col items-center justify-center">
+                              <span className={`font-black text-base ${hour.waveEnergy > 50 ? 'text-orange-500' : 'text-slate-700'}`}>
+                                {hour.waveEnergy}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase">Kj</span>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4 text-center">
+                            <span className={`text-xs ${hour.ripColor}`}>
+                              {hour.ripRisk}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4">
+                            <div className="flex flex-col">
+                              <span className={`font-black text-base ${hour.windS > 15 ? 'text-amber-500' : 'text-slate-700'}`}>
+                                {hour.windS} kts
+                              </span>
+                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                                Rachas: {hour.gust}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4 text-center">
+                            <div className="flex flex-col items-center justify-center">
+                              {hour.rain > 10 && <Droplets size={14} className="text-blue-400 mb-1" />}
+                              <span className={`font-bold ${hour.rain > 10 ? 'text-blue-600' : 'text-slate-400'}`}>
+                                {hour.rain}%
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4 text-center">
+                            <span className="font-bold text-slate-700 text-xs">
+                              {getWindDirection(hour.windDir)}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4 text-center">
+                            <span className={`font-black ${hour.uv > 5 ? 'text-orange-500' : 'text-slate-400'}`}>
+                              {hour.uv}
+                            </span>
+                          </td>
+
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
             </div>
-
-            {/* PANEL DERECHO: Tabla de previsiones */}
-            <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-fit">
-              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <h3 className="font-bold text-slate-800 text-lg">Evolución del mar (Próximas 12h)</h3>
-                <span className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 shadow-sm">
-                  <ShieldCheck size={14}/> Datos en Directo
-                </span>
-              </div>
-              
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[700px]">
-                  <thead>
-                    <tr className="bg-white text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
-                      <th className="px-5 py-4 font-bold">Hora</th>
-                      <th className="px-5 py-4 font-bold text-center">Score</th>
-                      <th className="px-5 py-4 font-bold">Oleaje (m / s)</th>
-                      <th className="px-5 py-4 font-bold text-center">Energía</th>
-                      <th className="px-5 py-4 font-bold text-center">Resaca</th>
-                      <th className="px-5 py-4 font-bold">Viento (Nudos)</th>
-                      <th className="px-5 py-4 font-bold text-center">Lluvia</th>
-                      <th className="px-5 py-4 font-bold text-center">Dir.</th>
-                      <th className="px-5 py-4 font-bold text-center">UV</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-sm">
-                    {beachData.hourly.map((hour, idx) => (
-                      <tr key={idx} className="hover:bg-blue-50/50 transition-colors group">
-                        
-                        <td className="px-5 py-4">
-                          <span className="font-bold text-slate-800 text-base">{hour.time}</span>
-                        </td>
-
-                        <td className="px-5 py-4 text-center">
-                          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-xs
-                            ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
-                              hour.hourScore > 40 ? 'bg-amber-100 text-amber-700' : 
-                              'bg-red-100 text-red-700'}`}>
-                            {hour.hourScore}
-                          </span>
-                        </td>
-                        
-                        <td className="px-5 py-4">
-                          <div className="flex flex-col">
-                            <span className={`font-black text-base ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
-                              {hour.swellH}m
-                            </span>
-                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                              P: {hour.period}s
-                            </span>
-                          </div>
-                        </td>
-
-                        <td className="px-5 py-4 text-center">
-                          <div className="flex flex-col items-center justify-center">
-                            <span className={`font-black text-base ${hour.waveEnergy > 50 ? 'text-orange-500' : 'text-slate-700'}`}>
-                              {hour.waveEnergy}
-                            </span>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">Kj</span>
-                          </div>
-                        </td>
-
-                        <td className="px-5 py-4 text-center">
-                          <span className={`text-xs ${hour.ripColor}`}>
-                            {hour.ripRisk}
-                          </span>
-                        </td>
-
-                        <td className="px-5 py-4">
-                          <div className="flex flex-col">
-                            <span className={`font-black text-base ${hour.windS > 15 ? 'text-amber-500' : 'text-slate-700'}`}>
-                              {hour.windS} kts
-                            </span>
-                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                              Rachas: {hour.gust}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* COLUMNA RESTAURADA: LLUVIA */}
-                        <td className="px-5 py-4 text-center">
-                          <div className="flex flex-col items-center justify-center">
-                            {hour.rain > 10 && <Droplets size={14} className="text-blue-400 mb-1" />}
-                            <span className={`font-bold ${hour.rain > 10 ? 'text-blue-600' : 'text-slate-400'}`}>
-                              {hour.rain}%
-                            </span>
-                          </div>
-                        </td>
-
-                        <td className="px-5 py-4 text-center">
-                          <span className="font-bold text-slate-700 text-xs">
-                            {getWindDirection(hour.windDir)}
-                          </span>
-                        </td>
-
-                        <td className="px-5 py-4 text-center">
-                          <span className={`font-black ${hour.uv > 5 ? 'text-orange-500' : 'text-slate-400'}`}>
-                            {hour.uv}
-                          </span>
-                        </td>
-
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-          </div>
+          </>
         )}
       </div>
     </div>
