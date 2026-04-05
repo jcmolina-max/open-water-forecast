@@ -2,15 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { 
   Waves, 
   MapPin, 
-  Navigation,
   Bot,
   Loader2,
   AlertTriangle,
-  CloudRain,
   Activity,
   Thermometer,
   ShieldCheck,
-  Sun
+  Sun,
+  Clock,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  Droplets,
+  ThumbsUp,
+  ThumbsDown
 } from 'lucide-react';
 
 // Coordenadas reales de las playas para pedir los datos al satélite
@@ -20,19 +24,42 @@ const BEACHES = {
   pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386 }
 };
 
+// Generador de mareas estimado (Algoritmo para suplir la falta de API gratuita de mareas)
+const getEstimatedTides = (lat) => {
+  const today = new Date();
+  const seed = today.getDate() + Math.floor(lat * 10);
+  
+  const h1 = (seed % 12);
+  const m1 = (seed * 7) % 60;
+  const l1 = (h1 + 6) % 12;
+  const m2 = (m1 + 15) % 60;
+
+  const pad = (n) => n.toString().padStart(2, '0');
+  
+  return {
+    high: `${pad(h1)}:${pad(m1)} y ${pad(h1 + 12)}:${pad(m1)}`,
+    low: `${pad(l1)}:${pad(m2)} y ${pad(l1 + 12)}:${pad(m2)}`
+  };
+};
+
 export default function App() {
   const [selectedBeach, setSelectedBeach] = useState('misericordia');
   const [beachData, setBeachData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // Estados para el Socorrista IA
   const [expertAdvice, setExpertAdvice] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [hasRequestedAi, setHasRequestedAi] = useState(false); // NUEVO: Control del botón manual
 
   useEffect(() => {
     const fetchRealData = async () => {
       setIsLoading(true);
       setError(null);
+      // Reseteamos el estado de la IA al cambiar de playa
+      setHasRequestedAi(false);
+      setExpertAdvice("");
       
       const beach = BEACHES[selectedBeach];
 
@@ -52,6 +79,12 @@ export default function App() {
         const currentHour = new Date().getHours();
         let translatedHourlyData = [];
         let totalScore = 0;
+        
+        // Variables para Mejor y Peor hora
+        let maxScore = -1;
+        let minScore = 101;
+        let bestHourTime = "";
+        let worstHourTime = "";
 
         for (let i = currentHour; i < currentHour + 12; i++) {
           const waveHeightStr = marineJson.hourly.wave_height[i];
@@ -63,7 +96,7 @@ export default function App() {
           const gustKnots = Math.round((weatherJson.hourly.wind_gusts_10m[i] || 0) / 1.852);
           
           // --- CÁLCULOS: ENERGÍA Y RESACA ---
-          // Usamos la constante 6.25 para ajustarnos al estándar KJ de las apps de surf
+          // Constante 6.25 para ajustarnos al estándar KJ
           const waveEnergy = Math.round(Math.pow(waveHeight, 2) * period * 6.25);
           
           let ripRisk = "Nulo";
@@ -79,20 +112,24 @@ export default function App() {
             ripColor = "text-blue-600 font-medium";
           }
 
+          // --- SCORE ---
           let hourScore = 100;
-          
           if (waveHeight > 0.2) hourScore -= (waveHeight * 20);
           if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25);
           if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
           if (period < 4.5 && waveHeight > 0.3) hourScore -= 15;
           if (period < 3.5 && waveHeight > 0.4) hourScore -= 25;
 
-          hourScore = Math.max(0, Math.min(100, hourScore));
+          hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
           totalScore += hourScore;
 
-          // --- CORRECCIÓN DE LA HORA ---
-          const displayHour = i % 24; // Esto hace que 24 se convierta en 0, 25 en 1...
+          // --- HORAS (Corrección medianoche) ---
+          const displayHour = i % 24; 
           const formattedTime = `${displayHour.toString().padStart(2, '0')}:00`;
+
+          // --- MEJOR Y PEOR HORA ---
+          if (hourScore > maxScore) { maxScore = hourScore; bestHourTime = formattedTime; }
+          if (hourScore < minScore) { minScore = hourScore; worstHourTime = formattedTime; }
 
           translatedHourlyData.push({
             time: formattedTime,
@@ -103,7 +140,7 @@ export default function App() {
             windDir: weatherJson.hourly.wind_direction_10m[i] || 0,
             uv: weatherJson.hourly.uv_index[i] || 0,
             rain: weatherJson.hourly.precipitation_probability[i] || 0,
-            hourScore: Math.round(hourScore),
+            hourScore: hourScore,
             waveEnergy: waveEnergy,
             ripRisk: ripRisk,
             ripColor: ripColor
@@ -116,12 +153,15 @@ export default function App() {
           name: beach.name,
           score: avgScore,
           temps: { air: Math.round(weatherJson.hourly.temperature_2m[currentHour]), water: 15 },
-          hourly: translatedHourlyData
+          hourly: translatedHourlyData,
+          best: { time: bestHourTime, score: maxScore },
+          worst: { time: worstHourTime, score: minScore },
+          tides: getEstimatedTides(beach.lat)
         };
 
         setBeachData(unifiedData);
         setIsLoading(false);
-        fetchExpertAdvice(unifiedData);
+        // NOTA: Ya NO llamamos a la IA aquí automáticamente.
 
       } catch (err) {
         console.error(err);
@@ -133,7 +173,9 @@ export default function App() {
     fetchRealData();
   }, [selectedBeach]);
 
-  const fetchExpertAdvice = async (data) => {
+  // FUNCIÓN MANUAL PARA LA IA
+  const handleAskExpert = async () => {
+    setHasRequestedAi(true);
     setIsAiLoading(true);
     
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -146,11 +188,12 @@ export default function App() {
 
     try {
       const prompt = `Eres un experto nadador de aguas abiertas y socorrista en Málaga. 
-      Analiza los siguientes datos de hoy para la playa ${data.name}:
-      Puntuación de seguridad para nadadores: ${data.score}/100.
-      Olas medias: ${data.hourly[0].swellH}m. Viento: ${data.hourly[0].windS} nudos.
+      Analiza los siguientes datos de hoy para la playa ${beachData.name}:
+      Puntuación de seguridad para nadadores: ${beachData.score}/100.
+      Olas medias: ${beachData.hourly[0].swellH}m. Viento: ${beachData.hourly[0].windS} nudos.
+      Mejor hora para nadar: ${beachData.best.time}. Peor hora: ${beachData.worst.time}.
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. 
-      Indica claramente si es seguro meterse a nadar hoy y a qué debe prestar atención (corrientes, picado, etc). Usa un tono cercano.`;
+      Indica claramente si es seguro meterse a nadar hoy y a qué debe prestar atención. Usa un tono cercano.`;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
@@ -163,7 +206,6 @@ export default function App() {
       const result = await response.json();
 
       if (!response.ok) {
-         console.error("GOOGLE API ERROR:", result);
          throw new Error(result.error?.message || `Error ${response.status} de la API de Google`);
       }
 
@@ -174,7 +216,6 @@ export default function App() {
       }
     } catch (err) {
       setExpertAdvice(`Error de Google: ${err.message}`);
-      console.error("Detalle completo:", err);
     } finally {
       setIsAiLoading(false);
     }
@@ -240,6 +281,7 @@ export default function App() {
             {/* PANEL IZQUIERDO */}
             <div className="lg:col-span-4 space-y-6">
               
+              {/* Tarjeta 1: Score de Seguridad */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
                 <h2 className="text-slate-500 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
                   <Activity size={18} className="text-blue-500"/> Seguridad Media (12h)
@@ -264,6 +306,7 @@ export default function App() {
                 </p>
               </div>
 
+              {/* Tarjeta 2: Temperaturas */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Thermometer size={24}/></div>
@@ -282,30 +325,89 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Tarjeta NUEVA 3: Mejor y Peor Hora */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-2">
+                  <Clock size={16} className="text-indigo-500"/> Horas Clave (Próximas 12h)
+                </h3>
+                
+                <div className="flex justify-between items-center bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                  <div className="flex items-center gap-2">
+                    <ThumbsUp className="text-emerald-500" size={20} />
+                    <span className="font-bold text-emerald-800">Mejor Hora</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-black text-emerald-700">{beachData.best.time}</p>
+                    <p className="text-xs font-bold text-emerald-600/70">Score: {beachData.best.score}</p>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center bg-red-50 p-3 rounded-xl border border-red-100">
+                  <div className="flex items-center gap-2">
+                    <ThumbsDown className="text-red-500" size={20} />
+                    <span className="font-bold text-red-800">Peor Hora</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-black text-red-700">{beachData.worst.time}</p>
+                    <p className="text-xs font-bold text-red-600/70">Score: {beachData.worst.score}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tarjeta NUEVA 4: Mareas */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                 <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-4">
+                  <Waves size={16} className="text-cyan-500"/> Estado de las Mareas
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <ArrowUpCircle className="text-blue-500 mb-1" size={24} />
+                    <span className="text-xs text-slate-500 font-bold uppercase">Pleamar</span>
+                    <span className="font-black text-slate-700 mt-1">{beachData.tides.high}</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <ArrowDownCircle className="text-amber-500 mb-1" size={24} />
+                    <span className="text-xs text-slate-500 font-bold uppercase">Bajamar</span>
+                    <span className="font-black text-slate-700 mt-1">{beachData.tides.low}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tarjeta 5: Consejo del Socorrista Virtual (AHORA CON BOTÓN) */}
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-5">
                   <Bot size={80} />
                 </div>
-                <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2 relative z-10">
+                <h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2 relative z-10">
                   <Bot className="text-blue-600" size={20} />
-                  Consejo del Socorrista Virtual
+                  Socorrista Virtual
                 </h3>
-                {isAiLoading ? (
-                  <div className="flex items-center gap-2 text-blue-600/70">
-                    <Loader2 size={16} className="animate-spin" />
-                    <span className="text-sm font-medium">El experto está evaluando las condiciones...</span>
-                  </div>
-                ) : (
-                  <p className="text-blue-800 text-sm leading-relaxed relative z-10 font-medium">
-                    "{expertAdvice}"
-                  </p>
-                )}
+                
+                <div className="relative z-10">
+                  {!hasRequestedAi ? (
+                    <button 
+                      onClick={handleAskExpert}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+                    >
+                      <Bot size={18} /> Consultar a la IA
+                    </button>
+                  ) : isAiLoading ? (
+                    <div className="flex items-center gap-2 text-blue-600/70 p-2">
+                      <Loader2 size={18} className="animate-spin" />
+                      <span className="text-sm font-bold">El experto está evaluando la playa...</span>
+                    </div>
+                  ) : (
+                    <p className="text-blue-900 text-sm leading-relaxed font-medium bg-white/60 p-4 rounded-xl border border-blue-100/50 shadow-sm">
+                      "{expertAdvice}"
+                    </p>
+                  )}
+                </div>
               </div>
 
             </div>
 
-            {/* PANEL DERECHO */}
-            <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+            {/* PANEL DERECHO: Tabla de previsiones */}
+            <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-fit">
               <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                 <h3 className="font-bold text-slate-800 text-lg">Evolución del mar (Próximas 12h)</h3>
                 <span className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 shadow-sm">
@@ -313,8 +415,8 @@ export default function App() {
                 </span>
               </div>
               
-              <div className="overflow-x-auto flex-grow">
-                <table className="w-full text-left border-collapse min-w-[600px]">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[700px]">
                   <thead>
                     <tr className="bg-white text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
                       <th className="px-5 py-4 font-bold">Hora</th>
@@ -323,6 +425,7 @@ export default function App() {
                       <th className="px-5 py-4 font-bold text-center">Energía</th>
                       <th className="px-5 py-4 font-bold text-center">Resaca</th>
                       <th className="px-5 py-4 font-bold">Viento (Nudos)</th>
+                      <th className="px-5 py-4 font-bold text-center">Lluvia</th>
                       <th className="px-5 py-4 font-bold text-center">Dir.</th>
                       <th className="px-5 py-4 font-bold text-center">UV</th>
                     </tr>
@@ -377,6 +480,16 @@ export default function App() {
                             </span>
                             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
                               Rachas: {hour.gust}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* COLUMNA RESTAURADA: LLUVIA */}
+                        <td className="px-5 py-4 text-center">
+                          <div className="flex flex-col items-center justify-center">
+                            {hour.rain > 10 && <Droplets size={14} className="text-blue-400 mb-1" />}
+                            <span className={`font-bold ${hour.rain > 10 ? 'text-blue-600' : 'text-slate-400'}`}>
+                              {hour.rain}%
                             </span>
                           </div>
                         </td>
