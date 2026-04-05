@@ -15,7 +15,8 @@ import {
   Droplets,
   ThumbsUp,
   ThumbsDown,
-  CalendarDays
+  CalendarDays,
+  AlertCircle
 } from 'lucide-react';
 
 // Coordenadas reales de las playas
@@ -25,7 +26,7 @@ const BEACHES = {
   pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386 }
 };
 
-// Generador de mareas estimado (ahora recibe el día de desfase)
+// Generador de mareas estimado
 const getEstimatedTides = (lat, dayOffset = 0) => {
   const today = new Date();
   const seed = today.getDate() + dayOffset + Math.floor(lat * 10);
@@ -43,10 +44,19 @@ const getEstimatedTides = (lat, dayOffset = 0) => {
   };
 };
 
+// Generador de etiquetas de fecha (Ej: "Hoy (5 abr)")
+const getDateLabel = (offset, prefix) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  const day = d.getDate();
+  const monthStr = d.toLocaleString('es-ES', { month: 'short' });
+  return `${prefix} (${day} ${monthStr})`;
+};
+
 export default function App() {
   const [selectedBeach, setSelectedBeach] = useState('misericordia');
   const [selectedDay, setSelectedDay] = useState(0); // 0: Hoy, 1: Mañana, 2: Pasado
-  const [beachData, setBeachData] = useState(null); // Ahora guardará un array con 3 días
+  const [beachData, setBeachData] = useState(null); 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
@@ -61,7 +71,7 @@ export default function App() {
       setError(null);
       setHasRequestedAi(false);
       setExpertAdvice("");
-      setSelectedDay(0); // Volver a "Hoy" al cambiar de playa
+      setSelectedDay(0); 
       
       const beach = BEACHES[selectedBeach];
 
@@ -79,18 +89,10 @@ export default function App() {
         const marineJson = await marineResponse.json();
 
         const currentHour = new Date().getHours();
-        const daysProcessed = []; // Aquí guardaremos los 3 días
+        const daysProcessed = []; 
 
-        // Bucle para procesar Hoy (0), Mañana (1) y Pasado (2)
         for (let d = 0; d < 3; d++) {
-          let startIndex;
-          if (d === 0) {
-            startIndex = currentHour; // Hoy: desde la hora actual
-          } else if (d === 1) {
-            startIndex = 32; // Mañana: Índice 32 suele corresponder a las 08:00 AM del día siguiente
-          } else {
-            startIndex = 56; // Pasado: Índice 56 corresponde a las 08:00 AM de dentro de 2 días
-          }
+          let startIndex = d === 0 ? currentHour : (d === 1 ? 32 : 56);
 
           let translatedHourlyData = [];
           let totalScore = 0;
@@ -98,9 +100,12 @@ export default function App() {
           let minScore = 101;
           let bestHourTime = "";
           let worstHourTime = "";
+          
+          // Variables para el algoritmo de Medusas
+          let eastWindCount = 0;
+          let maxEastWind = 0;
 
           for (let i = startIndex; i < startIndex + 12; i++) {
-            // Protección por si el satélite no tiene datos tan lejanos
             if (i >= marineJson.hourly.wave_height.length) break;
 
             const waveHeightStr = marineJson.hourly.wave_height[i];
@@ -110,8 +115,15 @@ export default function App() {
             const windKmh = weatherJson.hourly.wind_speed_10m[i] || 0;
             const windKnots = Math.round(windKmh / 1.852);
             const gustKnots = Math.round((weatherJson.hourly.wind_gusts_10m[i] || 0) / 1.852);
+            const windDir = weatherJson.hourly.wind_direction_10m[i] || 0;
             
-            // Constante 6.25 para ajustarnos al estándar KJ
+            // --- DETECCIÓN DE LEVANTE PARA MEDUSAS ---
+            // Si el viento viene del Este (entre 45º y 135º)
+            if (windDir > 45 && windDir < 135) {
+                eastWindCount++;
+                if (windKnots > maxEastWind) maxEastWind = windKnots;
+            }
+
             const waveEnergy = Math.round(Math.pow(waveHeight, 2) * period * 6.25);
             
             let ripRisk = "Nulo";
@@ -127,7 +139,6 @@ export default function App() {
               ripColor = "text-blue-600 font-medium";
             }
 
-            // SCORE
             let hourScore = 100;
             if (waveHeight > 0.2) hourScore -= (waveHeight * 20);
             if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25);
@@ -138,11 +149,9 @@ export default function App() {
             hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
             totalScore += hourScore;
 
-            // HORAS (Corrección medianoche)
             const displayHour = i % 24; 
             const formattedTime = `${displayHour.toString().padStart(2, '0')}:00`;
 
-            // MEJOR Y PEOR HORA
             if (hourScore > maxScore) { maxScore = hourScore; bestHourTime = formattedTime; }
             if (hourScore < minScore) { minScore = hourScore; worstHourTime = formattedTime; }
 
@@ -152,7 +161,7 @@ export default function App() {
               period: period.toFixed(1),
               windS: windKnots,
               gust: gustKnots,
-              windDir: weatherJson.hourly.wind_direction_10m[i] || 0,
+              windDir: windDir,
               uv: weatherJson.hourly.uv_index[i] || 0,
               rain: weatherJson.hourly.precipitation_probability[i] || 0,
               hourScore: hourScore,
@@ -162,8 +171,30 @@ export default function App() {
             });
           }
 
+          // --- EVALUACIÓN FINAL MEDUSAS DEL DÍA ---
+          let jRisk = "Bajo";
+          let jColor = "text-emerald-600";
+          let jBg = "bg-emerald-50 border-emerald-100";
+
+          // Si más de 4 horas del día sopla Levante, hay riesgo
+          if (eastWindCount >= 4) {
+              if (maxEastWind >= 10) {
+                  jRisk = "Alto";
+                  jColor = "text-red-600";
+                  jBg = "bg-red-50 border-red-100";
+              } else {
+                  jRisk = "Medio";
+                  jColor = "text-amber-600";
+                  jBg = "bg-amber-50 border-amber-100";
+              }
+          }
+
           const avgScore = Math.round(totalScore / 12);
-          const dayLabels = ["Hoy", "Mañana", "Pasado"];
+          const dayLabels = [
+              getDateLabel(0, "Hoy"), 
+              getDateLabel(1, "Mañana"), 
+              getDateLabel(2, "Pasado")
+          ];
           
           daysProcessed.push({
             dayIndex: d,
@@ -174,7 +205,8 @@ export default function App() {
             hourly: translatedHourlyData,
             best: { time: bestHourTime, score: maxScore },
             worst: { time: worstHourTime, score: minScore },
-            tides: getEstimatedTides(beach.lat, d)
+            tides: getEstimatedTides(beach.lat, d),
+            jellyfish: { risk: jRisk, color: jColor, bgColor: jBg }
           });
         }
 
@@ -191,7 +223,6 @@ export default function App() {
     fetchRealData();
   }, [selectedBeach]);
 
-  // Al cambiar de día (Hoy/Mañana/Pasado), reseteamos a la IA
   const handleDayChange = (index) => {
     setSelectedDay(index);
     setHasRequestedAi(false);
@@ -258,7 +289,6 @@ export default function App() {
     return '-';
   };
 
-  // Variable auxiliar para que el renderizado sea más limpio
   const currentDayData = beachData ? beachData[selectedDay] : null;
 
   return (
@@ -305,9 +335,9 @@ export default function App() {
           </div>
         ) : currentDayData && (
           <>
-            {/* NUEVO: SELECTOR DE DÍAS */}
+            {/* SELECTOR DE DÍAS CON FECHAS */}
             <div className="flex flex-wrap gap-2 mb-2">
-              {['Hoy (Próximas 12h)', 'Mañana', 'Pasado'].map((label, idx) => (
+              {beachData.map((day, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleDayChange(idx)}
@@ -318,7 +348,7 @@ export default function App() {
                   }`}
                 >
                   <CalendarDays size={16} />
-                  {label}
+                  {day.dayLabel}
                 </button>
               ))}
             </div>
@@ -331,7 +361,7 @@ export default function App() {
                 {/* Tarjeta 1: Score de Seguridad */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
                   <h2 className="text-slate-500 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
-                    <Activity size={18} className="text-blue-500"/> Seguridad Media ({currentDayData.dayLabel})
+                    <Activity size={18} className="text-blue-500"/> Seguridad Media
                   </h2>
                   <div className="relative">
                     <svg className="w-40 h-40 transform -rotate-90">
@@ -366,7 +396,7 @@ export default function App() {
                   <div className="flex items-center gap-3">
                     <div className="bg-orange-50 p-2 rounded-lg text-orange-500"><Sun size={24}/></div>
                     <div>
-                      <p className="text-sm text-slate-500 font-medium">Aire ({currentDayData.dayLabel})</p>
+                      <p className="text-sm text-slate-500 font-medium">Aire ({currentDayData.dayLabel.split(' ')[0]})</p>
                       <p className="text-xl font-bold text-slate-800">{currentDayData.temps.air}ºC</p>
                     </div>
                   </div>
@@ -404,7 +434,7 @@ export default function App() {
                 {/* Tarjeta 4: Mareas */}
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                    <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-4">
-                    <Waves size={16} className="text-cyan-500"/> Mareas ({currentDayData.dayLabel})
+                    <Waves size={16} className="text-cyan-500"/> Mareas
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-xl border border-slate-100">
@@ -420,7 +450,25 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 5: Socorrista Virtual */}
+                {/* NUEVO: Tarjeta 5: Riesgo de Medusas */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                  <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-4">
+                    <AlertCircle size={16} className="text-purple-500"/> Riesgo de Medusas
+                  </h3>
+                  <div className={`flex justify-between items-center p-3 rounded-xl border ${currentDayData.jellyfish.bgColor}`}>
+                    <span className={`font-black uppercase text-sm ${currentDayData.jellyfish.color}`}>
+                      Nivel {currentDayData.jellyfish.risk}
+                    </span>
+                    <a href="https://infomedusa.es/" target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-500 hover:text-blue-700 underline underline-offset-2">
+                      Ver Infomedusa
+                    </a>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-3 font-medium leading-tight">
+                    *Estimación experimental basada en la persistencia del viento de Levante.
+                  </p>
+                </div>
+
+                {/* Tarjeta 6: Socorrista Virtual */}
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-4 opacity-5">
                     <Bot size={80} />
@@ -436,7 +484,7 @@ export default function App() {
                         onClick={handleAskExpert}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
                       >
-                        <Bot size={18} /> Consultar previsión de {currentDayData.dayLabel.toLowerCase()}
+                        <Bot size={18} /> Consultar previsión 
                       </button>
                     ) : isAiLoading ? (
                       <div className="flex items-center gap-2 text-blue-600/70 p-2">
@@ -458,7 +506,7 @@ export default function App() {
                 <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                   <h3 className="font-bold text-slate-800 text-lg">Evolución del mar</h3>
                   <span className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 shadow-sm">
-                    <CalendarDays size={14}/> {currentDayData.dayLabel}
+                    <CalendarDays size={14}/> {currentDayData.dayLabel.split(' ')[0]}
                   </span>
                 </div>
                 
