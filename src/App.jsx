@@ -16,7 +16,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   CalendarDays,
-  AlertCircle
+  AlertCircle,
+  Anchor
 } from 'lucide-react';
 
 // Coordenadas reales de las playas
@@ -140,11 +141,18 @@ export default function App() {
             }
 
             let hourScore = 100;
+            
+            // Castigos por altura de ola
             if (waveHeight > 0.2) hourScore -= (waveHeight * 20);
-            if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25);
+            if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25); // Penalización exponencial para olas grandes
+            
+            // Castigo por viento
             if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
-            if (period < 4.5 && waveHeight > 0.3) hourScore -= 15;
-            if (period < 3.5 && waveHeight > 0.4) hourScore -= 25;
+            
+            // --- CORRECCIÓN: Castigo por "mar picado" (choppy) suavizado ---
+            // Antes castigaba a partir de 0.3m. Ahora solo castiga si la ola ya tiene algo de cuerpo (0.5m o más)
+            if (period < 4.5 && waveHeight > 0.5) hourScore -= 15;
+            if (period < 3.5 && waveHeight > 0.6) hourScore -= 25;
 
             hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
             totalScore += hourScore;
@@ -466,6 +474,24 @@ export default function App() {
                   <p className="text-[10px] text-slate-400 mt-3 font-medium leading-tight">
                     *Estimación experimental basada en la persistencia del viento de Levante.
                   </p>
+                </div>
+
+                {/* NUEVA TARJETA: Boya Oficial de Puertos del Estado */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                  <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-3">
+                    <Anchor size={16} className="text-blue-500"/> Boya Oficial (En Directo)
+                  </h3>
+                  <p className="text-sm text-slate-600 font-medium mb-4 leading-relaxed">
+                    Consulta la temperatura exacta y el oleaje medido en este instante por Puertos del Estado.
+                  </p>
+                  <a 
+                    href="https://portus.puertos.es/#/" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-blue-700 font-bold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-200 shadow-sm"
+                  >
+                    Ver datos en Portus
+                  </a>
                 </div>
 
                 {/* Tarjeta 6: Socorrista Virtual */}
