@@ -17,7 +17,15 @@ import {
   ThumbsDown,
   CalendarDays,
   AlertCircle,
-  Anchor
+  Anchor,
+  // Nuevos iconos para la Guía Local
+  BookOpen, 
+  X, 
+  Wind, 
+  ThermometerSun, 
+  ShieldAlert,
+  ArrowUpRight,
+  Info
 } from 'lucide-react';
 
 // Coordenadas reales de las playas
@@ -25,24 +33,6 @@ const BEACHES = {
   misericordia: { name: "La Misericordia, Málaga", lat: 36.696, lon: -4.444 },
   malagueta: { name: "La Malagueta, Málaga", lat: 36.718, lon: -4.407 },
   pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386 }
-};
-
-// Generador de mareas estimado
-const getEstimatedTides = (lat, dayOffset = 0) => {
-  const today = new Date();
-  const seed = today.getDate() + dayOffset + Math.floor(lat * 10);
-  
-  const h1 = (seed % 12);
-  const m1 = (seed * 7) % 60;
-  const l1 = (h1 + 6) % 12;
-  const m2 = (m1 + 15) % 60;
-
-  const pad = (n) => n.toString().padStart(2, '0');
-  
-  return {
-    high: `${pad(h1)}:${pad(m1)} y ${pad(h1 + 12)}:${pad(m1)}`,
-    low: `${pad(l1)}:${pad(m2)} y ${pad(l1 + 12)}:${pad(m2)}`
-  };
 };
 
 // Generador de etiquetas de fecha (Ej: "Hoy (5 abr)")
@@ -61,6 +51,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // Estado para la Guía Local Modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   // Estados para el Socorrista IA
   const [expertAdvice, setExpertAdvice] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -119,7 +112,6 @@ export default function App() {
             const windDir = weatherJson.hourly.wind_direction_10m[i] || 0;
             
             // --- DETECCIÓN DE LEVANTE PARA MEDUSAS ---
-            // Si el viento viene del Este (entre 45º y 135º)
             if (windDir > 45 && windDir < 135) {
                 eastWindCount++;
                 if (windKnots > maxEastWind) maxEastWind = windKnots;
@@ -142,14 +134,10 @@ export default function App() {
 
             let hourScore = 100;
             
-            // Castigos por altura de ola
+            // Castigos base
             if (waveHeight > 0.2) hourScore -= (waveHeight * 20);
             if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25); 
-            
-            // Castigo por viento
             if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
-            
-            // Castigo por "mar picado" (choppy) suavizado
             if (period < 4.5 && waveHeight > 0.5) hourScore -= 15;
             if (period < 3.5 && waveHeight > 0.6) hourScore -= 25;
 
@@ -183,7 +171,6 @@ export default function App() {
           let jColor = "text-emerald-600";
           let jBg = "bg-emerald-50 border-emerald-100";
 
-          // Si más de 4 horas del día sopla Levante, hay riesgo
           if (eastWindCount >= 4) {
               if (maxEastWind >= 10) {
                   jRisk = "Alto";
@@ -212,7 +199,6 @@ export default function App() {
             hourly: translatedHourlyData,
             best: { time: bestHourTime, score: maxScore },
             worst: { time: worstHourTime, score: minScore },
-            tides: getEstimatedTides(beach.lat, d),
             jellyfish: { risk: jRisk, color: jColor, bgColor: jBg }
           });
         }
@@ -314,17 +300,30 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl w-full md:w-auto border border-slate-200">
-            <MapPin className="text-slate-400 ml-2" size={20} />
-            <select 
-              value={selectedBeach} 
-              onChange={(e) => setSelectedBeach(e.target.value)}
-              className="bg-transparent font-bold text-slate-700 py-2 pr-8 pl-2 outline-none w-full md:w-64 cursor-pointer"
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            {/* BOTÓN GUÍA LOCAL */}
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="flex-1 md:flex-none bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-2.5 px-4 rounded-xl transition-colors border border-indigo-100 flex items-center justify-center gap-2"
+              title="Guía Local del Mar"
             >
-              <option value="misericordia">La Misericordia</option>
-              <option value="malagueta">La Malagueta</option>
-              <option value="pedregalejo">Pedregalejo</option>
-            </select>
+              <BookOpen size={18} />
+              <span className="md:hidden lg:inline">Guía Local</span>
+            </button>
+
+            {/* SELECTOR DE PLAYA */}
+            <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl w-full md:w-auto border border-slate-200 flex-1 md:flex-none">
+              <MapPin className="text-slate-400 ml-2" size={20} />
+              <select 
+                value={selectedBeach} 
+                onChange={(e) => setSelectedBeach(e.target.value)}
+                className="bg-transparent font-bold text-slate-700 py-1.5 pr-8 pl-2 outline-none w-full cursor-pointer"
+              >
+                <option value="misericordia">La Misericordia</option>
+                <option value="malagueta">La Malagueta</option>
+                <option value="pedregalejo">Pedregalejo</option>
+              </select>
+            </div>
           </div>
         </header>
 
@@ -648,6 +647,123 @@ export default function App() {
         )}
 
       </div>
+
+      {/* ========================================= */}
+      {/* LA VENTANA MODAL (GUÍA LOCAL INFOGRAFÍA) */}
+      {/* ========================================= */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity">
+          
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden relative flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+            
+            {/* Cabecera del Modal */}
+            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
+              <div className="flex items-center gap-3">
+                <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
+                  <BookOpen size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 tracking-tight">Guía Local del Mar</h3>
+                  <p className="text-xs text-slate-500 font-medium">Secretos de la Bahía de Málaga</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Contenido (Tarjetas) */}
+            <div className="p-6 overflow-y-auto">
+              
+              <div className="mb-6 bg-blue-50 text-blue-800 p-4 rounded-xl text-sm font-medium flex items-start gap-3 border border-blue-100">
+                <Info size={20} className="shrink-0 mt-0.5 text-blue-600" />
+                <p>
+                  Las aplicaciones meteorológicas globales no entienden la orografía de nuestra costa. 
+                  Como nadadores locales, utilizamos estas 4 reglas de oro para interpretar la previsión real.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                
+                {/* REGLA 1: El Magón */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-cyan-300 transition-colors group">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="bg-cyan-50 p-2.5 rounded-xl text-cyan-600 group-hover:bg-cyan-100 transition-colors">
+                      <Waves size={24} />
+                    </div>
+                    <h4 className="font-bold text-slate-800">El "Magón"</h4>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-3 leading-relaxed">
+                    Ola tendida y limpia (mar de fondo). Aunque el satélite marque 0.5m o más, si no hay viento, la ola simplemente te mece sin romper.
+                  </p>
+                  <div className="flex gap-2">
+                    <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md">Viento Nulo</span>
+                    <span className="text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md">Nado Cómodo</span>
+                  </div>
+                </div>
+
+                {/* REGLA 2: La Lavadora */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-amber-300 transition-colors group">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="bg-amber-50 p-2.5 rounded-xl text-amber-600 group-hover:bg-amber-100 transition-colors">
+                      <ThermometerSun size={24} />
+                    </div>
+                    <h4 className="font-bold text-slate-800">La "Lavadora" Térmica</h4>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-3 leading-relaxed">
+                    A mediodía, el calor de la tierra actúa como turbo para el viento de <strong>Poniente</strong>, levantando un mar picado ("choppy") repentino e incómodo.
+                  </p>
+                  <div className="flex gap-2">
+                    <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md">12:00h - 18:00h</span>
+                    <span className="text-[10px] font-bold uppercase bg-amber-100 text-amber-700 px-2 py-1 rounded-md">Incómodo</span>
+                  </div>
+                </div>
+
+                {/* REGLA 3: El Terral */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-red-300 transition-colors group">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="bg-red-50 p-2.5 rounded-xl text-red-600 group-hover:bg-red-100 transition-colors">
+                      <Wind size={24} />
+                    </div>
+                    <h4 className="font-bold text-slate-800">La trampa del Terral</h4>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-3 leading-relaxed">
+                    El viento fuerte de <strong>Norte (Tierra)</strong> alisa la orilla creando una falsa sensación de calma. Peligro alto de ser arrastrado hacia alta mar si te alejas.
+                  </p>
+                  <div className="flex gap-2">
+                    <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md">Falsa Calma</span>
+                    <span className="text-[10px] font-bold uppercase bg-red-100 text-red-700 px-2 py-1 rounded-md flex items-center gap-1">
+                      <ArrowUpRight size={12}/> Riesgo Deriva
+                    </span>
+                  </div>
+                </div>
+
+                {/* REGLA 4: El Escudo */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-colors group">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+                      <ShieldAlert size={24} />
+                    </div>
+                    <h4 className="font-bold text-slate-800">El Escudo del Puerto</h4>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-3 leading-relaxed">
+                    Las playas de La Malagueta y Pedregalejo están fuertemente protegidas por el Puerto y los espigones. Las olas del satélite llegan aquí muy atenuadas.
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <span className="text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md">Malagueta</span>
+                    <span className="text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md">Pedregalejo</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
