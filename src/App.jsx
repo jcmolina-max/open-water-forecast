@@ -27,24 +27,6 @@ const BEACHES = {
   pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386 }
 };
 
-// Generador de mareas estimado
-const getEstimatedTides = (lat, dayOffset = 0) => {
-  const today = new Date();
-  const seed = today.getDate() + dayOffset + Math.floor(lat * 10);
-  
-  const h1 = (seed % 12);
-  const m1 = (seed * 7) % 60;
-  const l1 = (h1 + 6) % 12;
-  const m2 = (m1 + 15) % 60;
-
-  const pad = (n) => n.toString().padStart(2, '0');
-  
-  return {
-    high: `${pad(h1)}:${pad(m1)} y ${pad(h1 + 12)}:${pad(m1)}`,
-    low: `${pad(l1)}:${pad(m2)} y ${pad(l1 + 12)}:${pad(m2)}`
-  };
-};
-
 // Generador de etiquetas de fecha (Ej: "Hoy (5 abr)")
 const getDateLabel = (offset, prefix) => {
   const d = new Date();
@@ -213,7 +195,6 @@ export default function App() {
             hourly: translatedHourlyData,
             best: { time: bestHourTime, score: maxScore },
             worst: { time: worstHourTime, score: minScore },
-            tides: getEstimatedTides(beach.lat, d),
             jellyfish: { risk: jRisk, color: jColor, bgColor: jBg }
           });
         }
@@ -439,23 +420,22 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 4: Mareas */}
+                {/* Tarjeta 4: Mareas Oficiales */}
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                   <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-4">
-                    <Waves size={16} className="text-cyan-500"/> Mareas
+                  <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-3">
+                    <Waves size={16} className="text-cyan-500"/> Mareas Oficiales
                   </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <ArrowUpCircle className="text-blue-500 mb-1" size={24} />
-                      <span className="text-xs text-slate-500 font-bold uppercase">Pleamar</span>
-                      <span className="font-black text-slate-700 mt-1">{currentDayData.tides.high}</span>
-                    </div>
-                    <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <ArrowDownCircle className="text-amber-500 mb-1" size={24} />
-                      <span className="text-xs text-slate-500 font-bold uppercase">Bajamar</span>
-                      <span className="font-black text-slate-700 mt-1">{currentDayData.tides.low}</span>
-                    </div>
-                  </div>
+                  <p className="text-sm text-slate-600 font-medium mb-4 leading-relaxed">
+                    Las mareas astronómicas exactas deben consultarse en las tablas oficiales para mayor seguridad.
+                  </p>
+                  <a 
+                    href="https://tablademareas.com/es/malaga/malaga" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-cyan-700 font-bold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-200 shadow-sm"
+                  >
+                    Ver tabla de mareas
+                  </a>
                 </div>
 
                 {/* Tarjeta 5: Riesgo de Medusas */}
