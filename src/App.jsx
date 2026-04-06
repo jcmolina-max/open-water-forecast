@@ -300,24 +300,24 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-row items-center gap-2 md:gap-3 w-full md:w-auto">
             {/* BOTÓN GUÍA LOCAL */}
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="flex-1 md:flex-none bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-2.5 px-4 rounded-xl transition-colors border border-indigo-100 flex items-center justify-center gap-2"
+              className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-2.5 px-3 md:px-4 rounded-xl transition-colors border border-indigo-100 flex items-center justify-center gap-2"
               title="Guía Local del Mar"
             >
               <BookOpen size={18} />
-              <span className="md:hidden lg:inline">Guía Local</span>
+              <span className="hidden sm:inline">Guía Local</span>
             </button>
 
             {/* SELECTOR DE PLAYA */}
-            <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl w-full md:w-auto border border-slate-200 flex-1 md:flex-none">
-              <MapPin className="text-slate-400 ml-2" size={20} />
+            <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl w-full md:w-auto border border-slate-200 flex-1 md:flex-none overflow-hidden">
+              <MapPin className="text-slate-400 ml-1 md:ml-2 shrink-0" size={20} />
               <select 
                 value={selectedBeach} 
                 onChange={(e) => setSelectedBeach(e.target.value)}
-                className="bg-transparent font-bold text-slate-700 py-1.5 pr-8 pl-2 outline-none w-full cursor-pointer"
+                className="bg-transparent font-bold text-slate-700 py-1.5 pr-4 pl-1 md:pl-2 outline-none w-full md:w-56 cursor-pointer text-ellipsis overflow-hidden"
               >
                 <option value="misericordia">La Misericordia</option>
                 <option value="malagueta">La Malagueta</option>
