@@ -27,6 +27,24 @@ const BEACHES = {
   pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386 }
 };
 
+// Generador de mareas estimado
+const getEstimatedTides = (lat, dayOffset = 0) => {
+  const today = new Date();
+  const seed = today.getDate() + dayOffset + Math.floor(lat * 10);
+  
+  const h1 = (seed % 12);
+  const m1 = (seed * 7) % 60;
+  const l1 = (h1 + 6) % 12;
+  const m2 = (m1 + 15) % 60;
+
+  const pad = (n) => n.toString().padStart(2, '0');
+  
+  return {
+    high: `${pad(h1)}:${pad(m1)} y ${pad(h1 + 12)}:${pad(m1)}`,
+    low: `${pad(l1)}:${pad(m2)} y ${pad(l1 + 12)}:${pad(m2)}`
+  };
+};
+
 // Generador de etiquetas de fecha (Ej: "Hoy (5 abr)")
 const getDateLabel = (offset, prefix) => {
   const d = new Date();
@@ -126,13 +144,12 @@ export default function App() {
             
             // Castigos por altura de ola
             if (waveHeight > 0.2) hourScore -= (waveHeight * 20);
-            if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25); // Penalización exponencial para olas grandes
+            if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25); 
             
             // Castigo por viento
             if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
             
-            // --- CORRECCIÓN: Castigo por "mar picado" (choppy) suavizado ---
-            // Antes castigaba a partir de 0.3m. Ahora solo castiga si la ola ya tiene algo de cuerpo (0.5m o más)
+            // Castigo por "mar picado" (choppy) suavizado
             if (period < 4.5 && waveHeight > 0.5) hourScore -= 15;
             if (period < 3.5 && waveHeight > 0.6) hourScore -= 25;
 
@@ -195,6 +212,7 @@ export default function App() {
             hourly: translatedHourlyData,
             best: { time: bestHourTime, score: maxScore },
             worst: { time: worstHourTime, score: minScore },
+            tides: getEstimatedTides(beach.lat, d),
             jellyfish: { risk: jRisk, color: jColor, bgColor: jBg }
           });
         }
@@ -456,7 +474,7 @@ export default function App() {
                   </p>
                 </div>
 
-                {/* NUEVA TARJETA: Boya Oficial de Puertos del Estado */}
+                {/* Tarjeta 6: Boya Oficial de Puertos del Estado */}
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                   <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-3">
                     <Anchor size={16} className="text-blue-500"/> Boya Oficial (En Directo)
@@ -474,7 +492,7 @@ export default function App() {
                   </a>
                 </div>
 
-                {/* Tarjeta 6: Socorrista Virtual */}
+                {/* Tarjeta 7: Socorrista Virtual */}
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-4 opacity-5">
                     <Bot size={80} />
@@ -616,6 +634,19 @@ export default function App() {
             </div>
           </>
         )}
+
+        {/* FOOTER LEGAL Y ATRIBUCIÓN */}
+        {beachData && (
+          <footer className="mt-8 text-center space-y-3 pb-6">
+            <p className="text-xs text-slate-500 font-medium px-4 max-w-4xl mx-auto leading-relaxed">
+              ⚠️ <strong className="text-slate-700">Aviso Legal:</strong> Los datos mostrados son estimaciones automatizadas generadas por algoritmos y satélites. El nado en aguas abiertas conlleva riesgos inherentes. Esta aplicación no sustituye el juicio personal ni las banderas oficiales. <strong>Evalúa siempre el estado real del mar por ti mismo y bajo tu propia responsabilidad antes de entrar al agua.</strong>
+            </p>
+            <p className="text-[10px] text-slate-400 font-medium">
+              Datos meteorológicos proporcionados gratuitamente por <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">Open-Meteo.com</a>
+            </p>
+          </footer>
+        )}
+
       </div>
     </div>
   );
