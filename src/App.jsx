@@ -71,7 +71,7 @@ export default function App() {
 
       try {
         const [weatherResponse, marineResponse] = await Promise.all([
-          fetch(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index&timezone=Europe%2FMadrid`),
+          fetch(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index&timezone=Europe%2FMadrid&models=arome_seamless`),
           fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period&timezone=Europe%2FMadrid`)
         ]);
 
@@ -110,6 +110,18 @@ export default function App() {
             const windKnots = Math.round(windKmh / 1.852);
             const gustKnots = Math.round((weatherJson.hourly.wind_gusts_10m[i] || 0) / 1.852);
             const windDir = weatherJson.hourly.wind_direction_10m[i] || 0;
+            const displayHour = i % 24; 
+            
+            // --- REGLA 4: EL ESCUDO (Atenuación del Puerto) ---
+            let effectiveWaveHeight = waveHeight;
+            let localRule = null;
+            let ruleColor = "";
+
+            if (selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') {
+                effectiveWaveHeight = waveHeight * 0.7; // Reduce un 30% la fuerza
+                localRule = "Escudo Activo";
+                ruleColor = "text-indigo-500";
+            }
             
             // --- DETECCIÓN DE LEVANTE PARA MEDUSAS ---
             if (windDir > 45 && windDir < 135) {
@@ -117,34 +129,56 @@ export default function App() {
                 if (windKnots > maxEastWind) maxEastWind = windKnots;
             }
 
-            const waveEnergy = Math.round(Math.pow(waveHeight, 2) * period * 6.25);
+            const waveEnergy = Math.round(Math.pow(effectiveWaveHeight, 2) * period * 6.25);
             
             let ripRisk = "Nulo";
             let ripColor = "text-slate-400";
-            if (waveHeight >= 1.0 || (waveHeight >= 0.8 && period > 6)) {
+            if (effectiveWaveHeight >= 1.0 || (effectiveWaveHeight >= 0.8 && period > 6)) {
               ripRisk = "Alto";
               ripColor = "text-red-600 font-bold bg-red-50 px-2 py-1 rounded";
-            } else if (waveHeight >= 0.6) {
+            } else if (effectiveWaveHeight >= 0.6) {
               ripRisk = "Medio";
               ripColor = "text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded";
-            } else if (waveHeight >= 0.3) {
+            } else if (effectiveWaveHeight >= 0.3) {
               ripRisk = "Bajo";
               ripColor = "text-blue-600 font-medium";
             }
 
             let hourScore = 100;
             
-            // Castigos base
-            if (waveHeight > 0.2) hourScore -= (waveHeight * 20);
-            if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25); 
+            // Castigos base con la ola atenuada
+            if (effectiveWaveHeight > 0.2) hourScore -= (effectiveWaveHeight * 20);
+            if (effectiveWaveHeight > 0.6) hourScore -= (Math.pow(effectiveWaveHeight, 2) * 25); 
             if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
-            if (period < 4.5 && waveHeight > 0.5) hourScore -= 15;
-            if (period < 3.5 && waveHeight > 0.6) hourScore -= 25;
+            if (period < 4.5 && effectiveWaveHeight > 0.5) hourScore -= 15;
+            if (period < 3.5 && effectiveWaveHeight > 0.6) hourScore -= 25;
+
+            // --- REGLA 1: EL MAGÓN ---
+            if (effectiveWaveHeight >= 0.4 && effectiveWaveHeight <= 0.7 && windKnots < 8 && period > 5.5) {
+                hourScore = 100 - (effectiveWaveHeight * 10); 
+                localRule = "Magón";
+                ruleColor = "text-emerald-600";
+            }
+
+            // --- REGLA 2: LA LAVADORA TÉRMICA ---
+            const isPoniente = windDir > 202.5 && windDir <= 292.5;
+            if (isPoniente && displayHour >= 12 && displayHour <= 18 && windKnots > 12) {
+                hourScore -= 25;
+                localRule = "Lavadora";
+                ruleColor = "text-amber-600";
+            }
+
+            // --- REGLA 3: EL TERRAL (Deriva) ---
+            const isNorte = windDir > 315 || windDir <= 45;
+            if (isNorte && windKnots > 15) {
+                hourScore -= 25;
+                localRule = "Riesgo Deriva";
+                ruleColor = "text-red-600";
+            }
 
             hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
             totalScore += hourScore;
 
-            const displayHour = i % 24; 
             const formattedTime = `${displayHour.toString().padStart(2, '0')}:00`;
 
             if (hourScore > maxScore) { maxScore = hourScore; bestHourTime = formattedTime; }
@@ -152,7 +186,8 @@ export default function App() {
 
             translatedHourlyData.push({
               time: formattedTime,
-              swellH: waveHeight.toFixed(2),
+              swellH: effectiveWaveHeight.toFixed(2),
+              rawSwellH: waveHeight.toFixed(2),
               period: period.toFixed(1),
               windS: windKnots,
               gust: gustKnots,
@@ -162,7 +197,9 @@ export default function App() {
               hourScore: hourScore,
               waveEnergy: waveEnergy,
               ripRisk: ripRisk,
-              ripColor: ripColor
+              ripColor: ripColor,
+              localRule: localRule,
+              ruleColor: ruleColor
             });
           }
 
@@ -557,19 +594,31 @@ export default function App() {
                           </td>
 
                           <td className="px-5 py-4 text-center">
-                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-xs
-                              ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
-                                hour.hourScore > 40 ? 'bg-amber-100 text-amber-700' : 
-                                'bg-red-100 text-red-700'}`}>
-                              {hour.hourScore}
-                            </span>
+                            <div className="flex flex-col items-center justify-center gap-1.5">
+                              <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-xs
+                                ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
+                                  hour.hourScore > 40 ? 'bg-amber-100 text-amber-700' : 
+                                  'bg-red-100 text-red-700'}`}>
+                                {hour.hourScore}
+                              </span>
+                              {hour.localRule && (
+                                <span className={`text-[9px] font-bold uppercase tracking-wide bg-white shadow-sm px-1.5 py-0.5 rounded border border-slate-100 ${hour.ruleColor}`}>
+                                  {hour.localRule}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           
                           <td className="px-5 py-4">
                             <div className="flex flex-col">
-                              <span className={`font-black text-base ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
-                                {hour.swellH}m
-                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className={`font-black text-base ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
+                                  {hour.swellH}m
+                                </span>
+                                {hour.localRule === "Escudo Activo" && (
+                                  <ShieldAlert size={14} className="text-indigo-400" title={`Atenuado. Ola original satélite: ${hour.rawSwellH}m`} />
+                                )}
+                              </div>
                               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
                                 P: {hour.period}s
                               </span>
