@@ -18,7 +18,6 @@ import {
   CalendarDays,
   AlertCircle,
   Anchor,
-  // Nuevos iconos para la Guía Local
   BookOpen, 
   X, 
   Wind, 
@@ -35,7 +34,7 @@ const BEACHES = {
   pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386 }
 };
 
-// Generador de etiquetas de fecha (Ej: "Hoy (5 abr)")
+// Generador de etiquetas de fecha
 const getDateLabel = (offset, prefix) => {
   const d = new Date();
   d.setDate(d.getDate() + offset);
@@ -46,12 +45,11 @@ const getDateLabel = (offset, prefix) => {
 
 export default function App() {
   const [selectedBeach, setSelectedBeach] = useState('misericordia');
-  const [selectedDay, setSelectedDay] = useState(0); // 0: Hoy, 1: Mañana, 2: Pasado
+  const [selectedDay, setSelectedDay] = useState(0); 
   const [beachData, setBeachData] = useState(null); 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Estado para la Guía Local Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Estados para el Socorrista IA
@@ -69,14 +67,34 @@ export default function App() {
       
       const beach = BEACHES[selectedBeach];
 
+      // NUEVO: Sistema de Timeout para que no se quede colgado en el PC
+      const fetchWithTimeout = async (url, ms = 10000) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), ms);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          return response;
+        } catch (e) {
+          clearTimeout(timeoutId);
+          throw e;
+        }
+      };
+
       try {
         const [weatherResponse, marineResponse] = await Promise.all([
-          fetch(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index&timezone=Europe%2FMadrid`),
-          fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period&timezone=Europe%2FMadrid`)
+          fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index&timezone=Europe%2FMadrid`),
+          fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period&timezone=Europe%2FMadrid`)
         ]);
 
-        if (!weatherResponse.ok || !marineResponse.ok) {
-          throw new Error("Error al conectar con los satélites");
+        // EL CHIVATO DE ERRORES INTELIGENTE
+        if (!weatherResponse.ok) {
+           const errData = await weatherResponse.json().catch(() => ({}));
+           throw new Error(`Satélite Clima bloqueado: ${errData.reason || weatherResponse.statusText || 'Error desconocido'}`);
+        }
+        if (!marineResponse.ok) {
+           const errData = await marineResponse.json().catch(() => ({}));
+           throw new Error(`Satélite Marino bloqueado: ${errData.reason || marineResponse.statusText || 'Error desconocido'}`);
         }
 
         const weatherJson = await weatherResponse.json();
@@ -95,7 +113,6 @@ export default function App() {
           let bestHourTime = "";
           let worstHourTime = "";
           
-          // Variables para el algoritmo de Medusas
           let eastWindCount = 0;
           let maxEastWind = 0;
 
@@ -110,6 +127,18 @@ export default function App() {
             const windKnots = Math.round(windKmh / 1.852);
             const gustKnots = Math.round((weatherJson.hourly.wind_gusts_10m[i] || 0) / 1.852);
             const windDir = weatherJson.hourly.wind_direction_10m[i] || 0;
+            const displayHour = i % 24;
+            
+            // --- REGLA 4: EL ESCUDO (Atenuación del Puerto) ---
+            let effectiveWaveHeight = waveHeight;
+            let localRule = null;
+            let ruleColor = "";
+
+            if (selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') {
+                effectiveWaveHeight = waveHeight * 0.7; // El puerto frena un 30%
+                localRule = "Escudo Activo";
+                ruleColor = "text-indigo-500";
+            }
             
             // --- DETECCIÓN DE LEVANTE PARA MEDUSAS ---
             if (windDir > 45 && windDir < 135) {
@@ -117,34 +146,56 @@ export default function App() {
                 if (windKnots > maxEastWind) maxEastWind = windKnots;
             }
 
-            const waveEnergy = Math.round(Math.pow(waveHeight, 2) * period * 6.25);
+            const waveEnergy = Math.round(Math.pow(effectiveWaveHeight, 2) * period * 6.25);
             
             let ripRisk = "Nulo";
             let ripColor = "text-slate-400";
-            if (waveHeight >= 1.0 || (waveHeight >= 0.8 && period > 6)) {
+            if (effectiveWaveHeight >= 1.0 || (effectiveWaveHeight >= 0.8 && period > 6)) {
               ripRisk = "Alto";
               ripColor = "text-red-600 font-bold bg-red-50 px-2 py-1 rounded";
-            } else if (waveHeight >= 0.6) {
+            } else if (effectiveWaveHeight >= 0.6) {
               ripRisk = "Medio";
               ripColor = "text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded";
-            } else if (waveHeight >= 0.3) {
+            } else if (effectiveWaveHeight >= 0.3) {
               ripRisk = "Bajo";
               ripColor = "text-blue-600 font-medium";
             }
 
             let hourScore = 100;
             
-            // Castigos base
-            if (waveHeight > 0.2) hourScore -= (waveHeight * 20);
-            if (waveHeight > 0.6) hourScore -= (Math.pow(waveHeight, 2) * 25); 
+            // Castigos base con la ola atenuada
+            if (effectiveWaveHeight > 0.2) hourScore -= (effectiveWaveHeight * 20);
+            if (effectiveWaveHeight > 0.6) hourScore -= (Math.pow(effectiveWaveHeight, 2) * 25); 
             if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
-            if (period < 4.5 && waveHeight > 0.5) hourScore -= 15;
-            if (period < 3.5 && waveHeight > 0.6) hourScore -= 25;
+            if (period < 4.5 && effectiveWaveHeight > 0.5) hourScore -= 15;
+            if (period < 3.5 && effectiveWaveHeight > 0.6) hourScore -= 25;
+
+            // --- REGLA 1: EL MAGÓN ---
+            if (effectiveWaveHeight >= 0.4 && effectiveWaveHeight <= 0.7 && windKnots < 8 && period > 5.5) {
+                hourScore = 100 - (effectiveWaveHeight * 10); 
+                localRule = "Magón";
+                ruleColor = "text-emerald-600";
+            }
+
+            // --- REGLA 2: LA LAVADORA TÉRMICA ---
+            const isPoniente = windDir > 202.5 && windDir <= 292.5;
+            if (isPoniente && displayHour >= 12 && displayHour <= 18 && windKnots > 12) {
+                hourScore -= 25;
+                localRule = "Lavadora";
+                ruleColor = "text-amber-600";
+            }
+
+            // --- REGLA 3: EL TERRAL (Deriva) ---
+            const isNorte = windDir > 315 || windDir <= 45;
+            if (isNorte && windKnots > 15) {
+                hourScore -= 25;
+                localRule = "Riesgo Deriva";
+                ruleColor = "text-red-600";
+            }
 
             hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
             totalScore += hourScore;
 
-            const displayHour = i % 24; 
             const formattedTime = `${displayHour.toString().padStart(2, '0')}:00`;
 
             if (hourScore > maxScore) { maxScore = hourScore; bestHourTime = formattedTime; }
@@ -152,21 +203,23 @@ export default function App() {
 
             translatedHourlyData.push({
               time: formattedTime,
-              swellH: waveHeight.toFixed(2),
+              swellH: effectiveWaveHeight.toFixed(2),
+              rawSwellH: waveHeight.toFixed(2),
               period: period.toFixed(1),
               windS: windKnots,
               gust: gustKnots,
               windDir: windDir,
-              uv: weatherJson.hourly.uv_index[i] || 0,
-              rain: weatherJson.hourly.precipitation_probability[i] || 0,
+              uv: weatherJson.hourly.uv_index ? weatherJson.hourly.uv_index[i] : "-",
+              rain: weatherJson.hourly.precipitation_probability ? weatherJson.hourly.precipitation_probability[i] : 0,
               hourScore: hourScore,
               waveEnergy: waveEnergy,
               ripRisk: ripRisk,
-              ripColor: ripColor
+              ripColor: ripColor,
+              localRule: localRule,
+              ruleColor: ruleColor
             });
           }
 
-          // --- EVALUACIÓN FINAL MEDUSAS DEL DÍA ---
           let jRisk = "Bajo";
           let jColor = "text-emerald-600";
           let jBg = "bg-emerald-50 border-emerald-100";
@@ -208,7 +261,16 @@ export default function App() {
 
       } catch (err) {
         console.error(err);
-        setError("No pudimos conectar con los satélites meteorológicos.");
+        
+        // TRADUCTOR DE ERRORES DE RED
+        let errorMsg = err.message;
+        if (err.name === 'AbortError') {
+           errorMsg = "El satélite está saturado y tardó demasiado en responder (Timeout).";
+        } else if (err.message === 'Failed to fetch' || err.message === 'NetworkError when attempting to fetch resource.') {
+           errorMsg = "Conexión bloqueada. Comprueba tu internet o desactiva tu bloqueador de anuncios (Adblock/Brave).";
+        }
+        
+        setError(errorMsg);
         setIsLoading(false);
       }
     };
@@ -300,24 +362,24 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-row items-center gap-2 md:gap-3 w-full md:w-auto">
             {/* BOTÓN GUÍA LOCAL */}
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="flex-1 md:flex-none bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-2.5 px-4 rounded-xl transition-colors border border-indigo-100 flex items-center justify-center gap-2"
+              className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-2.5 px-3 md:px-4 rounded-xl transition-colors border border-indigo-100 flex items-center justify-center gap-2"
               title="Guía Local del Mar"
             >
               <BookOpen size={18} />
-              <span className="md:hidden lg:inline">Guía Local</span>
+              <span className="hidden sm:inline">Guía Local</span>
             </button>
 
             {/* SELECTOR DE PLAYA */}
-            <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl w-full md:w-auto border border-slate-200 flex-1 md:flex-none">
-              <MapPin className="text-slate-400 ml-2" size={20} />
+            <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl w-full md:w-auto border border-slate-200 flex-1 md:flex-none overflow-hidden">
+              <MapPin className="text-slate-400 ml-1 md:ml-2 shrink-0" size={20} />
               <select 
                 value={selectedBeach} 
                 onChange={(e) => setSelectedBeach(e.target.value)}
-                className="bg-transparent font-bold text-slate-700 py-1.5 pr-8 pl-2 outline-none w-full cursor-pointer"
+                className="bg-transparent font-bold text-slate-700 py-1.5 pr-4 pl-1 md:pl-2 outline-none w-full md:w-56 cursor-pointer text-ellipsis overflow-hidden"
               >
                 <option value="misericordia">La Misericordia</option>
                 <option value="malagueta">La Malagueta</option>
@@ -328,9 +390,9 @@ export default function App() {
         </header>
 
         {error && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-xl flex items-center gap-3">
-            <AlertTriangle size={24} />
-            <p>{error}</p>
+          <div className="bg-red-50 text-red-600 p-4 rounded-xl flex items-center gap-3 shadow-sm border border-red-100">
+            <AlertTriangle size={24} className="shrink-0" />
+            <p className="font-bold">{error}</p>
           </div>
         )}
 
@@ -557,19 +619,31 @@ export default function App() {
                           </td>
 
                           <td className="px-5 py-4 text-center">
-                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-xs
-                              ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
-                                hour.hourScore > 40 ? 'bg-amber-100 text-amber-700' : 
-                                'bg-red-100 text-red-700'}`}>
-                              {hour.hourScore}
-                            </span>
+                            <div className="flex flex-col items-center justify-center gap-1.5">
+                              <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-xs
+                                ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
+                                  hour.hourScore > 40 ? 'bg-amber-100 text-amber-700' : 
+                                  'bg-red-100 text-red-700'}`}>
+                                {hour.hourScore}
+                              </span>
+                              {hour.localRule && (
+                                <span className={`text-[9px] font-bold uppercase tracking-wide bg-white shadow-sm px-1.5 py-0.5 rounded border border-slate-100 ${hour.ruleColor}`}>
+                                  {hour.localRule}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           
                           <td className="px-5 py-4">
                             <div className="flex flex-col">
-                              <span className={`font-black text-base ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
-                                {hour.swellH}m
-                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className={`font-black text-base ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
+                                  {hour.swellH}m
+                                </span>
+                                {hour.localRule === "Escudo Activo" && (
+                                  <ShieldAlert size={14} className="text-indigo-400" title={`Atenuado. Ola original satélite: ${hour.rawSwellH}m`} />
+                                )}
+                              </div>
                               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
                                 P: {hour.period}s
                               </span>
@@ -648,14 +722,10 @@ export default function App() {
 
       </div>
 
-      {/* ========================================= */}
       {/* LA VENTANA MODAL (GUÍA LOCAL INFOGRAFÍA) */}
-      {/* ========================================= */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity">
-          
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden relative flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
-            
             {/* Cabecera del Modal */}
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
               <div className="flex items-center gap-3">
@@ -677,7 +747,6 @@ export default function App() {
 
             {/* Contenido (Tarjetas) */}
             <div className="p-6 overflow-y-auto">
-              
               <div className="mb-6 bg-blue-50 text-blue-800 p-4 rounded-xl text-sm font-medium flex items-start gap-3 border border-blue-100">
                 <Info size={20} className="shrink-0 mt-0.5 text-blue-600" />
                 <p>
@@ -687,8 +756,6 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                
-                {/* REGLA 1: El Magón */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-cyan-300 transition-colors group">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="bg-cyan-50 p-2.5 rounded-xl text-cyan-600 group-hover:bg-cyan-100 transition-colors">
@@ -705,7 +772,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* REGLA 2: La Lavadora */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-amber-300 transition-colors group">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="bg-amber-50 p-2.5 rounded-xl text-amber-600 group-hover:bg-amber-100 transition-colors">
@@ -722,7 +788,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* REGLA 3: El Terral */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-red-300 transition-colors group">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="bg-red-50 p-2.5 rounded-xl text-red-600 group-hover:bg-red-100 transition-colors">
@@ -741,7 +806,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* REGLA 4: El Escudo */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-colors group">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600 group-hover:bg-indigo-100 transition-colors">
@@ -757,14 +821,11 @@ export default function App() {
                     <span className="text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md">Pedregalejo</span>
                   </div>
                 </div>
-
               </div>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
-
