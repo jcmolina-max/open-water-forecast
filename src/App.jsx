@@ -7,11 +7,8 @@ import {
   AlertTriangle,
   Activity,
   Thermometer,
-  ShieldCheck,
   Sun,
   Clock,
-  ArrowUpCircle,
-  ArrowDownCircle,
   Droplets,
   ThumbsUp,
   ThumbsDown,
@@ -475,7 +472,7 @@ export default function App() {
                     selectedDay === idx 
                       ? 'bg-blue-600 text-white shadow-md' 
                       : idx === 0 
-                        ? 'bg-slate-200 text-slate-600 hover:bg-slate-300 border border-slate-300' // Estilo distinto para "Ayer"
+                        ? 'bg-slate-200 text-slate-600 hover:bg-slate-300 border border-slate-300' 
                         : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
                   }`}
                 >
@@ -574,6 +571,47 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Tarjeta 4: Enlaces Oficiales (Boya y Mareas) */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+                      <Anchor size={16} className="text-blue-500"/> Estado Real
+                    </h3>
+                    <span className="text-[10px] text-slate-400 font-medium">Lectura Física</span>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <a 
+                      href="https://bancodedatos.puertos.es/BD/informes/INT_1.php?inst=2842&t=1&c=1" 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                        </span>
+                        <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Boya de Málaga</span>
+                      </div>
+                      <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
+                    </a>
+
+                    <a 
+                      href="https://tablademareas.com/es/malaga/malaga" 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Droplets size={16} className="text-blue-400" />
+                        <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Tabla de Mareas</span>
+                      </div>
+                      <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
+                    </a>
+                  </div>
+                </div>
+
                 {/* Tarjeta 5: Riesgo de Medusas */}
                 <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
                   <div className="flex justify-between items-center mb-4">
@@ -598,7 +636,7 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Tarjeta 7: Socorrista Virtual */}
+                {/* Tarjeta 6: Socorrista Virtual */}
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-4 opacity-5">
                     <Bot size={80} />
