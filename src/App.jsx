@@ -24,17 +24,19 @@ import {
   ThermometerSun, 
   ShieldAlert,
   ArrowUpRight,
-  Info
+  Info,
+  Compass,
+  History
 } from 'lucide-react';
 
-// Coordenadas reales de las playas
+// Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
 const BEACHES = {
-  misericordia: { name: "La Misericordia, Málaga", lat: 36.696, lon: -4.444 },
-  malagueta: { name: "La Malagueta, Málaga", lat: 36.718, lon: -4.407 },
-  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386 }
+  misericordia: { name: "La Misericordia, Málaga", lat: 36.696, lon: -4.444, facing: 135 },
+  malagueta: { name: "La Malagueta, Málaga", lat: 36.718, lon: -4.407, facing: 180 },
+  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386, facing: 180 }
 };
 
-// Generador de etiquetas de fecha
+// Generador de etiquetas de fecha (Ahora soporta días pasados, ej: offset -1)
 const getDateLabel = (offset, prefix) => {
   const d = new Date();
   d.setDate(d.getDate() + offset);
@@ -45,7 +47,8 @@ const getDateLabel = (offset, prefix) => {
 
 export default function App() {
   const [selectedBeach, setSelectedBeach] = useState('misericordia');
-  const [selectedDay, setSelectedDay] = useState(0); 
+  // Por defecto seleccionamos el índice 1 (que corresponde a "Hoy", ya que el 0 es "Ayer")
+  const [selectedDay, setSelectedDay] = useState(1); 
   const [beachData, setBeachData] = useState(null); 
   const [isLoading, setIsLoading] = useState(true);
   
@@ -65,7 +68,7 @@ export default function App() {
       setIsClimateDown(false);
       setHasRequestedAi(false);
       setExpertAdvice("");
-      setSelectedDay(0); 
+      setSelectedDay(1); // Reseteamos siempre a "Hoy" al cambiar de playa
       
       const beach = BEACHES[selectedBeach];
       
@@ -94,31 +97,39 @@ export default function App() {
         }
       };
 
-      // 1. INTENTAMOS DESCARGAR EL CLIMA (Silenciosamente)
+      // 1. SATÉLITE CLIMA (Con past_days=1 para el retrovisor)
       try {
-        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index&timezone=Europe%2FMadrid`);
+        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index&timezone=Europe%2FMadrid&past_days=1`);
       } catch (e) {
         console.warn("Satélite de clima caído. Activando auto-rescate.", e);
         localClimateDown = true;
         setIsClimateDown(true);
       }
 
-      // 2. INTENTAMOS DESCARGAR EL MAR (Es obligatorio para que funcione)
+      // 2. SATÉLITE MARINO (Con past_days=1 para el retrovisor)
       try {
-        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period&timezone=Europe%2FMadrid`);
+        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction&timezone=Europe%2FMadrid&past_days=1`);
       } catch (e) {
          setErrorDetails({ general: `El satélite marino no responde: ${e.message}` });
          setIsLoading(false);
          return; 
       }
 
-      // 3. PROCESAMOS LOS DATOS
+      // 3. PROCESAMOS LOS DATOS (Ayer, Hoy, Mañana, Pasado)
       try {
-        const currentHour = new Date().getHours();
         const daysProcessed = []; 
+        const dayOffsets = [-1, 0, 1, 2];
+        const dayPrefixes = ["Ayer", "Hoy", "Mañana", "Pasado"];
 
-        for (let d = 0; d < 3; d++) {
-          let startIndex = d === 0 ? currentHour : (d === 1 ? 32 : 56);
+        for (let d = 0; d < dayOffsets.length; d++) {
+          const offset = dayOffsets[d];
+          
+          // Al pedir past_days=1, el día de ayer empieza en el índice 0 de la matriz.
+          const baseIndex = (offset + 1) * 24; 
+          
+          // Mostramos desde las 06:00 hasta las 21:00 (16 horas de datos útiles para nadar)
+          const startIndex = baseIndex + 6;
+          const endIndex = baseIndex + 21;
 
           let translatedHourlyData = [];
           let totalScore = 0;
@@ -129,13 +140,15 @@ export default function App() {
           
           let eastWindCount = 0;
           let maxEastWind = 0;
+          let validHoursCount = 0;
 
-          for (let i = startIndex; i < startIndex + 12; i++) {
+          for (let i = startIndex; i <= endIndex; i++) {
             if (!marineJson?.hourly?.wave_height || i >= marineJson.hourly.wave_height.length) break;
 
             const waveHeightStr = marineJson.hourly.wave_height[i];
             const waveHeight = waveHeightStr !== null ? waveHeightStr : 0.1;
             const period = marineJson.hourly?.wave_period?.[i] || 4;
+            const waveDir = marineJson.hourly?.wave_direction?.[i];
             
             const windKmh = localClimateDown ? 0 : (weatherJson?.hourly?.wind_speed_10m?.[i] || 0);
             const windKnots = Math.round(windKmh / 1.852);
@@ -143,7 +156,6 @@ export default function App() {
             const windDir = localClimateDown ? 0 : (weatherJson?.hourly?.wind_direction_10m?.[i] || 0);
             const displayHour = i % 24;
             
-            // --- REGLA 4: EL ESCUDO (Atenuación del Puerto) ---
             let effectiveWaveHeight = waveHeight;
             let localRule = null;
             let ruleColor = "";
@@ -154,7 +166,21 @@ export default function App() {
                 ruleColor = "text-indigo-500";
             }
             
-            // --- DETECCIÓN DE LEVANTE ---
+            let driftInfo = { icon: "⏺️", color: "text-slate-400", short: "Nula" };
+            if (waveDir !== undefined && waveDir !== null && effectiveWaveHeight >= 0.2) {
+                let diff = waveDir - beach.facing;
+                while (diff > 180) diff -= 360;
+                while (diff < -180) diff += 360;
+
+                if (Math.abs(diff) < 85) { 
+                    if (diff > 15) {
+                        driftInfo = { icon: "⬅️", color: "text-indigo-600", short: "Rincón" };
+                    } else if (diff < -15) {
+                        driftInfo = { icon: "➡️", color: "text-indigo-600", short: "Torrem." };
+                    }
+                }
+            }
+            
             if (!localClimateDown && windDir > 45 && windDir < 135) {
                 eastWindCount++;
                 if (windKnots > maxEastWind) maxEastWind = windKnots;
@@ -163,15 +189,15 @@ export default function App() {
             const waveEnergy = Math.round(Math.pow(effectiveWaveHeight, 2) * period * 6.25);
             
             let ripRisk = "Nulo";
-            let ripColor = "text-slate-400";
+            let ripColor = "text-slate-400 font-medium";
             if (effectiveWaveHeight >= 1.0 || (effectiveWaveHeight >= 0.8 && period > 6)) {
-              ripRisk = "Alto";
-              ripColor = "text-red-600 font-bold bg-red-50 px-2 py-1 rounded";
+              ripRisk = "Alta";
+              ripColor = "text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded";
             } else if (effectiveWaveHeight >= 0.6) {
-              ripRisk = "Medio";
-              ripColor = "text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded";
+              ripRisk = "Media";
+              ripColor = "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded";
             } else if (effectiveWaveHeight >= 0.3) {
-              ripRisk = "Bajo";
+              ripRisk = "Baja";
               ripColor = "text-blue-600 font-medium";
             }
 
@@ -185,20 +211,17 @@ export default function App() {
             if (!localClimateDown) {
                 if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
                 
-                // REGLA 1: EL MAGÓN
                 if (effectiveWaveHeight >= 0.4 && effectiveWaveHeight <= 0.7 && windKnots < 8 && period > 5.5) {
                     hourScore = 100 - (effectiveWaveHeight * 10); 
                     localRule = "Magón";
                     ruleColor = "text-emerald-600";
                 }
-                // REGLA 2: LA LAVADORA TÉRMICA
                 const isPoniente = windDir > 202.5 && windDir <= 292.5;
                 if (isPoniente && displayHour >= 12 && displayHour <= 18 && windKnots > 12) {
                     hourScore -= 25;
                     localRule = "Lavadora";
                     ruleColor = "text-amber-600";
                 }
-                // REGLA 3: EL TERRAL
                 const isNorte = windDir > 315 || windDir <= 45;
                 if (isNorte && windKnots > 15) {
                     hourScore -= 25;
@@ -209,6 +232,7 @@ export default function App() {
 
             hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
             totalScore += hourScore;
+            validHoursCount++;
 
             const formattedTime = `${displayHour.toString().padStart(2, '0')}:00`;
 
@@ -229,6 +253,7 @@ export default function App() {
               waveEnergy: waveEnergy,
               ripRisk: ripRisk,
               ripColor: ripColor,
+              drift: driftInfo,
               localRule: localRule,
               ruleColor: ruleColor
             });
@@ -254,20 +279,18 @@ export default function App() {
               }
           }
 
-          const avgScore = Math.round(totalScore / 12);
-          const dayLabels = [
-              getDateLabel(0, "Hoy"), 
-              getDateLabel(1, "Mañana"), 
-              getDateLabel(2, "Pasado")
-          ];
+          const avgScore = validHoursCount > 0 ? Math.round(totalScore / validHoursCount) : 0;
+          
+          // Cogemos la temperatura de las 12:00 del mediodía de ese día como referencia para la tarjeta
+          const noonIndex = baseIndex + 12;
           
           daysProcessed.push({
             dayIndex: d,
-            dayLabel: dayLabels[d],
+            dayLabel: getDateLabel(offset, dayPrefixes[d]),
             name: beach.name,
             score: avgScore,
             temps: { 
-                air: localClimateDown ? "-" : Math.round(weatherJson?.hourly?.temperature_2m?.[startIndex] || 15), 
+                air: localClimateDown ? "-" : Math.round(weatherJson?.hourly?.temperature_2m?.[noonIndex] || 15), 
                 water: 15 
             },
             hourly: translatedHourlyData,
@@ -365,7 +388,6 @@ export default function App() {
     <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
         
-        {/* CABECERA */}
         <header className="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center gap-3 mb-4 md:mb-0">
             <div className="bg-blue-600 p-3 rounded-xl text-white">
@@ -402,20 +424,18 @@ export default function App() {
           </div>
         </header>
 
-        {/* CARTEL DE EMERGENCIA INTELIGENTE */}
         {!isLoading && !errorDetails && isClimateDown && (
           <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl shadow-sm flex items-start gap-3 animate-in fade-in slide-in-from-top-4 duration-500">
             <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={24} />
             <div>
               <h3 className="font-bold text-amber-800">Modo de Emergencia Activo</h3>
               <p className="text-sm text-amber-700 mt-1">
-                El satélite global de clima está temporalmente fuera de servicio. Estamos mostrando <strong>solo las previsiones de oleaje y resaca</strong>. Los datos de viento, temperatura y alertas volverán solos cuando el servidor se restaure.
+                El satélite global de clima está temporalmente fuera de servicio. Estamos mostrando <strong>solo las previsiones de oleaje y corrientes</strong>. Los datos de viento, temperatura y alertas volverán solos cuando el servidor se restaure.
               </p>
             </div>
           </div>
         )}
 
-        {/* PANEL DE DIAGNÓSTICO DE ERRORES (Solo Mar) */}
         {errorDetails && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border-2 border-red-200 flex flex-col gap-4">
             <div className="flex items-center gap-3 text-red-600 border-b border-red-100 pb-4">
@@ -446,7 +466,6 @@ export default function App() {
           </div>
         ) : currentDayData && !errorDetails && (
           <>
-            {/* SELECTOR DE DÍAS CON FECHAS */}
             <div className="flex flex-wrap gap-2 mb-2">
               {beachData.map((day, idx) => (
                 <button
@@ -455,10 +474,12 @@ export default function App() {
                   className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${
                     selectedDay === idx 
                       ? 'bg-blue-600 text-white shadow-md' 
-                      : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
+                      : idx === 0 
+                        ? 'bg-slate-200 text-slate-600 hover:bg-slate-300 border border-slate-300' // Estilo distinto para "Ayer"
+                        : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
                   }`}
                 >
-                  <CalendarDays size={16} />
+                  {idx === 0 ? <History size={16} /> : <CalendarDays size={16} />}
                   {day.dayLabel}
                 </button>
               ))}
@@ -466,11 +487,13 @@ export default function App() {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               
-              {/* PANEL IZQUIERDO */}
               <div className="lg:col-span-4 space-y-6">
                 
                 {/* Tarjeta 1: Score de Seguridad */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center relative">
+                  <div className="absolute top-4 right-4 text-[10px] text-slate-400 font-medium bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                    Algoritmo Propio
+                  </div>
                   <h2 className="text-slate-500 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
                     <Activity size={18} className="text-blue-500"/> Seguridad Media {isClimateDown && "(Solo Olas)"}
                   </h2>
@@ -499,27 +522,34 @@ export default function App() {
                   <div className="flex items-center gap-3">
                     <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Thermometer size={24}/></div>
                     <div>
-                      <p className="text-sm text-slate-500 font-medium">Agua</p>
+                      <div className="flex items-center gap-1">
+                        <p className="text-sm text-slate-500 font-medium">Agua</p>
+                      </div>
                       <p className="text-xl font-bold text-slate-800">{currentDayData.temps.water}ºC</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Satélite - Superficie</p>
                     </div>
                   </div>
                   <div className="h-10 w-px bg-slate-200"></div>
                   <div className="flex items-center gap-3">
                     <div className={isClimateDown ? "bg-slate-50 p-2 rounded-lg text-slate-400" : "bg-orange-50 p-2 rounded-lg text-orange-500"}><Sun size={24}/></div>
                     <div>
-                      <p className="text-sm text-slate-500 font-medium">Aire ({currentDayData.dayLabel.split(' ')[0]})</p>
+                      <p className="text-sm text-slate-500 font-medium">Aire <span className="text-xs">({currentDayData.dayLabel.split(' ')[0]})</span></p>
                       <p className={`text-xl font-bold ${isClimateDown ? 'text-slate-400' : 'text-slate-800'}`}>
                         {currentDayData.temps.air === "-" ? "- ºC" : `${currentDayData.temps.air}ºC`}
                       </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Predicción Modelo</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Tarjeta 3: Mejor y Peor Hora */}
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-                  <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-2">
-                    <Clock size={16} className="text-indigo-500"/> Horas Clave
-                  </h3>
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+                      <Clock size={16} className="text-indigo-500"/> Horas Clave
+                    </h3>
+                    <span className="text-[10px] text-slate-400 font-medium">Cálculo Propio</span>
+                  </div>
                   
                   <div className="flex justify-between items-center bg-emerald-50 p-3 rounded-xl border border-emerald-100">
                     <div className="flex items-center gap-2">
@@ -544,61 +574,28 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 4: Mareas Oficiales */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                  <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-3">
-                    <Waves size={16} className="text-cyan-500"/> Mareas Oficiales
-                  </h3>
-                  <p className="text-sm text-slate-600 font-medium mb-4 leading-relaxed">
-                    Las mareas astronómicas exactas deben consultarse en las tablas oficiales para mayor seguridad.
-                  </p>
-                  <a 
-                    href="https://tablademareas.com/es/malaga/malaga" 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="w-full bg-slate-100 hover:bg-slate-200 text-cyan-700 font-bold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-200 shadow-sm"
-                  >
-                    Ver tabla de mareas
-                  </a>
-                </div>
-
                 {/* Tarjeta 5: Riesgo de Medusas */}
                 <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
-                  <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-4">
-                    <AlertCircle size={16} className={isClimateDown ? 'text-slate-400' : 'text-purple-500'}/> Riesgo de Medusas
-                  </h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+                      <AlertCircle size={16} className={isClimateDown ? 'text-slate-400' : 'text-purple-500'}/> Riesgo de Medusas
+                    </h3>
+                    <span className="text-[10px] text-slate-400 font-medium">Cálculo Heurístico</span>
+                  </div>
+                  
                   <div className={`flex justify-between items-center p-3 rounded-xl border ${currentDayData.jellyfish.bgColor}`}>
                     <span className={`font-black uppercase text-sm ${currentDayData.jellyfish.color}`}>
                       {currentDayData.jellyfish.risk.includes("Dato") ? currentDayData.jellyfish.risk : `Nivel ${currentDayData.jellyfish.risk}`}
                     </span>
-                    {/* ENLACE A OCEANARIA SIEMPRE VISIBLE */}
                     <a href="https://oceanaria.es/" target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-500 hover:text-blue-700 underline underline-offset-2 text-right">
                       Oceanaria
                     </a>
                   </div>
                   {isClimateDown && (
                     <p className="text-[10px] text-slate-400 mt-3 font-medium leading-tight">
-                      *Al estar el satélite de viento desconectado, no podemos predecir el impacto de las medusas por levante. Consulta Oceanaria directamente.
+                      *Al estar el satélite desconectado, no podemos predecir el impacto de las medusas por levante. Consulta Oceanaria directamente.
                     </p>
                   )}
-                </div>
-
-                {/* Tarjeta 6: Boya Oficial de Puertos del Estado */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                  <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-3">
-                    <Anchor size={16} className="text-blue-500"/> Boya Oficial (En Directo)
-                  </h3>
-                  <p className="text-sm text-slate-600 font-medium mb-4 leading-relaxed">
-                    Consulta la temperatura exacta y el oleaje medido en este instante por Puertos del Estado.
-                  </p>
-                  <a 
-                    href="https://portus.puertos.es/#/" 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="w-full bg-slate-100 hover:bg-slate-200 text-blue-700 font-bold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-200 shadow-sm"
-                  >
-                    Ver datos en Portus
-                  </a>
                 </div>
 
                 {/* Tarjeta 7: Socorrista Virtual */}
@@ -606,10 +603,13 @@ export default function App() {
                   <div className="absolute top-0 right-0 p-4 opacity-5">
                     <Bot size={80} />
                   </div>
-                  <h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2 relative z-10">
-                    <Bot className="text-blue-600" size={20} />
-                    Socorrista Virtual
-                  </h3>
+                  <div className="flex justify-between items-center mb-4 relative z-10">
+                    <h3 className="font-bold text-blue-900 flex items-center gap-2">
+                      <Bot className="text-blue-600" size={20} />
+                      Socorrista Virtual
+                    </h3>
+                    <span className="text-[10px] text-blue-400/80 font-medium bg-blue-100/50 px-2 py-1 rounded-md">IA Generativa</span>
+                  </div>
                   
                   <div className="relative z-10">
                     {!hasRequestedAi ? (
@@ -637,36 +637,42 @@ export default function App() {
               {/* PANEL DERECHO: Tabla de previsiones */}
               <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-fit">
                 <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                  <h3 className="font-bold text-slate-800 text-lg">Evolución del mar</h3>
-                  <span className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-bold text-slate-800 text-lg">
+                      {selectedDay === 0 ? "Registro de ayer" : "Evolución del mar"}
+                    </h3>
+                    <span className="hidden sm:inline-block text-[10px] text-slate-400 font-medium border border-slate-200 bg-white px-2 py-0.5 rounded-full">
+                      Predicción Matemática
+                    </span>
+                  </div>
+                  <span className={`text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-1 shadow-sm ${selectedDay === 0 ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-700'}`}>
                     <CalendarDays size={14}/> {currentDayData.dayLabel.split(' ')[0]}
                   </span>
                 </div>
                 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[700px]">
-                    <thead>
-                      <tr className="bg-white text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
+                <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
+                  <table className="w-full text-left border-collapse min-w-[750px] relative">
+                    <thead className="sticky top-0 bg-white z-10 shadow-sm">
+                      <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
                         <th className="px-5 py-4 font-bold">Hora</th>
-                        <th className="px-5 py-4 font-bold text-center">Score</th>
-                        <th className="px-5 py-4 font-bold">Oleaje (m / s)</th>
-                        <th className="px-5 py-4 font-bold text-center">Energía</th>
-                        <th className="px-5 py-4 font-bold text-center">Resaca</th>
-                        <th className={`px-5 py-4 font-bold ${isClimateDown ? 'text-slate-300' : ''}`}>Viento (Nudos)</th>
-                        <th className={`px-5 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Lluvia</th>
-                        <th className={`px-5 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Dir.</th>
-                        <th className={`px-5 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>UV</th>
+                        <th className="px-4 py-4 font-bold text-center">Score</th>
+                        <th className="px-4 py-4 font-bold">Oleaje</th>
+                        <th className="px-4 py-4 font-bold text-center">Energía</th>
+                        <th className="px-4 py-4 font-bold">Corrientes</th>
+                        <th className={`px-4 py-4 font-bold ${isClimateDown ? 'text-slate-300' : ''}`}>Viento (kts)</th>
+                        <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Lluvia</th>
+                        <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Dir.</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
                       {currentDayData.hourly.map((hour, idx) => (
-                        <tr key={idx} className="hover:bg-blue-50/50 transition-colors group">
+                        <tr key={idx} className={`hover:bg-blue-50/50 transition-colors group ${selectedDay === 0 ? 'opacity-80' : ''}`}>
                           
                           <td className="px-5 py-4">
                             <span className="font-bold text-slate-800 text-base">{hour.time}</span>
                           </td>
 
-                          <td className="px-5 py-4 text-center">
+                          <td className="px-4 py-4 text-center">
                             <div className="flex flex-col items-center justify-center gap-1.5">
                               <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-xs
                                 ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
@@ -682,7 +688,7 @@ export default function App() {
                             </div>
                           </td>
                           
-                          <td className="px-5 py-4">
+                          <td className="px-4 py-4">
                             <div className="flex flex-col">
                               <div className="flex items-center gap-1">
                                 <span className={`font-black text-base ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
@@ -698,7 +704,7 @@ export default function App() {
                             </div>
                           </td>
 
-                          <td className="px-5 py-4 text-center">
+                          <td className="px-4 py-4 text-center">
                             <div className="flex flex-col items-center justify-center">
                               <span className={`font-black text-base ${hour.waveEnergy > 50 ? 'text-orange-500' : 'text-slate-700'}`}>
                                 {hour.waveEnergy}
@@ -707,13 +713,18 @@ export default function App() {
                             </div>
                           </td>
 
-                          <td className="px-5 py-4 text-center">
-                            <span className={`text-xs ${hour.ripColor}`}>
-                              {hour.ripRisk}
-                            </span>
+                          <td className="px-4 py-4">
+                            <div className="flex flex-col gap-1.5 justify-center items-start">
+                              <span className={`text-xs whitespace-nowrap ${hour.ripColor}`} title="Riesgo de resaca (Arrastre hacia adentro)">
+                                Resaca: {hour.ripRisk}
+                              </span>
+                              <div className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-50 border border-slate-100 whitespace-nowrap ${hour.drift.color}`} title="Deriva lateral (Empuje paralelo a la orilla)">
+                                <span>{hour.drift.icon}</span> <span>{hour.drift.short}</span>
+                              </div>
+                            </div>
                           </td>
 
-                          <td className="px-5 py-4">
+                          <td className="px-4 py-4">
                             {isClimateDown ? (
                                 <span className="font-bold text-slate-300 text-base">-</span>
                             ) : (
@@ -728,7 +739,7 @@ export default function App() {
                             )}
                           </td>
 
-                          <td className="px-5 py-4 text-center">
+                          <td className="px-4 py-4 text-center">
                              {isClimateDown ? (
                                 <span className="font-bold text-slate-300">-</span>
                              ) : (
@@ -741,15 +752,9 @@ export default function App() {
                              )}
                           </td>
 
-                          <td className="px-5 py-4 text-center">
+                          <td className="px-4 py-4 text-center">
                             <span className={`font-bold text-xs ${isClimateDown ? 'text-slate-300' : 'text-slate-700'}`}>
                               {getWindDirection(hour.windDir)}
-                            </span>
-                          </td>
-
-                          <td className="px-5 py-4 text-center">
-                            <span className={`font-black ${isClimateDown ? 'text-slate-300' : (hour.uv > 5 ? 'text-orange-500' : 'text-slate-400')}`}>
-                              {hour.uv}
                             </span>
                           </td>
 
@@ -764,26 +769,12 @@ export default function App() {
           </>
         )}
 
-        {/* FOOTER LEGAL Y ATRIBUCIÓN */}
-        {beachData && (
-          <footer className="mt-8 text-center space-y-3 pb-6">
-            <p className="text-xs text-slate-500 font-medium px-4 max-w-4xl mx-auto leading-relaxed">
-              ⚠️ <strong className="text-slate-700">Aviso Legal:</strong> Los datos mostrados son estimaciones automatizadas generadas por algoritmos y satélites. El nado en aguas abiertas conlleva riesgos inherentes. Esta aplicación no sustituye el juicio personal ni las banderas oficiales. <strong>Evalúa siempre el estado real del mar por ti mismo y bajo tu propia responsabilidad antes de entrar al agua.</strong>
-            </p>
-            <p className="text-[10px] text-slate-400 font-medium">
-              Datos meteorológicos proporcionados gratuitamente por <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">Open-Meteo.com</a>
-            </p>
-          </footer>
-        )}
-
       </div>
 
-      {/* LA NUEVA VENTANA MODAL: GUÍA DEL NADADOR + REGLAS */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden relative flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
             
-            {/* Cabecera del Modal */}
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
               <div className="flex items-center gap-3">
                 <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
@@ -802,151 +793,83 @@ export default function App() {
               </button>
             </div>
 
-            {/* Contenido Completo de la Guía */}
             <div className="p-6 overflow-y-auto space-y-8">
               
-              {/* INTRODUCCIÓN */}
               <section>
                 <p className="text-slate-600 leading-relaxed text-sm md:text-base">
-                  Hola a todos. Hemos creado esta aplicación web porque todos sabemos una cosa: <strong>las aplicaciones del tiempo normales no tienen ni idea de cómo se nada en Málaga.</strong> Para una app normal, una ola de medio metro es lo mismo en mar abierto que detrás de nuestro Puerto, y sabemos que eso no es verdad. Por eso, hemos cogido los datos en bruto de los satélites y les hemos metido <strong>"nuestra experiencia local"</strong>.
+                  Hemos cogido los datos en bruto de los satélites y les hemos metido <strong>"nuestra experiencia local"</strong> para crear el primer predictor de aguas abiertas pensado exclusivamente para la costa de Málaga.
                 </p>
               </section>
 
-              {/* SECCIÓN 1: PUNTUACIÓN */}
               <section>
-                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Activity size={20} className="text-blue-500"/> 1. La Nota de Seguridad (De 0 a 100)
-                </h4>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 border-b pb-2">🛠️ 1. Las Corrientes (El Nuevo Radar)</h4>
                 <p className="text-sm text-slate-600 mb-4">
-                  Olvídate de hacer cálculos raros. La aplicación coge la altura de la ola, la fuerza del viento y el periodo, y te da una nota del 0 al 100 para cada hora:
+                  En la columna "Corrientes" de la tabla, cruzamos los datos de las olas para vigilar los dos tipos de arrastres que pueden fastidiarte el nado:
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex flex-col justify-center">
-                     <span className="font-black text-emerald-700 text-lg mb-1">🟢 Verde (>70)</span>
-                     <span className="text-sm text-emerald-600">El mar es casi una piscina o el nado va a ser muy cómodo.</span>
+                <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="flex gap-3 items-start">
+                     <AlertTriangle className="text-red-500 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">La Resaca (Hacia adentro):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Depende de la altura de la ola y de su periodo. Si entra mucha agua a la playa, tiene que salir, creando embudos peligrosos que tiran hacia alta mar. Se marca como Baja, Media o Alta.</p>
+                     </div>
                   </div>
-                  <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex flex-col justify-center">
-                     <span className="font-black text-amber-700 text-lg mb-1">🟠 Naranja (40-70)</span>
-                     <span className="text-sm text-amber-600">Mar picado o agitado. Se puede nadar, pero tragarás algo de agua.</span>
-                  </div>
-                  <div className="bg-red-50 border border-red-100 p-4 rounded-xl flex flex-col justify-center">
-                     <span className="font-black text-red-700 text-lg mb-1">🔴 Rojo (&lt;40)</span>
-                     <span className="text-sm text-red-600">Lavadora total o riesgo alto de corrientes. Mejor quedarse en el chiringuito.</span>
+                  <div className="flex gap-3 items-start">
+                     <Compass className="text-indigo-500 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">La Deriva Lateral (Flechitas):</strong>
+                       <p className="text-sm text-slate-600 mt-1">La app cruza la inclinación de tu playa con el ángulo de la ola. Si la ola entra en diagonal, el agua "resbala" por la arena empujándote.<br/>
+                       <strong>⬅️ Rincón:</strong> Si nadas hacia la zona Este irás más rápido; si vas a Torremolinos irás a contracorriente.<br/>
+                       <strong>➡️ Torrem:</strong> La cinta transportadora del mar te empuja hacia el Oeste (Torremolinos).</p>
+                     </div>
                   </div>
                 </div>
               </section>
 
-              {/* SECCIÓN 2: REGLAS HEURÍSTICAS */}
               <section>
                 <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
                   <Bot size={20} className="text-indigo-500"/> 2. El "Cerebro" Malagueño
                 </h4>
                 <p className="text-sm text-slate-600 mb-5">
-                  Esta es la verdadera magia. La aplicación no se fía a ciegas del satélite, sino que aplica nuestras <strong>4 Reglas de Oro</strong> automáticamente. Si ves sus etiquetas en la tabla, es que la app te está protegiendo:
+                  La aplicación no se fía a ciegas del satélite, sino que aplica nuestras <strong>4 Reglas de Oro</strong> automáticamente. Si ves sus etiquetas en la tabla, es que la app te está protegiendo:
                 </p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="bg-cyan-50 p-2.5 rounded-xl text-cyan-600">
-                        <Waves size={24} />
-                      </div>
+                      <div className="bg-cyan-50 p-2.5 rounded-xl text-cyan-600"><Waves size={24} /></div>
                       <h5 className="font-bold text-slate-800">El "Magón"</h5>
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">
-                      Ola tendida y limpia (mar de fondo). Aunque el satélite marque 0.5m o más, si no hay viento, la app te dará luz verde porque la ola simplemente te mece sin romper.
-                    </p>
-                    <div className="flex gap-2">
-                      <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md">Viento Nulo</span>
-                      <span className="text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md">Nado Cómodo</span>
-                    </div>
+                    <p className="text-sm text-slate-600 mb-3">Ola tendida sin viento. Aunque sea grande (0.5m), la app no castiga la seguridad porque es mar de fondo cómodo.</p>
                   </div>
-
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="bg-amber-50 p-2.5 rounded-xl text-amber-600">
-                        <ThermometerSun size={24} />
-                      </div>
+                      <div className="bg-amber-50 p-2.5 rounded-xl text-amber-600"><ThermometerSun size={24} /></div>
                       <h5 className="font-bold text-slate-800">La "Lavadora" Térmica</h5>
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">
-                      A mediodía, el calor de la tierra actúa como turbo para el viento de <strong>Poniente</strong>, levantando un mar picado ("choppy") repentino e incómodo.
-                    </p>
-                    <div className="flex gap-2">
-                      <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md">12:00h - 18:00h</span>
-                      <span className="text-[10px] font-bold uppercase bg-amber-100 text-amber-700 px-2 py-1 rounded-md">Incómodo</span>
-                    </div>
+                    <p className="text-sm text-slate-600 mb-3">A mediodía, el Poniente superior a 12 nudos levanta un mar picado insoportable para respirar.</p>
                   </div>
-
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="bg-red-50 p-2.5 rounded-xl text-red-600">
-                        <Wind size={24} />
-                      </div>
+                      <div className="bg-red-50 p-2.5 rounded-xl text-red-600"><Wind size={24} /></div>
                       <h5 className="font-bold text-slate-800">La trampa del Terral</h5>
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">
-                      El viento fuerte de <strong>Norte (Tierra)</strong> alisa la orilla creando una falsa sensación de calma. Peligro alto de ser arrastrado hacia alta mar si te alejas.
-                    </p>
-                    <div className="flex gap-2">
-                      <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md">Falsa Calma</span>
-                      <span className="text-[10px] font-bold uppercase bg-red-100 text-red-700 px-2 py-1 rounded-md flex items-center gap-1">
-                        <ArrowUpRight size={12}/> Riesgo Deriva
-                      </span>
-                    </div>
+                    <p className="text-sm text-slate-600 mb-3">Viento fuerte de Tierra (Norte) alisa la orilla pero empuja hacia adentro. Riesgo muy alto de deriva.</p>
                   </div>
-
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600">
-                        <ShieldAlert size={24} />
-                      </div>
+                      <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600"><ShieldAlert size={24} /></div>
                       <h5 className="font-bold text-slate-800">El Escudo del Puerto</h5>
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">
-                      Las playas de La Malagueta y Pedregalejo están fuertemente protegidas por el Puerto y los espigones. La app baja automáticamente la fuerza de las olas aquí.
-                    </p>
-                    <div className="flex gap-2 flex-wrap">
-                      <span className="text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md">Malagueta</span>
-                      <span className="text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md">Pedregalejo</span>
-                    </div>
+                    <p className="text-sm text-slate-600 mb-3">La Malagueta y Pedregalejo rebajan automáticamente un 30% la fuerza de la ola gracias a los espigones.</p>
                   </div>
                 </div>
               </section>
 
-              {/* SECCIÓN 3: OTRAS HERRAMIENTAS */}
-              <section>
-                <h4 className="font-bold text-slate-800 text-lg mb-4 border-b pb-2">🛠️ 3. Otras Herramientas</h4>
-                <div className="space-y-4">
-                  <div className="flex gap-3 items-start">
-                     <AlertCircle className="text-purple-500 shrink-0 mt-1" size={20} />
-                     <div>
-                       <strong className="text-slate-800">El Radar de Medusas:</strong>
-                       <p className="text-sm text-slate-600 mt-1">La app cuenta cuántas horas seguidas sopla Levante. Si ve que lleva muchas horas empujando agua hacia la costa, te avisará de que el riesgo de encontrar "amigas" es Alto o Medio.</p>
-                     </div>
-                  </div>
-                  <div className="flex gap-3 items-start">
-                     <Bot className="text-blue-500 shrink-0 mt-1" size={20} />
-                     <div>
-                       <strong className="text-slate-800">El Socorrista Virtual:</strong>
-                       <p className="text-sm text-slate-600 mt-1">¿Tienes dudas viendo la tabla? Dale al botón azul para que una IA lea los datos y te dé un consejo de tres líneas en lenguaje de andar por casa.</p>
-                     </div>
-                  </div>
-                  <div className="flex gap-3 items-start">
-                     <AlertTriangle className="text-amber-500 shrink-0 mt-1" size={20} />
-                     <div>
-                       <strong className="text-slate-800">Modo de Supervivencia:</strong>
-                       <p className="text-sm text-slate-600 mt-1">Si los satélites fallan, la app saca un cartel amarillo. Perderemos los datos de viento, pero seguirá mostrando el tamaño de las olas para que no te quedes ciego.</p>
-                     </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* AVISO FINAL */}
               <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-sm text-amber-800 font-medium flex items-start gap-3">
                 <Info className="shrink-0 text-amber-600 mt-0.5" size={20} />
                 <p>
-                  <strong>El sentido común manda:</strong> Esta web es una ayuda genial hecha por y para nosotros, pero son previsiones matemáticas. Si la app dice verde, pero llegas a la playa y ves bandera roja o no lo ves claro, <strong>no te metas</strong>. ¡Tu instinto y tus ojos son el mejor satélite! Nos vemos en el agua 🏊‍♂️
+                  <strong>El sentido común manda:</strong> Estas previsiones son matemáticas y cálculos. Si la app dice verde pero al llegar ves bandera roja o tienes un mal presentimiento, <strong>no te metas</strong>. Tu instinto es el mejor satélite.
                 </p>
               </div>
 
