@@ -74,26 +74,39 @@ export default function App() {
       let weatherJson = null;
       let marineJson = null;
 
+      // MOTOR DE CONEXIÓN V7 (Independiente y con traductor de errores)
+      const fetchWithTimeout = async (url, ms = 10000) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), ms);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+             // Si el servidor rechaza, intentamos leer el motivo exacto
+             const errData = await response.json().catch(() => ({}));
+             throw new Error(errData.reason || `Error del Servidor (HTTP ${response.status})`);
+          }
+          return await response.json();
+          
+        } catch (e) {
+          clearTimeout(timeoutId);
+          if (e.name === 'AbortError') throw new Error('Tiempo agotado (>10s). El satélite no responde.');
+          if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) throw new Error('Conexión bloqueada por tu navegador (Adblock/Brave/Privacidad).');
+          throw e; // Lanza el error exacto (ej. limite de Open-Meteo)
+        }
+      };
+
       // 1. Petición al satélite del CLIMA
       try {
-        const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index&timezone=Europe%2FMadrid`);
-        if (!wRes.ok) {
-           wError = `Rechazado (HTTP ${wRes.status})`;
-        } else {
-           weatherJson = await wRes.json();
-        }
+        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index&timezone=Europe%2FMadrid`);
       } catch (e) {
         wError = e.message;
       }
 
       // 2. Petición al satélite MARINO
       try {
-        const mRes = await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period&timezone=Europe%2FMadrid`);
-        if (!mRes.ok) {
-           mError = `Rechazado (HTTP ${mRes.status})`;
-        } else {
-           marineJson = await mRes.json();
-        }
+        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period&timezone=Europe%2FMadrid`);
       } catch (e) {
         mError = e.message;
       }
@@ -127,16 +140,17 @@ export default function App() {
           let maxEastWind = 0;
 
           for (let i = startIndex; i < startIndex + 12; i++) {
-            if (i >= marineJson.hourly.wave_height.length) break;
+            // Protección contra arrays incompletos
+            if (!marineJson?.hourly?.wave_height || i >= marineJson.hourly.wave_height.length) break;
 
             const waveHeightStr = marineJson.hourly.wave_height[i];
             const waveHeight = waveHeightStr !== null ? waveHeightStr : 0.1;
-            const period = marineJson.hourly.wave_period[i] || 4;
+            const period = marineJson.hourly?.wave_period?.[i] || 4;
             
-            const windKmh = weatherJson.hourly.wind_speed_10m[i] || 0;
+            const windKmh = weatherJson.hourly?.wind_speed_10m?.[i] || 0;
             const windKnots = Math.round(windKmh / 1.852);
-            const gustKnots = Math.round((weatherJson.hourly.wind_gusts_10m[i] || 0) / 1.852);
-            const windDir = weatherJson.hourly.wind_direction_10m[i] || 0;
+            const gustKnots = Math.round((weatherJson.hourly?.wind_gusts_10m?.[i] || 0) / 1.852);
+            const windDir = weatherJson.hourly?.wind_direction_10m?.[i] || 0;
             const displayHour = i % 24;
             
             // --- REGLA 4: EL ESCUDO (Atenuación del Puerto) ---
@@ -219,8 +233,8 @@ export default function App() {
               windS: windKnots,
               gust: gustKnots,
               windDir: windDir,
-              uv: weatherJson.hourly.uv_index ? weatherJson.hourly.uv_index[i] : "-",
-              rain: weatherJson.hourly.precipitation_probability ? weatherJson.hourly.precipitation_probability[i] : 0,
+              uv: weatherJson.hourly?.uv_index?.[i] || "-",
+              rain: weatherJson.hourly?.precipitation_probability?.[i] || 0,
               hourScore: hourScore,
               waveEnergy: waveEnergy,
               ripRisk: ripRisk,
@@ -258,7 +272,7 @@ export default function App() {
             dayLabel: dayLabels[d],
             name: beach.name,
             score: avgScore,
-            temps: { air: Math.round(weatherJson.hourly.temperature_2m[startIndex]), water: 15 },
+            temps: { air: Math.round(weatherJson.hourly?.temperature_2m?.[startIndex] || 15), water: 15 },
             hourly: translatedHourlyData,
             best: { time: bestHourTime, score: maxScore },
             worst: { time: worstHourTime, score: minScore },
@@ -271,12 +285,14 @@ export default function App() {
 
       } catch (err) {
         console.error(err);
+        // Si hay un error general procesando los datos
         setErrorDetails({ general: err.message });
         setIsLoading(false);
       }
     };
 
     fetchRealData();
+    
   }, [selectedBeach]);
 
   const handleDayChange = (index) => {
