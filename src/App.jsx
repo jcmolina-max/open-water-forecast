@@ -48,7 +48,9 @@ export default function App() {
   const [selectedDay, setSelectedDay] = useState(0); 
   const [beachData, setBeachData] = useState(null); 
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  
+  // Nuevo estado de error detallado
+  const [errorDetails, setErrorDetails] = useState(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -60,46 +62,54 @@ export default function App() {
   useEffect(() => {
     const fetchRealData = async () => {
       setIsLoading(true);
-      setError(null);
+      setErrorDetails(null);
       setHasRequestedAi(false);
       setExpertAdvice("");
       setSelectedDay(0); 
       
       const beach = BEACHES[selectedBeach];
+      
+      let wError = null;
+      let mError = null;
+      let weatherJson = null;
+      let marineJson = null;
 
-      // NUEVO: Sistema de Timeout para que no se quede colgado en el PC
-      const fetchWithTimeout = async (url, ms = 10000) => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), ms);
-        try {
-          const response = await fetch(url, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          return response;
-        } catch (e) {
-          clearTimeout(timeoutId);
-          throw e;
-        }
-      };
-
+      // 1. Petición al satélite del CLIMA
       try {
-        const [weatherResponse, marineResponse] = await Promise.all([
-          fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index&timezone=Europe%2FMadrid`),
-          fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period&timezone=Europe%2FMadrid`)
-        ]);
-
-        // EL CHIVATO DE ERRORES INTELIGENTE
-        if (!weatherResponse.ok) {
-           const errData = await weatherResponse.json().catch(() => ({}));
-           throw new Error(`Satélite Clima bloqueado: ${errData.reason || weatherResponse.statusText || 'Error desconocido'}`);
+        const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index&timezone=Europe%2FMadrid`);
+        if (!wRes.ok) {
+           wError = `Rechazado (HTTP ${wRes.status})`;
+        } else {
+           weatherJson = await wRes.json();
         }
-        if (!marineResponse.ok) {
-           const errData = await marineResponse.json().catch(() => ({}));
-           throw new Error(`Satélite Marino bloqueado: ${errData.reason || marineResponse.statusText || 'Error desconocido'}`);
+      } catch (e) {
+        wError = e.message;
+      }
+
+      // 2. Petición al satélite MARINO
+      try {
+        const mRes = await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period&timezone=Europe%2FMadrid`);
+        if (!mRes.ok) {
+           mError = `Rechazado (HTTP ${mRes.status})`;
+        } else {
+           marineJson = await mRes.json();
         }
+      } catch (e) {
+        mError = e.message;
+      }
 
-        const weatherJson = await weatherResponse.json();
-        const marineJson = await marineResponse.json();
+      // 3. COMPROBACIÓN DE DIAGNÓSTICO
+      if (wError || mError) {
+         setErrorDetails({
+             weather: wError,
+             marine: mError
+         });
+         setIsLoading(false);
+         return; // Cortamos la ejecución aquí si hay error
+      }
 
+      // Si todo ha ido bien, procesamos los datos normales
+      try {
         const currentHour = new Date().getHours();
         const daysProcessed = []; 
 
@@ -135,7 +145,7 @@ export default function App() {
             let ruleColor = "";
 
             if (selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') {
-                effectiveWaveHeight = waveHeight * 0.7; // El puerto frena un 30%
+                effectiveWaveHeight = waveHeight * 0.7; 
                 localRule = "Escudo Activo";
                 ruleColor = "text-indigo-500";
             }
@@ -261,16 +271,7 @@ export default function App() {
 
       } catch (err) {
         console.error(err);
-        
-        // TRADUCTOR DE ERRORES DE RED
-        let errorMsg = err.message;
-        if (err.name === 'AbortError') {
-           errorMsg = "El satélite está saturado y tardó demasiado en responder (Timeout).";
-        } else if (err.message === 'Failed to fetch' || err.message === 'NetworkError when attempting to fetch resource.') {
-           errorMsg = "Conexión bloqueada. Comprueba tu internet o desactiva tu bloqueador de anuncios (Adblock/Brave).";
-        }
-        
-        setError(errorMsg);
+        setErrorDetails({ general: err.message });
         setIsLoading(false);
       }
     };
@@ -363,7 +364,6 @@ export default function App() {
           </div>
 
           <div className="flex flex-row items-center gap-2 md:gap-3 w-full md:w-auto">
-            {/* BOTÓN GUÍA LOCAL */}
             <button 
               onClick={() => setIsModalOpen(true)}
               className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-2.5 px-3 md:px-4 rounded-xl transition-colors border border-indigo-100 flex items-center justify-center gap-2"
@@ -373,7 +373,6 @@ export default function App() {
               <span className="hidden sm:inline">Guía Local</span>
             </button>
 
-            {/* SELECTOR DE PLAYA */}
             <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl w-full md:w-auto border border-slate-200 flex-1 md:flex-none overflow-hidden">
               <MapPin className="text-slate-400 ml-1 md:ml-2 shrink-0" size={20} />
               <select 
@@ -389,19 +388,60 @@ export default function App() {
           </div>
         </header>
 
-        {error && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-xl flex items-center gap-3 shadow-sm border border-red-100">
-            <AlertTriangle size={24} className="shrink-0" />
-            <p className="font-bold">{error}</p>
+        {/* PANEL DE DIAGNÓSTICO DE ERRORES */}
+        {errorDetails && (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border-2 border-red-200 flex flex-col gap-4">
+            <div className="flex items-center gap-3 text-red-600 border-b border-red-100 pb-4">
+              <AlertTriangle size={28} className="shrink-0" />
+              <div>
+                <h2 className="font-bold text-lg">Error de Conexión</h2>
+                <p className="text-sm text-red-500 font-medium">No se han podido descargar los datos de los satélites.</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Estado Clima */}
+              <div className={`p-4 rounded-xl border ${errorDetails.weather ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                <h3 className="font-bold text-slate-700 text-sm mb-2 flex justify-between">
+                  Satélite Clima (Viento/UV)
+                  <span>{errorDetails.weather ? '🔴 FALLO' : '🟢 OK'}</span>
+                </h3>
+                <p className={`text-xs font-mono break-words ${errorDetails.weather ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {errorDetails.weather || "Conexión establecida correctamente."}
+                </p>
+              </div>
+
+              {/* Estado Marino */}
+              <div className={`p-4 rounded-xl border ${errorDetails.marine ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                <h3 className="font-bold text-slate-700 text-sm mb-2 flex justify-between">
+                  Satélite Marino (Olas)
+                  <span>{errorDetails.marine ? '🔴 FALLO' : '🟢 OK'}</span>
+                </h3>
+                <p className={`text-xs font-mono break-words ${errorDetails.marine ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {errorDetails.marine || "Conexión establecida correctamente."}
+                </p>
+              </div>
+            </div>
+            {errorDetails.general && (
+              <p className="text-xs text-slate-500 font-mono mt-2 text-center border-t pt-4">
+                Error interno: {errorDetails.general}
+              </p>
+            )}
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold py-3 rounded-xl transition-colors"
+            >
+              Reintentar Conexión
+            </button>
           </div>
         )}
 
-        {isLoading && !error ? (
+        {isLoading && !errorDetails ? (
           <div className="flex flex-col items-center justify-center py-24 bg-white rounded-2xl shadow-sm border border-slate-200">
             <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
             <p className="text-slate-500 font-medium animate-pulse text-lg">Conectando con Open-Meteo y analizando satélites...</p>
           </div>
-        ) : currentDayData && (
+        ) : currentDayData && !errorDetails && (
           <>
             {/* SELECTOR DE DÍAS CON FECHAS */}
             <div className="flex flex-wrap gap-2 mb-2">
