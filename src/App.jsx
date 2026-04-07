@@ -50,6 +50,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   
   const [errorDetails, setErrorDetails] = useState(null);
+  const [isClimateDown, setIsClimateDown] = useState(false); // NUEVO: Detector de caída de clima
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Estados para el Socorrista IA
@@ -61,14 +62,16 @@ export default function App() {
     const fetchRealData = async () => {
       setIsLoading(true);
       setErrorDetails(null);
+      setIsClimateDown(false);
       setHasRequestedAi(false);
       setExpertAdvice("");
       setSelectedDay(0); 
       
       const beach = BEACHES[selectedBeach];
       
-      let mError = null;
       let marineJson = null;
+      let weatherJson = null;
+      let localClimateDown = false;
 
       const fetchWithTimeout = async (url, ms = 10000) => {
         const controller = new AbortController();
@@ -79,34 +82,37 @@ export default function App() {
           
           if (!response.ok) {
              const errData = await response.json().catch(() => ({}));
-             throw new Error(errData.reason || `Error del Servidor (HTTP ${response.status})`);
+             throw new Error(errData.reason || `Error HTTP ${response.status}`);
           }
           return await response.json();
           
         } catch (e) {
           clearTimeout(timeoutId);
-          if (e.name === 'AbortError') throw new Error('Tiempo agotado (>10s). El satélite no responde.');
-          if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) throw new Error('Conexión bloqueada por tu navegador.');
+          if (e.name === 'AbortError') throw new Error('Timeout (>10s)');
+          if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) throw new Error('Conexión bloqueada.');
           throw e; 
         }
       };
 
-      // MODO DE EMERGENCIA: Saltamos por completo la petición del clima
-      // y vamos directamente al satélite marino (que sí funciona)
+      // 1. INTENTAMOS DESCARGAR EL CLIMA (Silenciosamente)
+      try {
+        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index&timezone=Europe%2FMadrid`);
+      } catch (e) {
+        console.warn("Satélite de clima caído. Activando auto-rescate.", e);
+        localClimateDown = true;
+        setIsClimateDown(true);
+      }
+
+      // 2. INTENTAMOS DESCARGAR EL MAR (Es obligatorio para que funcione)
       try {
         marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period&timezone=Europe%2FMadrid`);
       } catch (e) {
-        mError = e.message;
-      }
-
-      // Comprobación de errores solo para el mar
-      if (mError) {
-         setErrorDetails({ general: mError });
+         setErrorDetails({ general: `El satélite marino no responde: ${e.message}` });
          setIsLoading(false);
          return; 
       }
 
-      // Si tenemos las olas, procesamos los datos
+      // 3. PROCESAMOS LOS DATOS (Híbrido)
       try {
         const currentHour = new Date().getHours();
         const daysProcessed = []; 
@@ -120,6 +126,9 @@ export default function App() {
           let minScore = 101;
           let bestHourTime = "";
           let worstHourTime = "";
+          
+          let eastWindCount = 0;
+          let maxEastWind = 0;
 
           for (let i = startIndex; i < startIndex + 12; i++) {
             if (!marineJson?.hourly?.wave_height || i >= marineJson.hourly.wave_height.length) break;
@@ -127,9 +136,15 @@ export default function App() {
             const waveHeightStr = marineJson.hourly.wave_height[i];
             const waveHeight = waveHeightStr !== null ? waveHeightStr : 0.1;
             const period = marineJson.hourly?.wave_period?.[i] || 4;
+            
+            // Si el clima funciona, cogemos datos. Si está caído, ponemos variables neutras
+            const windKmh = localClimateDown ? 0 : (weatherJson?.hourly?.wind_speed_10m?.[i] || 0);
+            const windKnots = Math.round(windKmh / 1.852);
+            const gustKnots = localClimateDown ? 0 : Math.round((weatherJson?.hourly?.wind_gusts_10m?.[i] || 0) / 1.852);
+            const windDir = localClimateDown ? 0 : (weatherJson?.hourly?.wind_direction_10m?.[i] || 0);
             const displayHour = i % 24;
             
-            // --- REGLA 4: EL ESCUDO (Atenuación del Puerto - Se mantiene en emergencia) ---
+            // --- REGLA 4: EL ESCUDO (Atenuación del Puerto) ---
             let effectiveWaveHeight = waveHeight;
             let localRule = null;
             let ruleColor = "";
@@ -138,6 +153,12 @@ export default function App() {
                 effectiveWaveHeight = waveHeight * 0.7; 
                 localRule = "Escudo Activo";
                 ruleColor = "text-indigo-500";
+            }
+            
+            // --- DETECCIÓN DE LEVANTE ---
+            if (!localClimateDown && windDir > 45 && windDir < 135) {
+                eastWindCount++;
+                if (windKnots > maxEastWind) maxEastWind = windKnots;
             }
 
             const waveEnergy = Math.round(Math.pow(effectiveWaveHeight, 2) * period * 6.25);
@@ -155,12 +176,39 @@ export default function App() {
               ripColor = "text-blue-600 font-medium";
             }
 
-            // Calculamos el score SOLO en base a la ola (Ignoramos el castigo de viento)
             let hourScore = 100;
+            
+            // Castigos base
             if (effectiveWaveHeight > 0.2) hourScore -= (effectiveWaveHeight * 20);
             if (effectiveWaveHeight > 0.6) hourScore -= (Math.pow(effectiveWaveHeight, 2) * 25); 
             if (period < 4.5 && effectiveWaveHeight > 0.5) hourScore -= 15;
             if (period < 3.5 && effectiveWaveHeight > 0.6) hourScore -= 25;
+            
+            // Si hay clima, aplicamos reglas avanzadas
+            if (!localClimateDown) {
+                if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
+                
+                // REGLA 1: EL MAGÓN
+                if (effectiveWaveHeight >= 0.4 && effectiveWaveHeight <= 0.7 && windKnots < 8 && period > 5.5) {
+                    hourScore = 100 - (effectiveWaveHeight * 10); 
+                    localRule = "Magón";
+                    ruleColor = "text-emerald-600";
+                }
+                // REGLA 2: LA LAVADORA TÉRMICA
+                const isPoniente = windDir > 202.5 && windDir <= 292.5;
+                if (isPoniente && displayHour >= 12 && displayHour <= 18 && windKnots > 12) {
+                    hourScore -= 25;
+                    localRule = "Lavadora";
+                    ruleColor = "text-amber-600";
+                }
+                // REGLA 3: EL TERRAL
+                const isNorte = windDir > 315 || windDir <= 45;
+                if (isNorte && windKnots > 15) {
+                    hourScore -= 25;
+                    localRule = "Riesgo Deriva";
+                    ruleColor = "text-red-600";
+                }
+            }
 
             hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
             totalScore += hourScore;
@@ -175,14 +223,11 @@ export default function App() {
               swellH: effectiveWaveHeight.toFixed(2),
               rawSwellH: waveHeight.toFixed(2),
               period: period.toFixed(1),
-              
-              // DATOS VACÍOS DE EMERGENCIA (Al no haber satélite de clima)
-              windS: "-",
-              gust: "-",
-              windDir: "-",
-              uv: "-",
-              rain: "-",
-              
+              windS: localClimateDown ? "-" : windKnots,
+              gust: localClimateDown ? "-" : gustKnots,
+              windDir: localClimateDown ? "-" : windDir,
+              uv: localClimateDown ? "-" : (weatherJson?.hourly?.uv_index?.[i] || "-"),
+              rain: localClimateDown ? "-" : (weatherJson?.hourly?.precipitation_probability?.[i] || 0),
               hourScore: hourScore,
               waveEnergy: waveEnergy,
               ripRisk: ripRisk,
@@ -190,6 +235,26 @@ export default function App() {
               localRule: localRule,
               ruleColor: ruleColor
             });
+          }
+
+          let jRisk = "Bajo";
+          let jColor = "text-emerald-600";
+          let jBg = "bg-emerald-50 border-emerald-100";
+
+          if (localClimateDown) {
+              jRisk = "Dato no disp.";
+              jColor = "text-slate-500";
+              jBg = "bg-slate-100 border-slate-200";
+          } else if (eastWindCount >= 4) {
+              if (maxEastWind >= 10) {
+                  jRisk = "Alto";
+                  jColor = "text-red-600";
+                  jBg = "bg-red-50 border-red-100";
+              } else {
+                  jRisk = "Medio";
+                  jColor = "text-amber-600";
+                  jBg = "bg-amber-50 border-amber-100";
+              }
           }
 
           const avgScore = Math.round(totalScore / 12);
@@ -204,11 +269,14 @@ export default function App() {
             dayLabel: dayLabels[d],
             name: beach.name,
             score: avgScore,
-            temps: { air: "-", water: 15 }, // Sin datos de aire
+            temps: { 
+                air: localClimateDown ? "-" : Math.round(weatherJson?.hourly?.temperature_2m?.[startIndex] || 15), 
+                water: 15 
+            },
             hourly: translatedHourlyData,
             best: { time: bestHourTime, score: maxScore },
             worst: { time: worstHourTime, score: minScore },
-            jellyfish: { risk: "Dato no disp.", color: "text-slate-500", bgColor: "bg-slate-100 border-slate-200" } // Sin viento no hay medusas
+            jellyfish: { risk: jRisk, color: jColor, bgColor: jBg }
           });
         }
 
@@ -246,13 +314,14 @@ export default function App() {
     }
 
     try {
+      const windText = isClimateDown ? "(Ignora el viento porque el satélite está caído)" : `Viento: ${currentDayData.hourly[0].windS} nudos.`;
       const prompt = `Eres un experto nadador de aguas abiertas y socorrista en Málaga. 
       Analiza los siguientes datos MARINOS de ${currentDayData.dayLabel.toLowerCase()} para la playa ${currentDayData.name}:
-      Puntuación media de seguridad basada en olas: ${currentDayData.score}/100.
-      Olas medias: ${currentDayData.hourly[0].swellH}m. (Ignora el viento porque el satélite está caído).
+      Puntuación media de seguridad: ${currentDayData.score}/100.
+      Olas medias: ${currentDayData.hourly[0].swellH}m. ${windText}
       Mejor hora para nadar: ${currentDayData.best.time}. Peor hora: ${currentDayData.worst.time}.
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. 
-      Indica claramente si es seguro meterse a nadar y a qué debe prestar atención según las OLAS. Usa un tono cercano.`;
+      Indica claramente si es seguro meterse a nadar. Usa un tono cercano.`;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
@@ -336,14 +405,14 @@ export default function App() {
           </div>
         </header>
 
-        {/* CARTEL DE EMERGENCIA */}
-        {!isLoading && !errorDetails && (
-          <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl shadow-sm flex items-start gap-3">
+        {/* CARTEL DE EMERGENCIA INTELIGENTE (Solo sale si el clima falla) */}
+        {!isLoading && !errorDetails && isClimateDown && (
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl shadow-sm flex items-start gap-3 animate-in fade-in slide-in-from-top-4 duration-500">
             <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={24} />
             <div>
               <h3 className="font-bold text-amber-800">Modo de Emergencia Activo</h3>
               <p className="text-sm text-amber-700 mt-1">
-                El satélite global de clima está temporalmente fuera de servicio. Estamos mostrando <strong>solo las previsiones de oleaje y resaca</strong>. Los datos de viento, temperatura del aire y riesgo de medusas volverán cuando el servidor se restaure.
+                El satélite global de clima está temporalmente fuera de servicio. Estamos mostrando <strong>solo las previsiones de oleaje y resaca</strong>. Los datos de viento, temperatura del aire y riesgo de medusas volverán solos cuando el servidor se restaure.
               </p>
             </div>
           </div>
@@ -355,13 +424,13 @@ export default function App() {
             <div className="flex items-center gap-3 text-red-600 border-b border-red-100 pb-4">
               <AlertTriangle size={28} className="shrink-0" />
               <div>
-                <h2 className="font-bold text-lg">Error de Conexión</h2>
+                <h2 className="font-bold text-lg">Error Crítico de Conexión</h2>
                 <p className="text-sm text-red-500 font-medium">Ni siquiera el satélite de olas está respondiendo en este momento.</p>
               </div>
             </div>
             {errorDetails.general && (
               <p className="text-xs text-slate-500 font-mono mt-2 text-center border-t pt-4">
-                Error interno: {errorDetails.general}
+                Detalles: {errorDetails.general}
               </p>
             )}
             <button 
@@ -376,7 +445,7 @@ export default function App() {
         {isLoading && !errorDetails ? (
           <div className="flex flex-col items-center justify-center py-24 bg-white rounded-2xl shadow-sm border border-slate-200">
             <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
-            <p className="text-slate-500 font-medium animate-pulse text-lg">Conectando con Open-Meteo (Solo Mar)...</p>
+            <p className="text-slate-500 font-medium animate-pulse text-lg">Conectando con satélites...</p>
           </div>
         ) : currentDayData && !errorDetails && (
           <>
@@ -406,7 +475,7 @@ export default function App() {
                 {/* Tarjeta 1: Score de Seguridad */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
                   <h2 className="text-slate-500 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
-                    <Activity size={18} className="text-blue-500"/> Seguridad Media (Olas)
+                    <Activity size={18} className="text-blue-500"/> Seguridad Media {isClimateDown && "(Solo Olas)"}
                   </h2>
                   <div className="relative">
                     <svg className="w-40 h-40 transform -rotate-90">
@@ -429,7 +498,7 @@ export default function App() {
                 </div>
 
                 {/* Tarjeta 2: Temperaturas */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center opacity-70">
+                <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center ${isClimateDown ? 'opacity-70' : ''}`}>
                   <div className="flex items-center gap-3">
                     <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Thermometer size={24}/></div>
                     <div>
@@ -439,10 +508,12 @@ export default function App() {
                   </div>
                   <div className="h-10 w-px bg-slate-200"></div>
                   <div className="flex items-center gap-3">
-                    <div className="bg-slate-50 p-2 rounded-lg text-slate-400"><Sun size={24}/></div>
+                    <div className={isClimateDown ? "bg-slate-50 p-2 rounded-lg text-slate-400" : "bg-orange-50 p-2 rounded-lg text-orange-500"}><Sun size={24}/></div>
                     <div>
                       <p className="text-sm text-slate-500 font-medium">Aire ({currentDayData.dayLabel.split(' ')[0]})</p>
-                      <p className="text-xl font-bold text-slate-400">- ºC</p>
+                      <p className={`text-xl font-bold ${isClimateDown ? 'text-slate-400' : 'text-slate-800'}`}>
+                        {currentDayData.temps.air === "-" ? "- ºC" : `${currentDayData.temps.air}ºC`}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -495,18 +566,25 @@ export default function App() {
                 </div>
 
                 {/* Tarjeta 5: Riesgo de Medusas */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 opacity-70">
+                <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
                   <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs mb-4">
-                    <AlertCircle size={16} className="text-slate-400"/> Riesgo de Medusas
+                    <AlertCircle size={16} className={isClimateDown ? 'text-slate-400' : 'text-purple-500'}/> Riesgo de Medusas
                   </h3>
                   <div className={`flex justify-between items-center p-3 rounded-xl border ${currentDayData.jellyfish.bgColor}`}>
                     <span className={`font-black uppercase text-sm ${currentDayData.jellyfish.color}`}>
-                      {currentDayData.jellyfish.risk}
+                      {currentDayData.jellyfish.risk.includes("Dato") ? currentDayData.jellyfish.risk : `Nivel ${currentDayData.jellyfish.risk}`}
                     </span>
+                    {!isClimateDown && (
+                      <a href="https://oceanaria.es/" target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-500 hover:text-blue-700 underline underline-offset-2 text-right">
+                        Oceanaria
+                      </a>
+                    )}
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-3 font-medium leading-tight">
-                    *Al estar el satélite de viento desconectado, no podemos calcular la probabilidad de levante.
-                  </p>
+                  {isClimateDown && (
+                    <p className="text-[10px] text-slate-400 mt-3 font-medium leading-tight">
+                      *Al estar el satélite de viento desconectado, no podemos calcular la probabilidad de levante.
+                    </p>
+                  )}
                 </div>
 
                 {/* Tarjeta 6: Boya Oficial de Puertos del Estado */}
@@ -578,10 +656,10 @@ export default function App() {
                         <th className="px-5 py-4 font-bold">Oleaje (m / s)</th>
                         <th className="px-5 py-4 font-bold text-center">Energía</th>
                         <th className="px-5 py-4 font-bold text-center">Resaca</th>
-                        <th className="px-5 py-4 font-bold text-slate-300">Viento (Nudos)</th>
-                        <th className="px-5 py-4 font-bold text-center text-slate-300">Lluvia</th>
-                        <th className="px-5 py-4 font-bold text-center text-slate-300">Dir.</th>
-                        <th className="px-5 py-4 font-bold text-center text-slate-300">UV</th>
+                        <th className={`px-5 py-4 font-bold ${isClimateDown ? 'text-slate-300' : ''}`}>Viento (Nudos)</th>
+                        <th className={`px-5 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Lluvia</th>
+                        <th className={`px-5 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Dir.</th>
+                        <th className={`px-5 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>UV</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
@@ -639,21 +717,44 @@ export default function App() {
                             </span>
                           </td>
 
-                          {/* DATOS VACÍOS (CLIMA) */}
                           <td className="px-5 py-4">
-                            <span className="font-bold text-slate-300 text-base">-</span>
+                            {isClimateDown ? (
+                                <span className="font-bold text-slate-300 text-base">-</span>
+                            ) : (
+                                <div className="flex flex-col">
+                                  <span className={`font-black text-base ${hour.windS > 15 ? 'text-amber-500' : 'text-slate-700'}`}>
+                                    {hour.windS} kts
+                                  </span>
+                                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                                    Rachas: {hour.gust}
+                                  </span>
+                                </div>
+                            )}
                           </td>
 
                           <td className="px-5 py-4 text-center">
-                            <span className="font-bold text-slate-300">-</span>
+                             {isClimateDown ? (
+                                <span className="font-bold text-slate-300">-</span>
+                             ) : (
+                                <div className="flex flex-col items-center justify-center">
+                                  {hour.rain > 10 && <Droplets size={14} className="text-blue-400 mb-1" />}
+                                  <span className={`font-bold ${hour.rain > 10 ? 'text-blue-600' : 'text-slate-400'}`}>
+                                    {hour.rain}%
+                                  </span>
+                                </div>
+                             )}
                           </td>
 
                           <td className="px-5 py-4 text-center">
-                            <span className="font-bold text-slate-300 text-xs">-</span>
+                            <span className={`font-bold text-xs ${isClimateDown ? 'text-slate-300' : 'text-slate-700'}`}>
+                              {getWindDirection(hour.windDir)}
+                            </span>
                           </td>
 
                           <td className="px-5 py-4 text-center">
-                            <span className="font-black text-slate-300">-</span>
+                            <span className={`font-black ${isClimateDown ? 'text-slate-300' : (hour.uv > 5 ? 'text-orange-500' : 'text-slate-400')}`}>
+                              {hour.uv}
+                            </span>
                           </td>
 
                         </tr>
