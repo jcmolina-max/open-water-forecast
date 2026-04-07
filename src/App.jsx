@@ -382,8 +382,8 @@ export default function App() {
   const currentDayData = beachData ? beachData[selectedDay] : null;
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans flex flex-col">
+      <div className="max-w-6xl mx-auto space-y-6 flex-grow w-full">
         
         <header className="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center gap-3 mb-4 md:mb-0">
@@ -806,6 +806,18 @@ export default function App() {
             </div>
           </>
         )}
+        
+        {/* FOOTER LEGAL */}
+        <footer className="mt-8 border-t border-slate-200 pt-6 pb-2 text-center w-full">
+          <div className="bg-slate-200/50 rounded-xl p-4 inline-block max-w-4xl text-left">
+            <p className="text-xs text-slate-500 leading-relaxed flex items-start gap-2">
+              <AlertTriangle className="shrink-0 text-slate-400 mt-0.5" size={14} />
+              <span>
+                <strong className="text-slate-700">Aviso Legal y Descargo de Responsabilidad:</strong> OpenWater Tracker proporciona estimaciones matemáticas basadas en modelos meteorológicos satelitales globales y algoritmos heurísticos locales. Los datos mostrados son puramente informativos y <strong>no garantizan la seguridad real</strong> en el agua. Las condiciones oceánicas pueden cambiar repentinamente. El uso de esta aplicación para planificar actividades acuáticas se realiza bajo la exclusiva responsabilidad del usuario. Ante cualquier duda, bandera roja o mala apariencia del mar en la orilla, no entre al agua.
+              </span>
+            </p>
+          </div>
+        </footer>
 
       </div>
 
