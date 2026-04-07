@@ -582,7 +582,7 @@ export default function App() {
                   
                   <div className="space-y-3">
                     <a 
-                      href="https://bancodedatos.puertos.es/BD/informes/INT_1.php?inst=2842&t=1&c=1" 
+                      href="https://portus.puertos.es/#/" 
                       target="_blank" 
                       rel="noreferrer"
                       className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group"
