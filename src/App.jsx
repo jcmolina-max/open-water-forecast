@@ -94,16 +94,16 @@ export default function App() {
         }
       };
 
-      // 1. SATÉLITE CLIMA (Con past_days=1 para el retrovisor)
+      // 1. SATÉLITE CLIMA (Añadido cloud_cover a la petición)
       try {
-        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index&timezone=Europe%2FMadrid&past_days=1`);
+        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index,cloud_cover&timezone=Europe%2FMadrid&past_days=1`);
       } catch (e) {
         console.warn("Satélite de clima caído. Activando auto-rescate.", e);
         localClimateDown = true;
         setIsClimateDown(true);
       }
 
-      // 2. SATÉLITE MARINO (Con past_days=1 para el retrovisor)
+      // 2. SATÉLITE MARINO
       try {
         marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction&timezone=Europe%2FMadrid&past_days=1`);
       } catch (e) {
@@ -151,6 +151,7 @@ export default function App() {
             const windKnots = Math.round(windKmh / 1.852);
             const gustKnots = localClimateDown ? 0 : Math.round((weatherJson?.hourly?.wind_gusts_10m?.[i] || 0) / 1.852);
             const windDir = localClimateDown ? 0 : (weatherJson?.hourly?.wind_direction_10m?.[i] || 0);
+            const cloudCover = localClimateDown ? "-" : (weatherJson?.hourly?.cloud_cover?.[i] || 0);
             const displayHour = i % 24;
             
             let effectiveWaveHeight = waveHeight;
@@ -181,6 +182,14 @@ export default function App() {
             if (!localClimateDown && windDir > 45 && windDir < 135) {
                 eastWindCount++;
                 if (windKnots > maxEastWind) maxEastWind = windKnots;
+            }
+
+            // Traductor visual de nubosidad
+            let skyIcon = "-";
+            if (!localClimateDown) {
+              if (cloudCover <= 25) skyIcon = "☀️";
+              else if (cloudCover <= 65) skyIcon = "⛅";
+              else skyIcon = "☁️";
             }
 
             const waveEnergy = Math.round(Math.pow(effectiveWaveHeight, 2) * period * 6.25);
@@ -244,6 +253,8 @@ export default function App() {
               windS: localClimateDown ? "-" : windKnots,
               gust: localClimateDown ? "-" : gustKnots,
               windDir: localClimateDown ? "-" : windDir,
+              cloudCover: cloudCover,
+              skyIcon: skyIcon,
               uv: localClimateDown ? "-" : (weatherJson?.hourly?.uv_index?.[i] || "-"),
               rain: localClimateDown ? "-" : (weatherJson?.hourly?.precipitation_probability?.[i] || 0),
               hourScore: hourScore,
@@ -331,7 +342,7 @@ export default function App() {
     }
 
     try {
-      const windText = isClimateDown ? "(Ignora el viento porque el satélite está caído)" : `Viento: ${currentDayData.hourly[0].windS} nudos.`;
+      const windText = isClimateDown ? "(Ignora el viento porque el satélite está caído)" : `Viento: ${currentDayData.hourly[0].windS} nudos. Cielo: ${currentDayData.hourly[0].cloudCover}% nublado.`;
       const prompt = `Eres un experto nadador de aguas abiertas y socorrista en Málaga. 
       Analiza los siguientes datos MARINOS de ${currentDayData.dayLabel.toLowerCase()} para la playa ${currentDayData.name}:
       Puntuación media de seguridad: ${currentDayData.score}/100.
@@ -689,7 +700,7 @@ export default function App() {
                 </div>
                 
                 <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
-                  <table className="w-full text-left border-collapse min-w-[750px] relative">
+                  <table className="w-full text-left border-collapse min-w-[850px] relative">
                     <thead className="sticky top-0 bg-white z-10 shadow-sm">
                       <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
                         <th className="px-5 py-4 font-bold">Hora</th>
@@ -697,6 +708,7 @@ export default function App() {
                         <th className="px-4 py-4 font-bold">Oleaje</th>
                         <th className="px-4 py-4 font-bold text-center">Energía</th>
                         <th className="px-4 py-4 font-bold">Corrientes</th>
+                        <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Cielo</th>
                         <th className={`px-4 py-4 font-bold ${isClimateDown ? 'text-slate-300' : ''}`}>Viento (kts)</th>
                         <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Lluvia</th>
                         <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Dir.</th>
@@ -760,6 +772,18 @@ export default function App() {
                                 <span>{hour.drift.icon}</span> <span>{hour.drift.short}</span>
                               </div>
                             </div>
+                          </td>
+
+                          {/* NUEVA COLUMNA: CIELO */}
+                          <td className="px-4 py-4 text-center">
+                            {isClimateDown ? (
+                                <span className="font-bold text-slate-300">-</span>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center">
+                                  <span className="text-xl" title={`Nubosidad: ${hour.cloudCover}%`}>{hour.skyIcon}</span>
+                                  <span className="text-[10px] font-bold text-slate-400">{hour.cloudCover}%</span>
+                                </div>
+                            )}
                           </td>
 
                           <td className="px-4 py-4">
