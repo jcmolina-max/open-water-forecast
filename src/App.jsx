@@ -23,7 +23,9 @@ import {
   ArrowUpRight,
   Info,
   Compass,
-  History
+  History,
+  TestTubes,
+  Zap
 } from 'lucide-react';
 
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
@@ -33,7 +35,7 @@ const BEACHES = {
   pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386, facing: 180 }
 };
 
-// Generador de etiquetas de fecha (Ahora soporta días pasados, ej: offset -1)
+// Generador de etiquetas de fecha
 const getDateLabel = (offset, prefix) => {
   const d = new Date();
   d.setDate(d.getDate() + offset);
@@ -44,7 +46,7 @@ const getDateLabel = (offset, prefix) => {
 
 export default function App() {
   const [selectedBeach, setSelectedBeach] = useState('misericordia');
-  // Por defecto seleccionamos el índice 1 (que corresponde a "Hoy", ya que el 0 es "Ayer")
+  // Por defecto seleccionamos "Hoy" (Índice 1, ya que Ayer es 0)
   const [selectedDay, setSelectedDay] = useState(1); 
   const [beachData, setBeachData] = useState(null); 
   const [isLoading, setIsLoading] = useState(true);
@@ -65,7 +67,7 @@ export default function App() {
       setIsClimateDown(false);
       setHasRequestedAi(false);
       setExpertAdvice("");
-      setSelectedDay(1); // Reseteamos siempre a "Hoy" al cambiar de playa
+      setSelectedDay(1); 
       
       const beach = BEACHES[selectedBeach];
       
@@ -94,18 +96,19 @@ export default function App() {
         }
       };
 
-      // 1. SATÉLITE CLIMA (Añadido cloud_cover a la petición)
+      // 1. SATÉLITE CLIMA (Pedimos past_days=2 para tener margen de medir 24h de lluvia previas)
+      // Añadimos 'precipitation' para volumen y 'weather_code' para rayos
       try {
-        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,uv_index,cloud_cover&timezone=Europe%2FMadrid&past_days=1`);
+        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,precipitation,weather_code,uv_index,cloud_cover&timezone=Europe%2FMadrid&past_days=2`);
       } catch (e) {
         console.warn("Satélite de clima caído. Activando auto-rescate.", e);
         localClimateDown = true;
         setIsClimateDown(true);
       }
 
-      // 2. SATÉLITE MARINO
+      // 2. SATÉLITE MARINO (past_days=2 para alinear índices con el clima)
       try {
-        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction&timezone=Europe%2FMadrid&past_days=1`);
+        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction&timezone=Europe%2FMadrid&past_days=2`);
       } catch (e) {
          setErrorDetails({ general: `El satélite marino no responde: ${e.message}` });
          setIsLoading(false);
@@ -121,12 +124,45 @@ export default function App() {
         for (let d = 0; d < dayOffsets.length; d++) {
           const offset = dayOffsets[d];
           
-          // Al pedir past_days=1, el día de ayer empieza en el índice 0 de la matriz.
-          const baseIndex = (offset + 1) * 24; 
+          // Al pedir past_days=2, "Hoy" (offset 0) empieza en el índice 48.
+          // Ayer (offset -1) empieza en el índice 24.
+          const baseIndex = (offset + 2) * 24; 
           
-          // Mostramos desde las 06:00 hasta las 21:00 (16 horas de datos útiles para nadar)
           const startIndex = baseIndex + 6;
           const endIndex = baseIndex + 21;
+
+          // ----- CÁLCULO DE CALIDAD DEL AGUA (Aguas Sucias) -----
+          // Sumamos la lluvia (mm) de las 24 horas EXACTAS anteriores al inicio del día evaluado
+          let rainSum24h = 0;
+          if (!localClimateDown && weatherJson?.hourly?.precipitation) {
+              for (let k = baseIndex - 24; k < baseIndex; k++) {
+                  if (k >= 0 && k < weatherJson.hourly.precipitation.length) {
+                      rainSum24h += weatherJson.hourly.precipitation[k] || 0;
+                  }
+              }
+          }
+          
+          let wqStatus = "Presumiblemente Limpia";
+          let wqColor = "text-blue-600";
+          let wqBg = "bg-blue-50 border-blue-100";
+          let wqDesc = "Sin lluvias severas recientes detectadas.";
+
+          if (localClimateDown) {
+              wqStatus = "Desconocida";
+              wqColor = "text-slate-500";
+              wqBg = "bg-slate-100 border-slate-200";
+              wqDesc = "Satélite desconectado.";
+          } else if (rainSum24h > 15) {
+              wqStatus = "Riesgo Alto";
+              wqColor = "text-red-600";
+              wqBg = "bg-red-50 border-red-200";
+              wqDesc = "Aliviaderos o Guadalhorce activos. Llovió mucho ayer.";
+          } else if (rainSum24h > 3) {
+              wqStatus = "Precaución";
+              wqColor = "text-amber-600";
+              wqBg = "bg-amber-50 border-amber-200";
+              wqDesc = "Lluvia reciente. Riesgo de arrastre de suciedad.";
+          }
 
           let translatedHourlyData = [];
           let totalScore = 0;
@@ -138,6 +174,7 @@ export default function App() {
           let eastWindCount = 0;
           let maxEastWind = 0;
           let validHoursCount = 0;
+          let hasStormRiskToday = false;
 
           for (let i = startIndex; i <= endIndex; i++) {
             if (!marineJson?.hourly?.wave_height || i >= marineJson.hourly.wave_height.length) break;
@@ -152,8 +189,13 @@ export default function App() {
             const gustKnots = localClimateDown ? 0 : Math.round((weatherJson?.hourly?.wind_gusts_10m?.[i] || 0) / 1.852);
             const windDir = localClimateDown ? 0 : (weatherJson?.hourly?.wind_direction_10m?.[i] || 0);
             const cloudCover = localClimateDown ? "-" : (weatherJson?.hourly?.cloud_cover?.[i] || 0);
+            const wCode = localClimateDown ? 0 : (weatherJson?.hourly?.weather_code?.[i] || 0);
             const displayHour = i % 24;
             
+            // Detección de tormenta eléctrica (Códigos WMO 95, 96, 99)
+            const isThunderstorm = (wCode === 95 || wCode === 96 || wCode === 99);
+            if (isThunderstorm) hasStormRiskToday = true;
+
             let effectiveWaveHeight = waveHeight;
             let localRule = null;
             let ruleColor = "";
@@ -236,6 +278,13 @@ export default function App() {
                 }
             }
 
+            // SOBRESCRITURA TOTAL POR PELIGRO VITAL
+            if (isThunderstorm) {
+                hourScore = 0;
+                localRule = "Tormenta ⚡";
+                ruleColor = "text-yellow-700 bg-yellow-300 border-yellow-500 shadow-sm";
+            }
+
             hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
             totalScore += hourScore;
             validHoursCount++;
@@ -289,7 +338,6 @@ export default function App() {
 
           const avgScore = validHoursCount > 0 ? Math.round(totalScore / validHoursCount) : 0;
           
-          // Cogemos la temperatura de las 12:00 del mediodía de ese día como referencia para la tarjeta
           const noonIndex = baseIndex + 12;
           
           daysProcessed.push({
@@ -304,7 +352,9 @@ export default function App() {
             hourly: translatedHourlyData,
             best: { time: bestHourTime, score: maxScore },
             worst: { time: worstHourTime, score: minScore },
-            jellyfish: { risk: jRisk, color: jColor, bgColor: jBg }
+            jellyfish: { risk: jRisk, color: jColor, bgColor: jBg },
+            waterQuality: { status: wqStatus, color: wqColor, bgColor: wqBg, desc: wqDesc },
+            hasStormRisk: hasStormRiskToday
           });
         }
 
@@ -342,11 +392,13 @@ export default function App() {
     }
 
     try {
-      const windText = isClimateDown ? "(Ignora el viento porque el satélite está caído)" : `Viento: ${currentDayData.hourly[0].windS} nudos. Cielo: ${currentDayData.hourly[0].cloudCover}% nublado.`;
+      const stormWarning = currentDayData.hasStormRisk ? " ¡HAY RIESGO DE TORMENTA ELÉCTRICA (RAYOS) HOY!" : "";
+      const windText = isClimateDown ? "(Ignora el viento porque satélite está caído)" : `Viento: ${currentDayData.hourly[0].windS} nudos. Cielo: ${currentDayData.hourly[0].cloudCover}% nublado. Calidad del agua: ${currentDayData.waterQuality.status}.`;
+      
       const prompt = `Eres un experto nadador de aguas abiertas y socorrista en Málaga. 
       Analiza los siguientes datos MARINOS de ${currentDayData.dayLabel.toLowerCase()} para la playa ${currentDayData.name}:
       Puntuación media de seguridad: ${currentDayData.score}/100.
-      Olas medias: ${currentDayData.hourly[0].swellH}m. ${windText}
+      Olas medias: ${currentDayData.hourly[0].swellH}m. ${windText}${stormWarning}
       Mejor hora para nadar: ${currentDayData.best.time}. Peor hora: ${currentDayData.worst.time}.
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. 
       Indica claramente si es seguro meterse a nadar. Usa un tono cercano.`;
@@ -431,6 +483,19 @@ export default function App() {
             </div>
           </div>
         </header>
+
+        {/* ALERTA DE TORMENTA GENERAL */}
+        {!isLoading && !errorDetails && currentDayData?.hasStormRisk && (
+          <div className="bg-yellow-400 border border-yellow-500 p-4 rounded-2xl shadow-md flex items-start gap-3 animate-pulse">
+            <Zap className="text-yellow-900 shrink-0 mt-0.5" size={24} />
+            <div>
+              <h3 className="font-black text-yellow-900 uppercase">Peligro: Tormenta Eléctrica</h3>
+              <p className="text-sm text-yellow-800 font-medium mt-1">
+                El satélite detecta riesgo de caída de rayos en la costa durante el día de hoy. El agua es un conductor eléctrico letal. Se prohíbe terminantemente el baño en horas de tormenta.
+              </p>
+            </div>
+          </div>
+        )}
 
         {!isLoading && !errorDetails && isClimateDown && (
           <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl shadow-sm flex items-start gap-3 animate-in fade-in slide-in-from-top-4 duration-500">
@@ -623,28 +688,48 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 5: Riesgo de Medusas */}
-                <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
-                      <AlertCircle size={16} className={isClimateDown ? 'text-slate-400' : 'text-purple-500'}/> Riesgo de Medusas
-                    </h3>
-                    <span className="text-[10px] text-slate-400 font-medium">Cálculo Heurístico</span>
+                {/* Tarjeta 5: Calidad del Agua y Medusas (Grid dual) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
+                  {/* Calidad del Agua */}
+                  <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+                        <TestTubes size={16} className={isClimateDown ? 'text-slate-400' : 'text-emerald-500'}/> Calidad del Agua
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-medium">Satélite + Deriva</span>
+                    </div>
+                    
+                    <div className={`flex flex-col p-3 rounded-xl border ${currentDayData.waterQuality.bgColor}`}>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className={`font-black uppercase text-sm ${currentDayData.waterQuality.color}`}>
+                          {currentDayData.waterQuality.status}
+                        </span>
+                        {currentDayData.waterQuality.status === "Riesgo Alto" && <AlertTriangle size={16} className="text-red-500" />}
+                      </div>
+                      <span className="text-xs font-medium text-slate-600 leading-tight">
+                        {currentDayData.waterQuality.desc}
+                      </span>
+                    </div>
                   </div>
-                  
-                  <div className={`flex justify-between items-center p-3 rounded-xl border ${currentDayData.jellyfish.bgColor}`}>
-                    <span className={`font-black uppercase text-sm ${currentDayData.jellyfish.color}`}>
-                      {currentDayData.jellyfish.risk.includes("Dato") ? currentDayData.jellyfish.risk : `Nivel ${currentDayData.jellyfish.risk}`}
-                    </span>
-                    <a href="https://oceanaria.es/" target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-500 hover:text-blue-700 underline underline-offset-2 text-right">
-                      Oceanaria
-                    </a>
+
+                  {/* Medusas */}
+                  <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+                        <AlertCircle size={16} className={isClimateDown ? 'text-slate-400' : 'text-purple-500'}/> Medusas
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-medium">Algoritmo</span>
+                    </div>
+                    
+                    <div className={`flex justify-between items-center p-3 rounded-xl border ${currentDayData.jellyfish.bgColor}`}>
+                      <span className={`font-black uppercase text-sm ${currentDayData.jellyfish.color}`}>
+                        {currentDayData.jellyfish.risk.includes("Dato") ? currentDayData.jellyfish.risk : `Nivel ${currentDayData.jellyfish.risk}`}
+                      </span>
+                      <a href="https://oceanaria.es/" target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-500 hover:text-blue-700 underline underline-offset-2 text-right">
+                        Oceanaria
+                      </a>
+                    </div>
                   </div>
-                  {isClimateDown && (
-                    <p className="text-[10px] text-slate-400 mt-3 font-medium leading-tight">
-                      *Al estar el satélite desconectado, no podemos predecir el impacto de las medusas por levante. Consulta Oceanaria directamente.
-                    </p>
-                  )}
                 </div>
 
                 {/* Tarjeta 6: Socorrista Virtual */}
@@ -727,6 +812,7 @@ export default function App() {
                               <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-xs
                                 ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
                                   hour.hourScore > 40 ? 'bg-amber-100 text-amber-700' : 
+                                  hour.localRule === "Tormenta ⚡" ? 'bg-yellow-100 text-yellow-700 border border-yellow-400' :
                                   'bg-red-100 text-red-700'}`}>
                                 {hour.hourScore}
                               </span>
@@ -774,7 +860,6 @@ export default function App() {
                             </div>
                           </td>
 
-                          {/* NUEVA COLUMNA: CIELO */}
                           <td className="px-4 py-4 text-center">
                             {isClimateDown ? (
                                 <span className="font-bold text-slate-300">-</span>
@@ -876,25 +961,20 @@ export default function App() {
               </section>
 
               <section>
-                <h4 className="font-bold text-slate-800 text-lg mb-4 border-b pb-2">🛠️ 1. Las Corrientes (El Nuevo Radar)</h4>
-                <p className="text-sm text-slate-600 mb-4">
-                  En la columna "Corrientes" de la tabla, cruzamos los datos de las olas para vigilar los dos tipos de arrastres que pueden fastidiarte el nado:
-                </p>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 border-b pb-2">🛠️ 1. Alertas de Salud y Riesgo</h4>
                 <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                   <div className="flex gap-3 items-start">
-                     <AlertTriangle className="text-red-500 shrink-0 mt-1" size={20} />
+                     <Zap className="text-yellow-600 shrink-0 mt-1" size={20} />
                      <div>
-                       <strong className="text-slate-800">La Resaca (Hacia adentro):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Depende de la altura de la ola y de su periodo. Si entra mucha agua a la playa, tiene que salir, creando embudos peligrosos que tiran hacia alta mar. Se marca como Baja, Media o Alta.</p>
+                       <strong className="text-slate-800">Corte por Tormenta (Rayos):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Si el satélite detecta riesgo eléctrico, la nota caerá a 0 puntos y aparecerá en amarillo. En el agua eres el punto más alto, un pararrayos natural. Sal inmediatamente.</p>
                      </div>
                   </div>
                   <div className="flex gap-3 items-start">
-                     <Compass className="text-indigo-500 shrink-0 mt-1" size={20} />
+                     <TestTubes className="text-emerald-500 shrink-0 mt-1" size={20} />
                      <div>
-                       <strong className="text-slate-800">La Deriva Lateral (Flechitas):</strong>
-                       <p className="text-sm text-slate-600 mt-1">La app cruza la inclinación de tu playa con el ángulo de la ola. Si la ola entra en diagonal, el agua "resbala" por la arena empujándote.<br/>
-                       <strong>⬅️ Rincón:</strong> Si nadas hacia la zona Este irás más rápido; si vas a Torremolinos irás a contracorriente.<br/>
-                       <strong>➡️ Torrem:</strong> La cinta transportadora del mar te empuja hacia el Oeste (Torremolinos).</p>
+                       <strong className="text-slate-800">Calidad del Agua (Arrastres):</strong>
+                       <p className="text-sm text-slate-600 mt-1">La app mide cuánta lluvia ha caído en las últimas 24 horas. Si llueve fuerte, los aliviaderos de Málaga y el río Guadalhorce escupirán suciedad que la deriva traerá a la costa. La tarjeta pasará a estado de "Precaución" o "Riesgo Alto".</p>
                      </div>
                   </div>
                 </div>
