@@ -96,7 +96,7 @@ export default function App() {
         }
       };
 
-      // 1. SATÉLITE CLIMA (Pedimos past_days=2 para tener margen de medir 24h de lluvia previas)
+      // 1. SATÉLITE CLIMA (Pedimos past_days=2 para tener margen de medir lluvia previa)
       // Añadimos 'precipitation' para volumen y 'weather_code' para rayos
       try {
         weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,precipitation,weather_code,uv_index,cloud_cover&timezone=Europe%2FMadrid&past_days=2`);
@@ -132,12 +132,13 @@ export default function App() {
           const endIndex = baseIndex + 21;
 
           // ----- CÁLCULO DE CALIDAD DEL AGUA (Aguas Sucias) -----
-          // Sumamos la lluvia (mm) de las 24 horas EXACTAS anteriores al inicio del día evaluado
-          let rainSum24h = 0;
+          // Sumamos la lluvia (mm) desde el inicio del día anterior hasta el final del día evaluado.
+          // Así nos aseguramos de atrapar si llovió ayer o si ha llovido hoy por la mañana.
+          let rainSum = 0;
           if (!localClimateDown && weatherJson?.hourly?.precipitation) {
-              for (let k = baseIndex - 24; k < baseIndex; k++) {
+              for (let k = baseIndex - 24; k <= baseIndex + 21; k++) {
                   if (k >= 0 && k < weatherJson.hourly.precipitation.length) {
-                      rainSum24h += weatherJson.hourly.precipitation[k] || 0;
+                      rainSum += weatherJson.hourly.precipitation[k] || 0;
                   }
               }
           }
@@ -145,23 +146,23 @@ export default function App() {
           let wqStatus = "Presumiblemente Limpia";
           let wqColor = "text-blue-600";
           let wqBg = "bg-blue-50 border-blue-100";
-          let wqDesc = "Sin lluvias severas recientes detectadas.";
+          let wqDesc = `Sin lluvias fuertes recientes (${rainSum.toFixed(1)}mm detectados).`;
 
           if (localClimateDown) {
               wqStatus = "Desconocida";
               wqColor = "text-slate-500";
               wqBg = "bg-slate-100 border-slate-200";
               wqDesc = "Satélite desconectado.";
-          } else if (rainSum24h > 15) {
+          } else if (rainSum >= 2.0) {
               wqStatus = "Riesgo Alto";
               wqColor = "text-red-600";
               wqBg = "bg-red-50 border-red-200";
-              wqDesc = "Aliviaderos o Guadalhorce activos. Llovió mucho ayer.";
-          } else if (rainSum24h > 3) {
+              wqDesc = `Aliviaderos activos. Lluvia acum: ${rainSum.toFixed(1)}mm.`;
+          } else if (rainSum >= 0.5) {
               wqStatus = "Precaución";
               wqColor = "text-amber-600";
               wqBg = "bg-amber-50 border-amber-200";
-              wqDesc = "Lluvia reciente. Riesgo de arrastre de suciedad.";
+              wqDesc = `Posible arrastre. Lluvia acum: ${rainSum.toFixed(1)}mm.`;
           }
 
           let translatedHourlyData = [];
@@ -278,7 +279,7 @@ export default function App() {
                 }
             }
 
-            // SOBRESCRITURA TOTAL POR PELIGRO VITAL
+            // SOBRESCRITURA TOTAL POR PELIGRO VITAL (RAYOS)
             if (isThunderstorm) {
                 hourScore = 0;
                 localRule = "Tormenta ⚡";
@@ -974,7 +975,7 @@ export default function App() {
                      <TestTubes className="text-emerald-500 shrink-0 mt-1" size={20} />
                      <div>
                        <strong className="text-slate-800">Calidad del Agua (Arrastres):</strong>
-                       <p className="text-sm text-slate-600 mt-1">La app mide cuánta lluvia ha caído en las últimas 24 horas. Si llueve fuerte, los aliviaderos de Málaga y el río Guadalhorce escupirán suciedad que la deriva traerá a la costa. La tarjeta pasará a estado de "Precaución" o "Riesgo Alto".</p>
+                       <p className="text-sm text-slate-600 mt-1">La app suma la lluvia desde ayer hasta hoy. Si llueve fuerte, los aliviaderos de Málaga y el río Guadalhorce escupirán suciedad que la deriva traerá a la costa. La tarjeta pasará a estado de "Precaución" (2mm) o "Riesgo Alto" (5mm).</p>
                      </div>
                   </div>
                 </div>
