@@ -235,6 +235,7 @@ export default function App() {
               else skyIcon = "☁️";
             }
 
+            // Cálculo físico real de la Energía (Expone crecimiento exponencial H^2)
             const waveEnergy = Math.round(Math.pow(effectiveWaveHeight, 2) * period * 6.25);
             
             let ripRisk = "Nulo";
@@ -975,7 +976,7 @@ export default function App() {
                      <TestTubes className="text-emerald-500 shrink-0 mt-1" size={20} />
                      <div>
                        <strong className="text-slate-800">Calidad del Agua (Arrastres):</strong>
-                       <p className="text-sm text-slate-600 mt-1">La app suma la lluvia desde ayer hasta hoy. Si llueve fuerte, los aliviaderos de Málaga y el río Guadalhorce escupirán suciedad que la deriva traerá a la costa. La tarjeta pasará a estado de "Precaución" (2mm) o "Riesgo Alto" (5mm).</p>
+                       <p className="text-sm text-slate-600 mt-1">La app suma la lluvia desde ayer hasta hoy. Si llueve fuerte, los aliviaderos de Málaga y el río Guadalhorce escupirán suciedad que la deriva traerá a la costa. La tarjeta pasará a estado de "Precaución" (0.5mm) o "Riesgo Alto" (2mm).</p>
                      </div>
                   </div>
                 </div>
@@ -983,12 +984,51 @@ export default function App() {
 
               <section>
                 <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Bot size={20} className="text-indigo-500"/> 2. El "Cerebro" Malagueño
+                  <Compass size={20} className="text-indigo-500"/> 2. Las Corrientes (El Radar)
+                </h4>
+                <p className="text-sm text-slate-600 mb-4">
+                  En la tabla, cruzamos los datos de las olas para vigilar los dos tipos de arrastres:
+                </p>
+                <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="flex gap-3 items-start">
+                     <AlertTriangle className="text-red-500 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">La Resaca (Hacia adentro):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Si entra mucha agua a la playa, tiene que salir, creando embudos que tiran hacia alta mar. Se marca como Baja, Media o Alta.</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                     <Compass className="text-indigo-500 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">La Deriva Lateral (Flechitas):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Cruzando la inclinación de la playa con el ángulo de la ola, sabemos si el agua "resbala" empujándote hacia El Rincón (⬅️) o hacia Torremolinos (➡️).</p>
+                     </div>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Activity size={20} className="text-orange-500"/> 3. La Energía (La Regla de Oro)
+                </h4>
+                <p className="text-sm text-slate-600 mb-4">
+                  Basado en los informes de oceanografía física, la fuerza de una ola no crece en línea recta, sino de forma <strong>exponencial</strong> (al cuadrado).
+                </p>
+                <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 text-sm text-orange-800 font-medium flex items-start gap-3">
+                  <Info className="shrink-0 text-orange-600 mt-0.5" size={20} />
+                  <p>
+                    Una ola de 0.8m no tiene el doble de fuerza que una de 0.4m... <strong>¡Tiene 4 veces más energía!</strong> Por eso, a partir de 0.6m notarás que el mar golpea con mucha dureza. Fíjate en la columna de <strong>Energía (Kj)</strong> para conocer el impacto real de las olas en tu pecho.
+                  </p>
+                </div>
+              </section>
+
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Bot size={20} className="text-indigo-500"/> 4. El "Cerebro" Malagueño
                 </h4>
                 <p className="text-sm text-slate-600 mb-5">
-                  La aplicación no se fía a ciegas del satélite, sino que aplica nuestras <strong>4 Reglas de Oro</strong> automáticamente. Si ves sus etiquetas en la tabla, es que la app te está protegiendo:
+                  La aplicación no se fía a ciegas del satélite, sino que aplica nuestras <strong>4 Reglas de Oro</strong> automáticamente:
                 </p>
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
