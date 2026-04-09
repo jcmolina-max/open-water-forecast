@@ -772,6 +772,7 @@ export default function App() {
 
               {/* PANEL DERECHO: Tabla de previsiones */}
               <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-fit">
+                
                 <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                   <div className="flex items-center gap-3">
                     <h3 className="font-bold text-slate-800 text-lg">
@@ -785,6 +786,29 @@ export default function App() {
                     <CalendarDays size={14}/> {currentDayData.dayLabel.split(' ')[0]}
                   </span>
                 </div>
+
+                {/* BANNER TRAMPA PARA "AYER" */}
+                {selectedDay === 0 && (
+                  <div className="bg-indigo-50 border-b border-indigo-100 p-4 flex flex-col sm:flex-row items-center gap-4 justify-between animate-in fade-in slide-in-from-top-4 duration-500">
+                     <div className="flex items-center gap-3">
+                       <div className="bg-white p-2 rounded-full shadow-sm shrink-0">
+                         <Activity className="text-indigo-600" size={20} />
+                       </div>
+                       <div className="text-left">
+                         <p className="font-bold text-indigo-900 text-sm">💡 ¿Estuviste en el agua ayer?</p>
+                         <p className="text-xs text-indigo-700 font-medium mt-0.5">Comprueba esta tabla y ayúdanos a calibrar el algoritmo.</p>
+                       </div>
+                     </div>
+                     <a
+                       href="https://docs.google.com/forms/d/e/1FAIpQLSdTjdiGOAEtBYo6wjNRtMK1KpdAijJajxhp-_uUBpMhG0Y8YQ/viewform?usp=sharing&ouid=114554177440629903097"
+                       target="_blank"
+                       rel="noreferrer"
+                       className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs w-full sm:w-auto"
+                     >
+                       📝 Rellenar Diario
+                     </a>
+                  </div>
+                )}
                 
                 <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
                   <table className="w-full text-left border-collapse min-w-[850px] relative">
@@ -917,6 +941,30 @@ export default function App() {
             </div>
           </>
         )}
+
+        {/* PANEL DE CALIBRACIÓN FIJO (FOOTER) */}
+        <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-3xl p-6 md:p-8 text-center max-w-4xl mx-auto flex flex-col items-center shadow-sm">
+          <div className="bg-white p-3 rounded-2xl shadow-sm mb-4">
+            <Activity className="text-blue-600" size={32} />
+          </div>
+          <h2 className="text-xl md:text-2xl font-black text-slate-800 mb-2">Ayúdanos a calibrar el algoritmo</h2>
+          <p className="text-slate-600 mb-6 max-w-2xl text-sm md:text-base leading-relaxed">
+            OpenWater Tracker está en fase beta. Si vas a nadar, compártenos qué tal estaba el mar en realidad para que podamos ajustar las fórmulas matemáticas de la Bahía de Málaga.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+            <a 
+              href="https://docs.google.com/forms/d/e/1FAIpQLSdTjdiGOAEtBYo6wjNRtMK1KpdAijJajxhp-_uUBpMhG0Y8YQ/viewform?usp=sharing&ouid=114554177440629903097" 
+              target="_blank" 
+              rel="noreferrer"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 w-full sm:w-auto"
+            >
+              📝 Rellenar Formulario de Calibración
+            </a>
+          </div>
+          <p className="text-xs text-slate-500 mt-5 font-medium">
+            * O si lo prefieres, cuéntanos tu experiencia directamente por el <strong className="text-indigo-600">grupo de WhatsApp del club</strong>.
+          </p>
+        </div>
         
         {/* FOOTER LEGAL */}
         <footer className="mt-8 border-t border-slate-200 pt-6 pb-2 text-center w-full">
