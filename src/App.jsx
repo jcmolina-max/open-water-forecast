@@ -296,13 +296,25 @@ export default function App() {
                 }
             }
 
-            // HACHAZO POR RESACA ALTA (Nuevo Freno de Emergencia vital)
+            // EL MURO DE LA ROMPIENTE (Olas > 0.5m son muy incómodas/peligrosas para entrar al agua)
+            if (effectiveWaveHeight > 0.5) {
+                hourScore -= 15; // Castigo directo por incomodidad en la orilla
+                if (hourScore > 50) hourScore = 50; // Muro estricto: nunca pasa de 50
+                
+                // Etiquetamos si no hay una regla previa importante
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo") {
+                    localRule = "Rompiente Dura";
+                    ruleColor = "text-orange-700 font-bold bg-orange-100 border border-orange-300 shadow-sm";
+                }
+            }
+
+            // HACHAZO POR RESACA ALTA (Freno de Emergencia vital)
             if (ripRisk === "Alta") {
                 hourScore -= 30; // Castigo severo
                 if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
                 
                 // Etiquetamos visualmente la alerta si no hay otra regla más crítica (como Niebla/Tormenta)
-                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo") {
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Rompiente Dura") {
                     localRule = "Resaca Fuerte";
                     ruleColor = "text-red-600 font-bold bg-red-50 border border-red-200 shadow-sm";
                 }
