@@ -272,17 +272,11 @@ export default function App() {
                     hourScore -= ((gustKnots - 15) * 2);
                 }
                 
-                // MAGÓN LIMITADO
-                if (effectiveWaveHeight >= 0.4 && effectiveWaveHeight <= 0.7 && windKnots < 8 && period > 5.5) {
+                // MAGÓN (Ahora estrictamente limitado a olas de 0.5m o menos)
+                if (effectiveWaveHeight >= 0.4 && effectiveWaveHeight <= 0.5 && windKnots < 8 && period > 5.5) {
                     hourScore = 100 - (effectiveWaveHeight * 10); 
                     localRule = "Magón";
                     ruleColor = "text-emerald-600";
-                    
-                    // Límite de seguridad para Magón grande
-                    if (effectiveWaveHeight > 0.5) {
-                        hourScore = Math.min(hourScore, 75); // Capado a Naranja
-                        ruleColor = "text-amber-600";
-                    }
                 }
 
                 // Lavadora
@@ -302,7 +296,19 @@ export default function App() {
                 }
             }
 
-            // SOBRESCRITURAS POR PELIGRO (Rayos y Niebla)
+            // HACHAZO POR RESACA ALTA (Nuevo Freno de Emergencia vital)
+            if (ripRisk === "Alta") {
+                hourScore -= 30; // Castigo severo
+                if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
+                
+                // Etiquetamos visualmente la alerta si no hay otra regla más crítica (como Niebla/Tormenta)
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo") {
+                    localRule = "Resaca Fuerte";
+                    ruleColor = "text-red-600 font-bold bg-red-50 border border-red-200 shadow-sm";
+                }
+            }
+
+            // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos y Niebla)
             if (isThunderstorm) {
                 hourScore = 0;
                 localRule = "Tormenta ⚡";
