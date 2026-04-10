@@ -627,6 +627,9 @@ export default function App() {
                 
                 {/* Tarjeta 1: Score de Seguridad */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center relative">
+                  <div className="absolute top-3 left-3 text-[8px] text-slate-300 font-semibold uppercase tracking-widest opacity-70">
+                    Algoritmo Propio
+                  </div>
                   <h2 className="text-slate-500 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
                     <Activity size={18} className="text-blue-500"/> Seguridad Media {isClimateDown && "(Solo Olas)"}
                   </h2>
@@ -648,9 +651,6 @@ export default function App() {
                   <p className={`mt-5 font-black text-lg ${currentDayData.score > 70 ? 'text-emerald-600' : currentDayData.score > 40 ? 'text-amber-600' : 'text-red-600'}`}>
                     {currentDayData.score > 70 ? 'Nado Seguro' : currentDayData.score > 40 ? 'Precaución: Mar Agitado' : 'No Recomendado Nadar'}
                   </p>
-                  <div className="absolute bottom-4 right-4 text-[9px] text-slate-400 font-bold uppercase tracking-wider bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                    Algoritmo Propio
-                  </div>
                 </div>
 
                 {/* Tarjeta 2: Temperaturas */}
