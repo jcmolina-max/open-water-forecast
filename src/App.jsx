@@ -35,7 +35,12 @@ import {
 const BEACHES = {
   misericordia: { name: "La Misericordia, Málaga", lat: 36.696, lon: -4.444, facing: 135 },
   malagueta: { name: "La Malagueta, Málaga", lat: 36.718, lon: -4.407, facing: 180 },
-  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386, facing: 180 }
+  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386, facing: 180 },
+  // v9.4+ — expansión costera (Open-Meteo: mismos endpoints, lat/lon por playa)
+  los_alamos: { name: "Los Álamos, Torremolinos", lat: 36.6398, lon: -4.4815, facing: 188 },
+  bajondillo: { name: "El Bajondillo, Torremolinos", lat: 36.6271, lon: -4.4916, facing: 182 },
+  rincon_victoria: { name: "Rincón de la Victoria, Málaga", lat: 36.7131, lon: -4.2743, facing: 162 },
+  cala_del_moral: { name: "La Cala del Moral, Rincón de la Victoria", lat: 36.7148, lon: -4.31, facing: 148 }
 };
 
 // Generador de etiquetas de fecha
@@ -261,9 +266,9 @@ export default function App() {
 
                 if (Math.abs(diff) < 85) { 
                     if (diff > 15) {
-                        driftInfo = { icon: "⬅️", color: "text-indigo-600", short: "Rincón" };
+                        driftInfo = { icon: "⬅️", color: "text-indigo-600", short: "Nerja" };
                     } else if (diff < -15) {
-                        driftInfo = { icon: "➡️", color: "text-indigo-600", short: "Torrem." };
+                        driftInfo = { icon: "➡️", color: "text-indigo-600", short: "Fuengirola" };
                     }
                 }
             }
@@ -540,15 +545,18 @@ export default function App() {
   };
 
   const getWindDirection = (degrees) => {
+    if (degrees === undefined || degrees === null || (typeof degrees === "number" && Number.isNaN(degrees))) return "—";
     if (degrees === "-") return "-";
-    if (degrees > 337.5 || degrees <= 22.5) return '⬇️ N';
-    if (degrees > 22.5 && degrees <= 67.5) return '↙️ NE';
-    if (degrees > 67.5 && degrees <= 112.5) return '⬅️ E';
-    if (degrees > 112.5 && degrees <= 157.5) return '↖️ SE';
-    if (degrees > 157.5 && degrees <= 202.5) return '⬆️ S';
-    if (degrees > 202.5 && degrees <= 247.5) return '↗️ SO';
-    if (degrees > 247.5 && degrees <= 292.5) return '➡️ O';
-    if (degrees > 292.5 && degrees <= 337.5) return '↘️ NO';
+    const d = Number(degrees);
+    if (Number.isNaN(d)) return "—";
+    if (d > 337.5 || d <= 22.5) return '⬇️ N';
+    if (d > 22.5 && d <= 67.5) return '↙️ NE';
+    if (d > 67.5 && d <= 112.5) return '⬅️ E';
+    if (d > 112.5 && d <= 157.5) return '↖️ SE';
+    if (d > 157.5 && d <= 202.5) return '⬆️ S';
+    if (d > 202.5 && d <= 247.5) return '↗️ SO';
+    if (d > 247.5 && d <= 292.5) return '➡️ O';
+    if (d > 292.5 && d <= 337.5) return '↘️ NO';
     return '-';
   };
 
@@ -609,11 +617,15 @@ export default function App() {
               <select 
                 value={selectedBeach} 
                 onChange={(e) => setSelectedBeach(e.target.value)}
-                className="bg-transparent font-bold text-slate-700 py-1.5 pr-4 pl-1 md:pl-2 outline-none w-full md:w-56 cursor-pointer text-ellipsis overflow-hidden"
+                className="bg-transparent font-bold text-slate-700 py-1.5 pr-4 pl-1 md:pl-2 outline-none w-full md:min-w-[14rem] md:max-w-[22rem] cursor-pointer text-ellipsis overflow-hidden"
               >
                 <option value="misericordia">La Misericordia</option>
                 <option value="malagueta">La Malagueta</option>
                 <option value="pedregalejo">Pedregalejo</option>
+                <option value="los_alamos">Los Álamos (Torremolinos)</option>
+                <option value="bajondillo">El Bajondillo (Torremolinos)</option>
+                <option value="rincon_victoria">Rincón de la Victoria</option>
+                <option value="cala_del_moral">La Cala del Moral</option>
               </select>
             </div>
           </div>
@@ -976,13 +988,16 @@ export default function App() {
                 )}
                 
                 <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
-                  <table className="w-full text-left border-collapse min-w-[920px] relative">
+                  <table className="w-full text-left border-collapse min-w-[980px] relative">
                     <thead className="sticky top-0 bg-white z-10 shadow-sm">
                       <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
                         <th className="px-5 py-4 font-bold">Hora</th>
                         <th className="px-4 py-4 font-bold text-center">Score</th>
                         <th className="px-4 py-4 font-bold">Oleaje</th>
-                        <th className="px-4 py-4 font-bold text-center">Energía</th>
+                        <th className="px-4 py-4 font-bold text-center">
+                          <span className="block">Energía</span>
+                          <span className="block text-[9px] font-semibold text-slate-400 normal-case tracking-normal mt-0.5">Oleaje (procedencia)</span>
+                        </th>
                         <th className="px-4 py-4 font-bold">Corrientes</th>
                         <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Cielo</th>
                         <th className={`px-4 py-4 font-bold ${isClimateDown ? 'text-slate-300' : ''}`}>Viento (kts)</th>
@@ -1035,14 +1050,24 @@ export default function App() {
 
                           <td className="px-4 py-4 text-center">
                             <div
-                              className="flex flex-col items-center justify-center"
-                              title={`Energía ≈ altura² × T × coef. (${hour.energyCoef}). Oleaje desde modelo: ${hour.swellDir != null ? `${hour.swellDir}°` : 'n/d'}.`}
+                              className="flex flex-col items-center justify-center gap-0.5"
+                              title={`Energía ≈ altura² × T × coef. (${hour.energyCoef}). Dirección: procedencia del oleaje (modelo Open-Meteo, desde el norte).`}
                             >
                               <span className={`font-black text-base ${hour.waveEnergy > 50 ? 'text-orange-500' : 'text-slate-700'}`}>
                                 {hour.waveEnergy}
                               </span>
                               <span className="text-[10px] font-bold text-slate-400 uppercase">Kj</span>
                               <span className="text-[9px] font-semibold text-slate-400">×{hour.energyCoef}</span>
+                              <span className="text-[10px] font-bold text-slate-600 leading-tight mt-0.5">
+                                {hour.swellDir != null && !Number.isNaN(Number(hour.swellDir)) ? (
+                                  <>
+                                    <span className="block">{getWindDirection(Number(hour.swellDir))}</span>
+                                    <span className="block text-[9px] font-semibold text-slate-400">{Math.round(Number(hour.swellDir))}°</span>
+                                  </>
+                                ) : (
+                                  <span className="text-slate-400 font-semibold">—</span>
+                                )}
+                              </span>
                             </div>
                           </td>
 
@@ -1257,7 +1282,7 @@ export default function App() {
                      <Compass className="text-indigo-500 shrink-0 mt-1" size={20} />
                      <div>
                        <strong className="text-slate-800">La Deriva Lateral (Flechitas):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Cruzando la inclinación de la playa con el ángulo de la ola, sabemos si el agua "resbala" empujándote hacia El Rincón (⬅️) o hacia Torremolinos (➡️).</p>
+                       <p className="text-sm text-slate-600 mt-1">Cruzando la inclinación de la playa con el ángulo de la ola, sabemos si el agua "resbala" empujándote hacia el este (⬅️ etiqueta <strong>Nerja</strong>) o hacia el oeste (➡️ etiqueta <strong>Fuengirola</strong>) a lo largo de la costa.</p>
                      </div>
                   </div>
                 </div>
@@ -1268,7 +1293,7 @@ export default function App() {
                   <Activity size={20} className="text-orange-500"/> 3. La Energía (La Regla de Oro)
                 </h4>
                 <p className="text-sm text-slate-600 mb-4">
-                  La columna <strong>Energía (Kj)</strong> usa <code className="bg-slate-100 px-1 rounded text-xs">altura² × periodo × coeficiente dinámico</code>. El coeficiente depende de la <strong>dirección del oleaje</strong> (Sur/SSE más noble, Sureste intermedio, Suroeste más agresivo) y del <strong>periodo</strong> (más de 5 s suma empuje; menos de 4 s resta, mar más caótico).
+                  La columna <strong>Energía (Kj)</strong> usa <code className="bg-slate-100 px-1 rounded text-xs">altura² × periodo × coeficiente dinámico</code>. El coeficiente depende de la <strong>dirección del oleaje</strong> (Sur/SSE más noble, Sureste intermedio, Suroeste más agresivo) y del <strong>periodo</strong> (más de 5 s suma empuje; menos de 4 s resta, mar más caótico). Debajo del valor verás la <strong>procedencia del oleaje</strong> (brújula + grados, convención del modelo).
                 </p>
                 <p className="text-sm text-slate-600 mb-4">
                   Basado en los informes de oceanografía física, la fuerza de una ola no crece en línea recta, sino de forma <strong>exponencial</strong> (al cuadrado en la altura).
