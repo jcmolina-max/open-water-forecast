@@ -26,14 +26,21 @@ import {
   History,
   TestTubes,
   Zap,
-  CloudFog
+  CloudFog,
+  RefreshCw,
+  Copy
 } from 'lucide-react';
 
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
 const BEACHES = {
   misericordia: { name: "La Misericordia, Málaga", lat: 36.696, lon: -4.444, facing: 135 },
   malagueta: { name: "La Malagueta, Málaga", lat: 36.718, lon: -4.407, facing: 180 },
-  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386, facing: 180 }
+  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386, facing: 180 },
+  // v9.4+ — expansión costera (Open-Meteo: mismos endpoints, lat/lon por playa)
+  los_alamos: { name: "Los Álamos, Torremolinos", lat: 36.6398, lon: -4.4815, facing: 188 },
+  bajondillo: { name: "El Bajondillo, Torremolinos", lat: 36.6271, lon: -4.4916, facing: 182 },
+  rincon_victoria: { name: "Rincón de la Victoria, Málaga", lat: 36.7131, lon: -4.2743, facing: 162 },
+  cala_del_moral: { name: "La Cala del Moral, Rincón de la Victoria", lat: 36.7148, lon: -4.31, facing: 148 }
 };
 
 // Generador de etiquetas de fecha
@@ -43,6 +50,33 @@ const getDateLabel = (offset, prefix) => {
   const day = d.getDate();
   const monthStr = d.toLocaleString('es-ES', { month: 'short' });
   return `${prefix} (${day} ${monthStr})`;
+};
+
+/**
+ * Coeficiente dinámico de energía de ola (v10.0 motor Kj).
+ * Dirección en grados = procedencia del oleaje (convención Open-Meteo, desde el norte en sentido horario).
+ * Energía ≈ altura² × periodo × coeficiente.
+ * Bases: S+SSE 7.5 | SE 8.5 | SO 9.5 | resto 8.0. Periodo >5s +1.5 | <4s −0.5.
+ */
+const getDynamicWaveEnergyCoefficient = (waveDirDeg, period) => {
+  const p = Number(period);
+  let base = 8.0;
+
+  if (waveDirDeg !== undefined && waveDirDeg !== null && !Number.isNaN(Number(waveDirDeg))) {
+    const d = ((Number(waveDirDeg) % 360) + 360) % 360;
+    // Sur (S) + Sur-Sureste (SSE): sectores 16 puntos contiguos (~146°–191°)
+    if (d >= 146.25 && d < 191.25) base = 7.5;
+    else if (d >= 123.75 && d < 146.25) base = 8.5; // Sureste (SE)
+    else if (d >= 202.5 && d < 247.5) base = 9.5; // Suroeste (SO)
+    else base = 8.0;
+  }
+
+  let coef = base;
+  if (!Number.isNaN(p)) {
+    if (p > 5) coef += 1.5;
+    if (p < 4) coef -= 0.5;
+  }
+  return Math.round(coef * 100) / 100;
 };
 
 export default function App() {
@@ -61,6 +95,17 @@ export default function App() {
   const [expertAdvice, setExpertAdvice] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [hasRequestedAi, setHasRequestedAi] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  const [dataRefreshKey, setDataRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setIsModalOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isModalOpen]);
 
   useEffect(() => {
     const fetchRealData = async () => {
@@ -110,7 +155,7 @@ export default function App() {
 
       // 2. SATÉLITE MARINO
       try {
-        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction&timezone=Europe%2FMadrid&past_days=2`);
+        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature&timezone=Europe%2FMadrid&past_days=2`);
       } catch (e) {
          setErrorDetails({ general: `El satélite marino no responde: ${e.message}` });
          setIsLoading(false);
@@ -221,9 +266,9 @@ export default function App() {
 
                 if (Math.abs(diff) < 85) { 
                     if (diff > 15) {
-                        driftInfo = { icon: "⬅️", color: "text-indigo-600", short: "Rincón" };
+                        driftInfo = { icon: "⬅️", color: "text-indigo-600", short: "Nerja" };
                     } else if (diff < -15) {
-                        driftInfo = { icon: "➡️", color: "text-indigo-600", short: "Torrem." };
+                        driftInfo = { icon: "➡️", color: "text-indigo-600", short: "Fuengirola" };
                     }
                 }
             }
@@ -241,7 +286,8 @@ export default function App() {
               else skyIcon = "☁️";
             }
 
-            const waveEnergy = Math.round(Math.pow(effectiveWaveHeight, 2) * period * 6.25);
+            const energyCoef = getDynamicWaveEnergyCoefficient(waveDir, period);
+            const waveEnergy = Math.round(Math.pow(effectiveWaveHeight, 2) * period * energyCoef);
             
             let ripRisk = "Nulo";
             let ripColor = "text-slate-400 font-medium";
@@ -350,6 +396,8 @@ export default function App() {
             if (hourScore > maxScore) { maxScore = hourScore; bestHourTime = formattedTime; }
             if (hourScore < minScore) { minScore = hourScore; worstHourTime = formattedTime; }
 
+            const uvVal = localClimateDown ? "-" : (weatherJson?.hourly?.uv_index?.[i]);
+
             translatedHourlyData.push({
               time: formattedTime,
               swellH: effectiveWaveHeight.toFixed(2),
@@ -360,11 +408,13 @@ export default function App() {
               windDir: localClimateDown ? "-" : windDir,
               cloudCover: cloudCover,
               skyIcon: skyIcon,
-              uv: localClimateDown ? "-" : (weatherJson?.hourly?.uv_index?.[i] || "-"),
+              uv: uvVal === undefined || uvVal === null ? "-" : uvVal,
               rainProb: rainProb,
               rainMm: rainMm,
               hourScore: hourScore,
               waveEnergy: waveEnergy,
+              energyCoef: energyCoef,
+              swellDir: waveDir === undefined || waveDir === null ? null : waveDir,
               ripRisk: ripRisk,
               ripColor: ripColor,
               drift: driftInfo,
@@ -396,7 +446,12 @@ export default function App() {
           const avgScore = validHoursCount > 0 ? Math.round(totalScore / validHoursCount) : 0;
           
           const noonIndex = baseIndex + 12;
-          
+          const sstNoon = marineJson?.hourly?.sea_surface_temperature?.[noonIndex];
+          const waterTemp =
+            sstNoon !== undefined && sstNoon !== null && !Number.isNaN(Number(sstNoon))
+              ? Math.round(Number(sstNoon) * 10) / 10
+              : 15;
+
           daysProcessed.push({
             dayIndex: d,
             dayLabel: getDateLabel(offset, dayPrefixes[d]),
@@ -404,7 +459,7 @@ export default function App() {
             score: avgScore,
             temps: { 
                 air: localClimateDown ? "-" : Math.round(weatherJson?.hourly?.temperature_2m?.[noonIndex] || 15), 
-                water: 15 
+                water: waterTemp
             },
             hourly: translatedHourlyData,
             best: { time: bestHourTime, score: maxScore },
@@ -417,6 +472,7 @@ export default function App() {
 
         setBeachData(daysProcessed);
         setCurrentNowData(tempCurrentNow);
+        setLastUpdatedAt(new Date());
         setIsLoading(false);
 
       } catch (err) {
@@ -428,7 +484,7 @@ export default function App() {
 
     fetchRealData();
     
-  }, [selectedBeach]);
+  }, [selectedBeach, dataRefreshKey]);
 
   const handleDayChange = (index) => {
     setSelectedDay(index);
@@ -452,11 +508,12 @@ export default function App() {
     try {
       const stormWarning = currentDayData.hasStormRisk ? " ¡HAY RIESGO DE TORMENTA ELÉCTRICA (RAYOS) HOY!" : "";
       const windText = isClimateDown ? "(Ignora el viento porque satélite está caído)" : `Viento: ${currentDayData.hourly[0].windS} nudos. Cielo: ${currentDayData.hourly[0].cloudCover}% nublado. Calidad del agua: ${currentDayData.waterQuality.status}.`;
+      const extraMarine = `Medusas (heurístico): ${currentDayData.jellyfish.risk}. Temperatura agua (modelo): ${currentDayData.temps.water}ºC.`;
       
       const prompt = `Eres un experto nadador de aguas abiertas y socorrista en Málaga. 
       Analiza los siguientes datos MARINOS de ${currentDayData.dayLabel.toLowerCase()} para la playa ${currentDayData.name}:
       Puntuación media de seguridad: ${currentDayData.score}/100.
-      Olas medias: ${currentDayData.hourly[0].swellH}m. ${windText}${stormWarning}
+      Olas medias: ${currentDayData.hourly[0].swellH}m. ${windText} ${extraMarine}${stormWarning}
       Mejor hora para nadar: ${currentDayData.best.time}. Peor hora: ${currentDayData.worst.time}.
       IMPORTANTE: Si la puntuación media es menor a 70 o hay rachas que superen los 12 nudos, DEBES empezar tu consejo obligatoriamente con una advertencia seria de peligro en MAYÚSCULAS.
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. Usa un tono cercano.`;
@@ -488,15 +545,18 @@ export default function App() {
   };
 
   const getWindDirection = (degrees) => {
+    if (degrees === undefined || degrees === null || (typeof degrees === "number" && Number.isNaN(degrees))) return "—";
     if (degrees === "-") return "-";
-    if (degrees > 337.5 || degrees <= 22.5) return '⬇️ N';
-    if (degrees > 22.5 && degrees <= 67.5) return '↙️ NE';
-    if (degrees > 67.5 && degrees <= 112.5) return '⬅️ E';
-    if (degrees > 112.5 && degrees <= 157.5) return '↖️ SE';
-    if (degrees > 157.5 && degrees <= 202.5) return '⬆️ S';
-    if (degrees > 202.5 && degrees <= 247.5) return '↗️ SO';
-    if (degrees > 247.5 && degrees <= 292.5) return '➡️ O';
-    if (degrees > 292.5 && degrees <= 337.5) return '↘️ NO';
+    const d = Number(degrees);
+    if (Number.isNaN(d)) return "—";
+    if (d > 337.5 || d <= 22.5) return '⬇️ N';
+    if (d > 22.5 && d <= 67.5) return '↙️ NE';
+    if (d > 67.5 && d <= 112.5) return '⬅️ E';
+    if (d > 112.5 && d <= 157.5) return '↖️ SE';
+    if (d > 157.5 && d <= 202.5) return '⬆️ S';
+    if (d > 202.5 && d <= 247.5) return '↗️ SO';
+    if (d > 247.5 && d <= 292.5) return '➡️ O';
+    if (d > 292.5 && d <= 337.5) return '↘️ NO';
     return '-';
   };
 
@@ -521,11 +581,17 @@ export default function App() {
             <div>
               <h1 className="text-2xl font-bold text-slate-800 tracking-tight">OpenWater Tracker</h1>
               <p className="text-slate-500 text-sm font-medium">Pronóstico en tiempo real para nadadores</p>
+              {lastUpdatedAt && (
+                <p className="text-[11px] text-slate-400 mt-1 font-medium" title="Última lectura correcta de satélites">
+                  Actualizado: {lastUpdatedAt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
             </div>
           </div>
 
           <div className="flex flex-row items-center gap-2 md:gap-3 w-full md:w-auto">
             <button 
+              type="button"
               onClick={() => setIsModalOpen(true)}
               className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-2.5 px-3 md:px-4 rounded-xl transition-colors border border-indigo-100 flex items-center justify-center gap-2"
               title="Guía Local del Mar"
@@ -534,16 +600,32 @@ export default function App() {
               <span className="hidden sm:inline">Guía Local</span>
             </button>
 
+            <button
+              type="button"
+              onClick={() => setDataRefreshKey((k) => k + 1)}
+              disabled={isLoading}
+              className="shrink-0 bg-white hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-3 rounded-xl transition-colors border border-slate-200 flex items-center justify-center gap-2 disabled:opacity-50"
+              title="Volver a pedir datos a los satélites"
+              aria-label="Actualizar datos del satélite"
+            >
+              <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Actualizar</span>
+            </button>
+
             <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl w-full md:w-auto border border-slate-200 flex-1 md:flex-none overflow-hidden">
               <MapPin className="text-slate-400 ml-1 md:ml-2 shrink-0" size={20} />
               <select 
                 value={selectedBeach} 
                 onChange={(e) => setSelectedBeach(e.target.value)}
-                className="bg-transparent font-bold text-slate-700 py-1.5 pr-4 pl-1 md:pl-2 outline-none w-full md:w-56 cursor-pointer text-ellipsis overflow-hidden"
+                className="bg-transparent font-bold text-slate-700 py-1.5 pr-4 pl-1 md:pl-2 outline-none w-full md:min-w-[14rem] md:max-w-[22rem] cursor-pointer text-ellipsis overflow-hidden"
               >
                 <option value="misericordia">La Misericordia</option>
                 <option value="malagueta">La Malagueta</option>
                 <option value="pedregalejo">Pedregalejo</option>
+                <option value="los_alamos">Los Álamos (Torremolinos)</option>
+                <option value="bajondillo">El Bajondillo (Torremolinos)</option>
+                <option value="rincon_victoria">Rincón de la Victoria</option>
+                <option value="cala_del_moral">La Cala del Moral</option>
               </select>
             </div>
           </div>
@@ -680,7 +762,7 @@ export default function App() {
                         <p className="text-sm text-slate-500 font-medium">Agua</p>
                       </div>
                       <p className="text-xl font-bold text-slate-800">{currentDayData.temps.water}ºC</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Satélite - Superficie</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Modelo marino (mediodía)</p>
                     </div>
                   </div>
                   <div className="h-10 w-px bg-slate-200"></div>
@@ -840,9 +922,20 @@ export default function App() {
                         <span className="text-sm font-bold">El experto está evaluando la playa...</span>
                       </div>
                     ) : (
-                      <p className="text-blue-900 text-sm leading-relaxed font-medium bg-white/60 p-4 rounded-xl border border-blue-100/50 shadow-sm">
-                        "{expertAdvice}"
-                      </p>
+                      <div className="space-y-2">
+                        <p className="text-blue-900 text-sm leading-relaxed font-medium bg-white/60 p-4 rounded-xl border border-blue-100/50 shadow-sm">
+                          "{expertAdvice}"
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (expertAdvice) navigator.clipboard?.writeText(expertAdvice).catch(() => {});
+                          }}
+                          className="w-full sm:w-auto text-xs font-bold text-blue-700 bg-white/80 hover:bg-white border border-blue-200 rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors"
+                        >
+                          <Copy size={14} /> Copiar consejo
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -895,16 +988,20 @@ export default function App() {
                 )}
                 
                 <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
-                  <table className="w-full text-left border-collapse min-w-[850px] relative">
+                  <table className="w-full text-left border-collapse min-w-[980px] relative">
                     <thead className="sticky top-0 bg-white z-10 shadow-sm">
                       <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
                         <th className="px-5 py-4 font-bold">Hora</th>
                         <th className="px-4 py-4 font-bold text-center">Score</th>
                         <th className="px-4 py-4 font-bold">Oleaje</th>
-                        <th className="px-4 py-4 font-bold text-center">Energía</th>
+                        <th className="px-4 py-4 font-bold text-center">
+                          <span className="block">Energía</span>
+                          <span className="block text-[9px] font-semibold text-slate-400 normal-case tracking-normal mt-0.5">Oleaje (procedencia)</span>
+                        </th>
                         <th className="px-4 py-4 font-bold">Corrientes</th>
                         <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Cielo</th>
                         <th className={`px-4 py-4 font-bold ${isClimateDown ? 'text-slate-300' : ''}`}>Viento (kts)</th>
+                        <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>UV</th>
                         <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Lluvia</th>
                         <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Dir.</th>
                       </tr>
@@ -952,11 +1049,25 @@ export default function App() {
                           </td>
 
                           <td className="px-4 py-4 text-center">
-                            <div className="flex flex-col items-center justify-center">
+                            <div
+                              className="flex flex-col items-center justify-center gap-0.5"
+                              title={`Energía ≈ altura² × T × coef. (${hour.energyCoef}). Dirección: procedencia del oleaje (modelo Open-Meteo, desde el norte).`}
+                            >
                               <span className={`font-black text-base ${hour.waveEnergy > 50 ? 'text-orange-500' : 'text-slate-700'}`}>
                                 {hour.waveEnergy}
                               </span>
                               <span className="text-[10px] font-bold text-slate-400 uppercase">Kj</span>
+                              <span className="text-[9px] font-semibold text-slate-400">×{hour.energyCoef}</span>
+                              <span className="text-[10px] font-bold text-slate-600 leading-tight mt-0.5">
+                                {hour.swellDir != null && !Number.isNaN(Number(hour.swellDir)) ? (
+                                  <>
+                                    <span className="block">{getWindDirection(Number(hour.swellDir))}</span>
+                                    <span className="block text-[9px] font-semibold text-slate-400">{Math.round(Number(hour.swellDir))}°</span>
+                                  </>
+                                ) : (
+                                  <span className="text-slate-400 font-semibold">—</span>
+                                )}
+                              </span>
                             </div>
                           </td>
 
@@ -994,6 +1105,19 @@ export default function App() {
                                     Rachas: {hour.gust}
                                   </span>
                                 </div>
+                            )}
+                          </td>
+
+                          <td className="px-4 py-4 text-center">
+                            {isClimateDown ? (
+                              <span className="font-bold text-slate-300">-</span>
+                            ) : (
+                              <span
+                                className={`font-bold text-sm ${typeof hour.uv === 'number' && hour.uv >= 6 ? 'text-amber-600' : 'text-slate-600'}`}
+                                title="Índice UV horario (protección solar en superficie)"
+                              >
+                                {hour.uv === '-' || hour.uv === undefined || hour.uv === null ? '-' : Number(hour.uv).toFixed(1)}
+                              </span>
                             )}
                           </td>
 
@@ -1071,8 +1195,18 @@ export default function App() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden relative flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+          role="presentation"
+          onClick={() => setIsModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden relative flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="guia-nadadores-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
             
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
               <div className="flex items-center gap-3">
@@ -1080,13 +1214,15 @@ export default function App() {
                   <BookOpen size={24} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-800 tracking-tight">Guía Fácil para Nadadores</h3>
+                  <h3 id="guia-nadadores-titulo" className="text-lg font-bold text-slate-800 tracking-tight">Guía Fácil para Nadadores</h3>
                   <p className="text-xs text-slate-500 font-medium">Cómo leer OpenWater Tracker</p>
                 </div>
               </div>
               <button 
+                type="button"
                 onClick={() => setIsModalOpen(false)}
                 className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
+                aria-label="Cerrar guía"
               >
                 <X size={24} />
               </button>
@@ -1146,7 +1282,7 @@ export default function App() {
                      <Compass className="text-indigo-500 shrink-0 mt-1" size={20} />
                      <div>
                        <strong className="text-slate-800">La Deriva Lateral (Flechitas):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Cruzando la inclinación de la playa con el ángulo de la ola, sabemos si el agua "resbala" empujándote hacia El Rincón (⬅️) o hacia Torremolinos (➡️).</p>
+                       <p className="text-sm text-slate-600 mt-1">Cruzando la inclinación de la playa con el ángulo de la ola, sabemos si el agua "resbala" empujándote hacia el este (⬅️ etiqueta <strong>Nerja</strong>) o hacia el oeste (➡️ etiqueta <strong>Fuengirola</strong>) a lo largo de la costa.</p>
                      </div>
                   </div>
                 </div>
@@ -1157,7 +1293,10 @@ export default function App() {
                   <Activity size={20} className="text-orange-500"/> 3. La Energía (La Regla de Oro)
                 </h4>
                 <p className="text-sm text-slate-600 mb-4">
-                  Basado en los informes de oceanografía física, la fuerza de una ola no crece en línea recta, sino de forma <strong>exponencial</strong> (al cuadrado).
+                  La columna <strong>Energía (Kj)</strong> usa <code className="bg-slate-100 px-1 rounded text-xs">altura² × periodo × coeficiente dinámico</code>. El coeficiente depende de la <strong>dirección del oleaje</strong> (Sur/SSE más noble, Sureste intermedio, Suroeste más agresivo) y del <strong>periodo</strong> (más de 5 s suma empuje; menos de 4 s resta, mar más caótico). Debajo del valor verás la <strong>procedencia del oleaje</strong> (brújula + grados, convención del modelo).
+                </p>
+                <p className="text-sm text-slate-600 mb-4">
+                  Basado en los informes de oceanografía física, la fuerza de una ola no crece en línea recta, sino de forma <strong>exponencial</strong> (al cuadrado en la altura).
                 </p>
                 <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 text-sm text-orange-800 font-medium flex items-start gap-3">
                   <Info className="shrink-0 text-orange-600 mt-0.5" size={20} />
@@ -1221,3 +1360,4 @@ export default function App() {
     </div>
   );
 }
+
