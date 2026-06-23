@@ -30,6 +30,7 @@ import {
   RefreshCw,
   Copy
 } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
 const BEACHES = {
@@ -1357,6 +1358,7 @@ export default function App() {
         </div>
       )}
 
+      <Analytics />
     </div>
   );
 }
