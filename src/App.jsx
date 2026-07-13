@@ -230,9 +230,10 @@ export default function App() {
             const period = marineJson.hourly?.wave_period?.[i] || 4;
             const waveDir = marineJson.hourly?.wave_direction?.[i];
             
+            const displayHour = i % 24;
             const windKmh = localClimateDown ? 0 : (weatherJson?.hourly?.wind_speed_10m?.[i] || 0);
-            const windKnots = Math.round(windKmh / 1.852);
-            const gustKnots = localClimateDown ? 0 : Math.round((weatherJson?.hourly?.wind_gusts_10m?.[i] || 0) / 1.852);
+            let windKnots = Math.round(windKmh / 1.852);
+            let gustKnots = localClimateDown ? 0 : Math.round((weatherJson?.hourly?.wind_gusts_10m?.[i] || 0) / 1.852);
             const windDir = localClimateDown ? 0 : (weatherJson?.hourly?.wind_direction_10m?.[i] || 0);
             const cloudCover = localClimateDown ? "-" : (weatherJson?.hourly?.cloud_cover?.[i] || 0);
             const wCode = localClimateDown ? 0 : (weatherJson?.hourly?.weather_code?.[i] || 0);
@@ -240,8 +241,17 @@ export default function App() {
             const rainMm = localClimateDown ? 0 : (weatherJson?.hourly?.precipitation?.[i] || 0);
             const rainProb = localClimateDown ? "-" : (weatherJson?.hourly?.precipitation_probability?.[i] || 0);
             
-            const displayHour = i % 24;
-            
+            // Regla: Multiplicador Térmico de Mediodía en Misericordia (v9.5)
+            const isMisericordia = selectedBeach === 'misericordia';
+            if (isMisericordia && !localClimateDown) {
+                const isNoonWindow = displayHour >= 12 && displayHour <= 18;
+                const isSouthOrSouthWestWind = windDir >= 157.5 && windDir <= 247.5;
+                if (isNoonWindow && isSouthOrSouthWestWind) {
+                    windKnots += 10;
+                    gustKnots += 10;
+                }
+            }
+
             // Detección de tormenta eléctrica
             const isThunderstorm = (wCode === 95 || wCode === 96 || wCode === 99);
             if (isThunderstorm) hasStormRiskToday = true;
@@ -249,6 +259,14 @@ export default function App() {
             let effectiveWaveHeight = waveHeight;
             let localRule = null;
             let ruleColor = "";
+
+            // Regla: Minoración de Ola ("Filtro Misericordia") (v9.5)
+            if (isMisericordia) {
+                const isSouthWestWindStrong = (windDir >= 202.5 && windDir <= 247.5) && windKnots >= 15;
+                if (!isSouthWestWindStrong) {
+                    effectiveWaveHeight = waveHeight * 0.6; // Reducción del 40% en la orilla
+                }
+            }
 
             // ESCUDO DEL PUERTO (Solo activo si la ola viene de Poniente/Suroeste: entre 200 y 300 grados)
             const isWestOrSouthWest = waveDir >= 200 && waveDir <= 300;
@@ -259,7 +277,14 @@ export default function App() {
             }
             
             let driftInfo = { icon: "⏺️", color: "text-slate-400", short: "Nula" };
-            if (waveDir !== undefined && waveDir !== null && effectiveWaveHeight >= 0.2) {
+            const isLevanteMar = waveDir !== undefined && waveDir !== null && waveDir >= 60 && waveDir <= 120;
+            const isPedregalejo = selectedBeach === 'pedregalejo';
+
+            if (isPedregalejo && isLevanteMar) {
+                driftInfo = { icon: "➡️", color: "text-red-600 font-bold bg-red-50 border-red-200", short: "Embudo: Fuengirola" };
+                localRule = "Efecto Embudo: Alta resistencia";
+                ruleColor = "text-red-700 font-bold bg-red-100 border border-red-300 shadow-sm";
+            } else if (waveDir !== undefined && waveDir !== null && effectiveWaveHeight >= 0.2) {
                 let diff = waveDir - beach.facing;
                 while (diff > 180) diff -= 360;
                 while (diff < -180) diff += 360;
@@ -308,6 +333,16 @@ export default function App() {
             if (effectiveWaveHeight > 0.6) hourScore -= (Math.pow(effectiveWaveHeight, 2) * 25); 
             if (period < 4.5 && effectiveWaveHeight > 0.5) hourScore -= 15;
             if (period < 3.5 && effectiveWaveHeight > 0.6) hourScore -= 25;
+
+            // Regla: La Trampa del Levante (v10.x)
+            const isLevanteComponent = (waveDir >= 60 && waveDir <= 120) || (!localClimateDown && windDir >= 60 && windDir <= 120);
+            if (isLevanteComponent && effectiveWaveHeight < 0.4) {
+                hourScore = Math.max(0, hourScore - 10);
+                if (!localRule || localRule === "Escudo Activo" || localRule === "Magón") {
+                    localRule = "Falsa Calma: Corriente de Fondo";
+                    ruleColor = "text-amber-600 bg-amber-50 border border-amber-200 shadow-sm";
+                }
+            }
             
             if (!localClimateDown) {
                 // Viento genérico
@@ -340,6 +375,25 @@ export default function App() {
                     localRule = "Riesgo Deriva";
                     ruleColor = "text-red-600";
                 }
+
+                // Regla: Batalla Térmica en Misericordia (v9.5)
+                const isWestOrNorthWestWind = windDir >= 247.5 && windDir <= 337.5;
+                const isNoonWindow = displayHour >= 12 && displayHour <= 18;
+                if (isMisericordia && isNoonWindow && isWestOrNorthWestWind && windKnots < 15) {
+                    if (!localRule || localRule === "Escudo Activo" || localRule === "Magón") {
+                        localRule = "Batalla Térmica ⚔️";
+                        ruleColor = "text-yellow-800 bg-yellow-100 border border-yellow-300 shadow-sm";
+                    }
+                }
+
+                // Regla: Desacople de Incomodidad vs Altura (Mar Picado / Incómodo) en Misericordia (v9.5)
+                if (isMisericordia && windKnots > 10) {
+                    if (hourScore > 60) hourScore = 60;
+                    if (!localRule || localRule === "Escudo Activo" || localRule === "Magón" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo") {
+                        localRule = "Mar Picado / Incómodo";
+                        ruleColor = "text-amber-700 bg-amber-50 border border-amber-200 shadow-sm";
+                    }
+                }
             }
 
             // EL MURO DE LA ROMPIENTE (Olas > 0.5m son muy incómodas/peligrosas para entrar al agua)
@@ -348,7 +402,7 @@ export default function App() {
                 if (hourScore > 50) hourScore = 50; // Muro estricto: nunca pasa de 50
                 
                 // Etiquetamos si no hay una regla previa importante
-                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo") {
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo") {
                     localRule = "Rompiente Dura";
                     ruleColor = "text-orange-700 font-bold bg-orange-100 border border-orange-300 shadow-sm";
                 }
@@ -360,7 +414,7 @@ export default function App() {
                 if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
                 
                 // Etiquetamos visualmente la alerta si no hay otra regla más crítica (como Niebla/Tormenta)
-                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Rompiente Dura") {
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo" || localRule === "Rompiente Dura" || localRule === "Efecto Embudo: Alta resistencia") {
                     localRule = "Resaca Fuerte";
                     ruleColor = "text-red-600 font-bold bg-red-50 border border-red-200 shadow-sm";
                 }
@@ -510,10 +564,17 @@ export default function App() {
       const windText = isClimateDown ? "(Ignora el viento porque satélite está caído)" : `Viento: ${currentDayData.hourly[0].windS} nudos. Cielo: ${currentDayData.hourly[0].cloudCover}% nublado. Calidad del agua: ${currentDayData.waterQuality.status}.`;
       const extraMarine = `Medusas (heurístico): ${currentDayData.jellyfish.risk}. Temperatura agua (modelo): ${currentDayData.temps.water}ºC.`;
       
+      // Alerta de termoclina para la IA (v10.x)
+      let termoclinaAlert = "";
+      const isLevante = currentDayData.hourly[0].swellDir >= 60 && currentDayData.hourly[0].swellDir <= 120;
+      if ((selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') && isLevante) {
+          termoclinaAlert = " ADVERTENCIA ADICIONAL PARA LA IA: Advierte al nadador de que puede encontrar bloques de agua fría repentinos (termoclinas) y sensación de agua 'pesada' al cruzar la zona del Morlaco debido al relieve del fondo marino.";
+      }
+
       const prompt = `Eres un experto nadador de aguas abiertas y socorrista en Málaga. 
       Analiza los siguientes datos MARINOS de ${currentDayData.dayLabel.toLowerCase()} para la playa ${currentDayData.name}:
       Puntuación media de seguridad: ${currentDayData.score}/100.
-      Olas medias: ${currentDayData.hourly[0].swellH}m. ${windText} ${extraMarine}${stormWarning}
+      Olas medias: ${currentDayData.hourly[0].swellH}m. ${windText} ${extraMarine}${stormWarning}${termoclinaAlert}
       Mejor hora para nadar: ${currentDayData.best.time}. Peor hora: ${currentDayData.worst.time}.
       IMPORTANTE: Si la puntuación media es menor a 70 o hay rachas que superen los 12 nudos, DEBES empezar tu consejo obligatoriamente con una advertencia seria de peligro en MAYÚSCULAS.
       Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. Usa un tono cercano.`;
