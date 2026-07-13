@@ -245,7 +245,7 @@ export default function App() {
             const isMisericordia = selectedBeach === 'misericordia';
             if (isMisericordia && !localClimateDown) {
                 const isNoonWindow = displayHour >= 12 && displayHour <= 18;
-                const isSouthOrSouthWestWind = windDir >= 135 && windDir <= 247.5;
+                const isSouthOrSouthWestWind = windDir >= 157.5 && windDir <= 247.5;
                 if (isNoonWindow && isSouthOrSouthWestWind) {
                     windKnots += 10;
                     gustKnots += 10;
