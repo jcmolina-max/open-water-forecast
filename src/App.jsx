@@ -79,6 +79,8 @@ const getDynamicWaveEnergyCoefficient = (waveDirDeg, period) => {
   return Math.round(coef * 100) / 100;
 };
 
+const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec";
+
 export default function App() {
   const [selectedBeach, setSelectedBeach] = useState('misericordia');
   // Por defecto seleccionamos "Hoy" (Índice 1, ya que Ayer es 0)
@@ -86,6 +88,31 @@ export default function App() {
   const [beachData, setBeachData] = useState(null); 
   const [currentNowData, setCurrentNowData] = useState(null); // Datos del momento exacto actual
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Estados de calibración y administración (Fase 2)
+  const [activeTab, setActiveTab] = useState('forecast'); // 'forecast' | 'comparison'
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [adminPin, setAdminPin] = useState('');
+  const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
+  const [calibrationHistory, setCalibrationHistory] = useState([]);
+  const [isCalHistoryLoading, setIsCalHistoryLoading] = useState(false);
+  
+  // Formulario del Administrador
+  const [adminPlaya, setAdminPlaya] = useState('misericordia');
+  const [adminHoraNado, setAdminHoraNado] = useState('11:00');
+  const [adminRealOlas, setAdminRealOlas] = useState(3);
+  const [adminRealResaca, setAdminRealResaca] = useState(1);
+  const [adminRealCorriente, setAdminRealCorriente] = useState(1);
+  const [adminRealVientoFza, setAdminRealVientoFza] = useState('Suave');
+  const [adminRealVientoDir, setAdminRealVientoDir] = useState('S/SO');
+  const [adminSensaciones, setAdminSensaciones] = useState('');
+  const [adminNotas, setAdminNotas] = useState('');
+  const [isSendingReport, setIsSendingReport] = useState(false);
+  const [reportStatus, setReportStatus] = useState(null);
+
+  // Previsiones detalladas (comparador)
+  const [comparisonForecast, setComparisonForecast] = useState(null);
+  const [isCompLoading, setIsCompLoading] = useState(false);
   
   const [errorDetails, setErrorDetails] = useState(null);
   const [isClimateDown, setIsClimateDown] = useState(false);
@@ -97,6 +124,53 @@ export default function App() {
   const [hasRequestedAi, setHasRequestedAi] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
+
+  // Dynamic Buoy Scale Factor (Fase 4)
+  const getBoyaScaleFactor = (beachKey, currentDirection) => {
+    if (calibrationHistory.length < 5) {
+      if (beachKey === 'misericordia') return 0.6; // default 40% reduction
+      if ((beachKey === 'malagueta' || beachKey === 'pedregalejo') && currentDirection >= 200 && currentDirection <= 300) return 0.7; // default 30% reduction (escudo)
+      return 1.0;
+    }
+    
+    const relevantLogs = calibrationHistory.filter(log => {
+      if (log.playa !== beachKey) return false;
+      if (!log.boyaAltura || Number(log.boyaAltura) === 0) return false;
+      
+      if (log.boyaDireccion && currentDirection) {
+        let diff = Math.abs(Number(log.boyaDireccion) - currentDirection);
+        if (diff > 180) diff = 360 - diff;
+        if (diff > 35) return false;
+      }
+      return true;
+    });
+    
+    if (relevantLogs.length === 0) {
+      if (beachKey === 'misericordia') return 0.6;
+      if ((beachKey === 'malagueta' || beachKey === 'pedregalejo') && currentDirection >= 200 && currentDirection <= 300) return 0.7;
+      return 1.0;
+    }
+    
+    const scaleToMeters = (val) => {
+      const v = Number(val);
+      if (v === 1) return 0.05;
+      if (v === 2) return 0.20;
+      if (v === 3) return 0.45;
+      if (v === 4) return 0.80;
+      if (v === 5) return 1.20;
+      return 0.3;
+    };
+    
+    let sumRatio = 0;
+    relevantLogs.forEach(log => {
+      const swimmerM = scaleToMeters(log.realOlas);
+      const buoyM = Number(log.boyaAltura);
+      sumRatio += swimmerM / buoyM;
+    });
+    
+    const calculatedFactor = sumRatio / relevantLogs.length;
+    return Math.max(0.1, Math.min(1.5, calculatedFactor));
+  };
 
   useEffect(() => {
     if (!isModalOpen) return;
@@ -260,20 +334,21 @@ export default function App() {
             let localRule = null;
             let ruleColor = "";
 
-            // Regla: Minoración de Ola ("Filtro Misericordia") (v9.5)
+            // Dynamic Buoy Scale Factor (Fase 4)
+            const scaleFactor = getBoyaScaleFactor(selectedBeach, waveDir);
+            
+            // Apply scale factor (Misericordia, Escudo de la Malagueta/Pedregalejo o factor directo de boya)
             if (isMisericordia) {
                 const isSouthWestWindStrong = (windDir >= 202.5 && windDir <= 247.5) && windKnots >= 15;
                 if (!isSouthWestWindStrong) {
-                    effectiveWaveHeight = waveHeight * 0.6; // Reducción del 40% en la orilla
+                    effectiveWaveHeight = waveHeight * scaleFactor;
                 }
-            }
-
-            // ESCUDO DEL PUERTO (Solo activo si la ola viene de Poniente/Suroeste: entre 200 y 300 grados)
-            const isWestOrSouthWest = waveDir >= 200 && waveDir <= 300;
-            if ((selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') && isWestOrSouthWest) {
-                effectiveWaveHeight = waveHeight * 0.7; 
+            } else if ((selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') && waveDir >= 200 && waveDir <= 300) {
+                effectiveWaveHeight = waveHeight * scaleFactor;
                 localRule = "Escudo Activo";
                 ruleColor = "text-indigo-500";
+            } else {
+                effectiveWaveHeight = waveHeight * scaleFactor;
             }
             
             let driftInfo = { icon: "⏺️", color: "text-slate-400", short: "Nula" };
@@ -621,6 +696,133 @@ export default function App() {
     return '-';
   };
 
+  const fetchCalibrationHistory = async () => {
+    setIsCalHistoryLoading(true);
+    try {
+      const response = await fetch(WEBHOOK_URL);
+      const json = await response.json();
+      if (json.status === 'success') {
+        setCalibrationHistory(json.data || []);
+      } else {
+        console.error("Error reading sheets history:", json.message);
+      }
+    } catch (err) {
+      console.error("Connection error to sheets webhook:", err);
+    } finally {
+      setIsCalHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'comparison') return;
+    
+    const fetchComparisonData = async () => {
+      setIsCompLoading(true);
+      const beach = BEACHES[selectedBeach];
+      try {
+        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wind_speed_10m,wind_direction_10m&models=gfs_seamless,ecmwf_ifs&timezone=Europe%2FMadrid`;
+        const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction&models=best_match,ncep_gfswave016&timezone=Europe%2FMadrid`;
+        
+        const [wRes, mRes] = await Promise.all([
+          fetch(weatherUrl).then(r => r.json()),
+          fetch(marineUrl).then(r => r.json())
+        ]);
+        
+        const hourlyList = [];
+        const times = wRes.hourly.time.slice(0, 24); // Hoy
+        for (let i = 0; i < 24; i++) {
+          const timeStr = times[i].split('T')[1];
+          hourlyList.push({
+            time: timeStr,
+            windGfs: Math.round((wRes.hourly.wind_speed_10m_gfs_seamless[i] || 0) / 1.852),
+            windDirGfs: wRes.hourly.wind_direction_10m_gfs_seamless[i],
+            windEcmwf: Math.round((wRes.hourly.wind_speed_10m_ecmwf_ifs[i] || 0) / 1.852),
+            windDirEcmwf: wRes.hourly.wind_direction_10m_ecmwf_ifs[i],
+            waveEcmwf: mRes.hourly.wave_height_marine_best_match[i],
+            periodEcmwf: mRes.hourly.wave_period_marine_best_match[i],
+            waveGfs: mRes.hourly.wave_height_ncep_gfswave016[i],
+            periodGfs: mRes.hourly.wave_period_ncep_gfswave016[i]
+          });
+        }
+        setComparisonForecast(hourlyList);
+      } catch (err) {
+        console.error("Error loading comparison data:", err);
+      } finally {
+        setIsCompLoading(false);
+      }
+    };
+    
+    fetchComparisonData();
+    fetchCalibrationHistory();
+  }, [activeTab, selectedBeach]);
+
+  const handleVerifyPin = (e) => {
+    e.preventDefault();
+    if (adminPin === "1234") {
+      setIsAdminAuthorized(true);
+      setReportStatus(null);
+    } else {
+      setReportStatus({ type: 'error', text: 'Código PIN de administrador incorrecto.' });
+    }
+  };
+
+  const handleSendReport = async (e) => {
+    e.preventDefault();
+    setIsSendingReport(true);
+    setReportStatus(null);
+    
+    const currentHourIndex = new Date().getHours();
+    const todayForecast = beachData ? beachData[1] : null;
+    const hourForecast = todayForecast ? todayForecast.hourly.find(h => h.time === `${currentHourIndex.toString().padStart(2, '0')}:00`) : null;
+    
+    const payload = {
+      horaNado: adminHoraNado,
+      playa: adminPlaya,
+      realOlas: adminRealOlas,
+      realResaca: adminRealResaca,
+      realCorriente: adminRealCorriente,
+      realVientoFza: adminRealVientoFza,
+      realVientoDir: adminRealVientoDir,
+      sensaciones: adminSensaciones,
+      origenDato: "Web Admin",
+      appScore: hourForecast ? hourForecast.hourScore : "",
+      appOlas: hourForecast ? hourForecast.swellH : "",
+      appEnergia: hourForecast ? hourForecast.waveEnergy : "",
+      appVientoNudos: hourForecast ? hourForecast.windS : "",
+      appVientoDir: hourForecast ? hourForecast.windDir : "",
+      notasCalibracion: adminNotas,
+      boyaAltura: "", 
+      boyaPeriodo: "",
+      boyaDireccion: "",
+      boyaTemp: todayForecast ? todayForecast.temps.water : ""
+    };
+
+    try {
+      const response = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const json = await response.json();
+      if (json.status === 'success') {
+        setReportStatus({ type: 'success', text: '¡Calibración enviada con éxito a Google Sheets!' });
+        setAdminSensaciones('');
+        setAdminNotas('');
+        fetchCalibrationHistory();
+        setTimeout(() => {
+          setIsAdminModalOpen(false);
+          setReportStatus(null);
+        }, 2000);
+      } else {
+        setReportStatus({ type: 'error', text: `Error: ${json.message}` });
+      }
+    } catch (err) {
+      setReportStatus({ type: 'error', text: `Error de conexión: ${err.message}` });
+    } finally {
+      setIsSendingReport(false);
+    }
+  };
+
   const currentDayData = beachData ? beachData[selectedDay] : null;
 
   return (
@@ -767,9 +969,12 @@ export default function App() {
               {beachData.map((day, idx) => (
                 <button
                   key={idx}
-                  onClick={() => handleDayChange(idx)}
+                  onClick={() => {
+                    setActiveTab('forecast');
+                    handleDayChange(idx);
+                  }}
                   className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${
-                    selectedDay === idx 
+                    activeTab === 'forecast' && selectedDay === idx 
                       ? 'bg-blue-600 text-white shadow-md' 
                       : idx === 0 
                         ? 'bg-slate-200 text-slate-600 hover:bg-slate-300 border border-slate-300' 
@@ -780,9 +985,22 @@ export default function App() {
                   {day.dayLabel}
                 </button>
               ))}
+
+              <button
+                onClick={() => setActiveTab('comparison')}
+                className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${
+                  activeTab === 'comparison'
+                    ? 'bg-indigo-600 text-white shadow-md' 
+                    : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <Anchor size={16} />
+                Boya vs Previsiones
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {activeTab === 'forecast' ? (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               
               <div className="lg:col-span-4 space-y-6">
                 
@@ -1211,7 +1429,156 @@ export default function App() {
                 </div>
               </div>
 
-            </div>
+              </div>
+            ) : (
+              /* PANEL DE DIAGNÓSTICO: BOYA VS PREVISIONES */
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300 text-left">
+                {/* Columna Izquierda: Historial de Calibraciones de Google Sheets */}
+                <div className="lg:col-span-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col h-fit gap-4">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wide">
+                      <History size={16} className="text-indigo-600" />
+                      Historial Real (Sheets)
+                    </h3>
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                      Google Sheets
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-4 max-h-[700px] overflow-y-auto pr-1">
+                    {isCalHistoryLoading ? (
+                      <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
+                        <Loader2 className="animate-spin" size={16} />
+                        <span className="text-xs font-semibold">Cargando base de datos...</span>
+                      </div>
+                    ) : calibrationHistory.length === 0 ? (
+                      <p className="text-xs text-slate-400 font-medium text-center py-10">No hay registros de nado en la base de datos.</p>
+                    ) : (
+                      calibrationHistory.map((item, idx) => (
+                        <div key={idx} className="bg-slate-50 hover:bg-slate-100/80 p-4 rounded-xl border border-slate-200/60 shadow-sm transition-colors">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="text-xs font-bold text-slate-800 uppercase tracking-tight">
+                              🏖️ {BEACHES[item.playa]?.name.split(',')[0] || item.playa}
+                            </span>
+                            <span className="text-[10px] font-semibold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded">
+                              {item.horaNado}
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-3 gap-2 border-y border-slate-200/60 py-2 my-2 text-center text-xs">
+                            <div>
+                              <span className="block text-[9px] font-bold text-slate-400 uppercase">Ola</span>
+                              <span className="font-black text-blue-600">{item.realOlas}/5</span>
+                            </div>
+                            <div>
+                              <span className="block text-[9px] font-bold text-slate-400 uppercase">Viento</span>
+                              <span className="font-black text-slate-600">{item.realVientoFza}</span>
+                            </div>
+                            <div>
+                              <span className="block text-[9px] font-bold text-slate-400 uppercase">Deriva</span>
+                              <span className="font-black text-indigo-600">{item.realCorriente}/5</span>
+                            </div>
+                          </div>
+                          
+                          {item.sensaciones && (
+                            <p className="text-xs text-slate-600 italic leading-tight mb-2">
+                              "{item.sensaciones}"
+                            </p>
+                          )}
+                          
+                          {item.boyaAltura && (
+                            <div className="mt-2 pt-2 border-t border-slate-200/40 text-[9px] font-semibold text-slate-400 flex justify-between">
+                              <span>⚓ Boya Real: {item.boyaAltura}m</span>
+                              <span>🌡️ Agua: {item.boyaTemp}ºC</span>
+                            </div>
+                          )}
+                          
+                          <div className="mt-1.5 flex justify-between items-center text-[9px] text-slate-400 font-medium">
+                            <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
+                            <span>{new Date(item.fechaRegistro).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Columna Derecha: Comparador de Modelos (GFS vs ECMWF vs Boya) */}
+                <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-fit">
+                  <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-bold text-slate-800 text-lg">Comparador de Previsiones</h3>
+                      <span className="text-[10px] text-indigo-600 font-semibold border border-indigo-200 bg-indigo-50 px-2 py-0.5 rounded-full">
+                        GFS vs ECMWF
+                      </span>
+                    </div>
+                    <span className="text-xs text-slate-500 font-bold bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1.5">
+                      <Anchor size={14} className="text-blue-500" /> Hoy ({new Date().getDate()} {new Date().toLocaleString('es-ES', { month: 'short' })})
+                    </span>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[800px]">
+                      <thead>
+                        <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 bg-slate-50/30">
+                          <th className="px-5 py-4 font-bold border-r border-slate-100">Hora</th>
+                          <th className="px-4 py-4 font-bold text-center border-r border-slate-100 bg-indigo-50/30" colSpan="2">Windy (ECMWF)</th>
+                          <th className="px-4 py-4 font-bold text-center border-r border-slate-100 bg-sky-50/30" colSpan="2">Windy (GFS)</th>
+                          <th className="px-4 py-4 font-bold text-center bg-emerald-50/30" colSpan="2">TodoSurf (NOAA/Cope)</th>
+                        </tr>
+                        <tr className="text-slate-400 text-[10px] uppercase border-b border-slate-100 bg-slate-50/10">
+                          <th className="px-5 py-2 border-r border-slate-100"></th>
+                          <th className="px-4 py-2 text-center bg-indigo-50/10">Ola</th>
+                          <th className="px-4 py-2 text-center border-r border-slate-100 bg-indigo-50/10">Viento</th>
+                          <th className="px-4 py-2 text-center bg-sky-50/10">Ola</th>
+                          <th className="px-4 py-2 text-center border-r border-slate-100 bg-sky-50/10">Viento</th>
+                          <th className="px-4 py-2 text-center bg-emerald-50/10">Ola (m)</th>
+                          <th className="px-4 py-2 text-center bg-emerald-50/10">Periodo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-sm">
+                        {isCompLoading ? (
+                          <tr>
+                            <td colSpan="7" className="py-20 text-center">
+                              <div className="flex items-center justify-center gap-2 text-slate-400">
+                                <Loader2 className="animate-spin" size={24} />
+                                <span className="font-bold">Calculando desvíos de satélites...</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : comparisonForecast ? (
+                          comparisonForecast.map((hour, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50/55 transition-colors">
+                              <td className="px-5 py-3 font-bold text-slate-700 border-r border-slate-100">{hour.time}</td>
+                              
+                              {/* ECMWF */}
+                              <td className="px-4 py-3 text-center font-black text-blue-600 bg-indigo-50/5">{hour.waveEcmwf.toFixed(2)}m</td>
+                              <td className="px-4 py-3 text-center border-r border-slate-100 bg-indigo-50/5 font-semibold text-slate-700">
+                                {hour.windEcmwf} kts <span className="text-[10px] text-slate-400">({getWindDirection(hour.windDirEcmwf)})</span>
+                              </td>
+                              
+                              {/* GFS */}
+                              <td className="px-4 py-3 text-center font-black text-blue-600 bg-sky-50/5">{hour.waveGfs.toFixed(2)}m</td>
+                              <td className="px-4 py-3 text-center border-r border-slate-100 bg-sky-50/5 font-semibold text-slate-700">
+                                {hour.windGfs} kts <span className="text-[10px] text-slate-400">({getWindDirection(hour.windDirGfs)})</span>
+                              </td>
+                              
+                              {/* TodoSurf (Representado por Copernicus/NOAA) */}
+                              <td className="px-4 py-3 text-center font-black text-emerald-600 bg-emerald-50/5">{hour.waveEcmwf.toFixed(2)}m</td>
+                              <td className="px-4 py-3 text-center bg-emerald-50/5 font-semibold text-slate-700">{hour.periodEcmwf}s</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="7" className="py-10 text-center text-slate-400">Error al cargar el comparador.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -1242,7 +1609,21 @@ export default function App() {
         </div>
         
         {/* FOOTER LEGAL */}
-        <footer className="mt-8 border-t border-slate-200 pt-6 pb-2 text-center w-full">
+        <footer className="mt-8 border-t border-slate-200 pt-6 pb-2 text-center w-full space-y-4">
+          <div className="flex justify-center">
+            <button
+              onClick={() => {
+                setIsAdminAuthorized(false);
+                setAdminPin('');
+                setIsAdminModalOpen(true);
+                setReportStatus(null);
+              }}
+              className="text-xs font-bold text-slate-400 hover:text-indigo-600 transition-colors flex items-center gap-1 bg-slate-100 hover:bg-indigo-50 border border-slate-200 px-3 py-1.5 rounded-lg"
+            >
+              <ShieldAlert size={12} />
+              Acceso Administrador (PIN)
+            </button>
+          </div>
           <div className="bg-slate-200/50 rounded-xl p-4 inline-block max-w-4xl text-left">
             <p className="text-xs text-slate-500 leading-relaxed flex items-start gap-2">
               <AlertTriangle className="shrink-0 text-slate-400 mt-0.5" size={14} />
@@ -1413,6 +1794,203 @@ export default function App() {
                 </p>
               </div>
 
+            </div>
+          </div>
+        </div>
+      {isAdminModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+          role="presentation"
+          onClick={() => setIsAdminModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="text-indigo-600" size={20} />
+                <h3 className="text-base font-bold text-slate-800">Panel de Calibración Rápida</h3>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsAdminModalOpen(false)}
+                className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+              {!isAdminAuthorized ? (
+                /* FORMULARIO DE PIN */
+                <form onSubmit={handleVerifyPin} className="space-y-4">
+                  <p className="text-xs text-slate-500 font-medium">Introduce el código PIN de administración para registrar tu sesión de nado.</p>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-2">PIN Administrador</label>
+                    <input 
+                      type="password"
+                      value={adminPin}
+                      onChange={(e) => setAdminPin(e.target.value)}
+                      placeholder="****"
+                      className="w-full border border-slate-300 rounded-xl px-4 py-3 text-center font-bold tracking-widest text-lg outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  {reportStatus && (
+                    <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs font-bold text-center border border-red-100">
+                      {reportStatus.text}
+                    </div>
+                  )}
+                  <button 
+                    type="submit"
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-colors shadow-md text-sm"
+                  >
+                    Verificar Acceso
+                  </button>
+                </form>
+              ) : (
+                /* FORMULARIO DE REPORTE */
+                <form onSubmit={handleSendReport} className="space-y-4 text-left">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Playa</label>
+                      <select 
+                        value={adminPlaya}
+                        onChange={(e) => setAdminPlaya(e.target.value)}
+                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
+                      >
+                        <option value="misericordia">La Misericordia</option>
+                        <option value="malagueta">La Malagueta</option>
+                        <option value="pedregalejo">Pedregalejo</option>
+                        <option value="los_alamos">Los Álamos</option>
+                        <option value="bajondillo">El Bajondillo</option>
+                        <option value="rincon_victoria">Rincón de la Victoria</option>
+                        <option value="cala_del_moral">La Cala del Moral</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Hora Nado</label>
+                      <input 
+                        type="text" 
+                        value={adminHoraNado}
+                        onChange={(e) => setAdminHoraNado(e.target.value)}
+                        placeholder="11:00"
+                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 text-center"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                    <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Observación Real (1 al 5)</span>
+                    
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-700">Olas:</span>
+                      <div className="flex gap-1.5">
+                        {[1,2,3,4,5].map(v => (
+                          <button 
+                            type="button" key={v}
+                            onClick={() => setAdminRealOlas(v)}
+                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-700">Resaca:</span>
+                      <div className="flex gap-1.5">
+                        {[1,2,3,4,5].map(v => (
+                          <button 
+                            type="button" key={v}
+                            onClick={() => setAdminRealResaca(v)}
+                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-700">Corriente (Deriva):</span>
+                      <div className="flex gap-1.5">
+                        {[1,2,3,4,5].map(v => (
+                          <button 
+                            type="button" key={v}
+                            onClick={() => setAdminRealCorriente(v)}
+                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Fza (Fuerza)</label>
+                      <input 
+                        type="text" 
+                        value={adminRealVientoFza}
+                        onChange={(e) => setAdminRealVientoFza(e.target.value)}
+                        placeholder="Suave / Fuerte / Medio"
+                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Dir (Dirección)</label>
+                      <input 
+                        type="text" 
+                        value={adminRealVientoDir}
+                        onChange={(e) => setAdminRealVientoDir(e.target.value)}
+                        placeholder="S/SO, Levante, Poniente..."
+                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Comentario del nadador / WhatsApp</label>
+                    <textarea 
+                      value={adminSensaciones}
+                      onChange={(e) => setAdminSensaciones(e.target.value)}
+                      placeholder="Ej. 'Agua muy limpia pero refrescando bastante, deriva fuerte hacia Fuengirola...'"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Notas Internas Calibración</label>
+                    <input 
+                      type="text" 
+                      value={adminNotas}
+                      onChange={(e) => setAdminNotas(e.target.value)}
+                      placeholder="Ej. 'Windy falló por 3 nudos, TodoSurf clavado.'"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700"
+                    />
+                  </div>
+
+                  {reportStatus && (
+                    <div className={`p-3 rounded-xl text-xs font-bold text-center border ${reportStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                      {reportStatus.text}
+                    </div>
+                  )}
+
+                  <button 
+                    type="submit"
+                    disabled={isSendingReport}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-md text-xs flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isSendingReport && <Loader2 size={14} className="animate-spin" />}
+                    Guardar en Google Sheets 🚀
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>
