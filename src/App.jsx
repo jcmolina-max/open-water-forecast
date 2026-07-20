@@ -1602,17 +1602,38 @@ export default function App() {
                           </p>
                         </div>
                         <div className="flex gap-3 shrink-0 text-center text-xs w-full md:w-auto justify-between md:justify-end">
-                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[65px]">
+                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
                             <span className="block text-[8px] font-bold text-slate-400 uppercase">Ola</span>
                             <span className="font-black text-blue-600">{selectedHistoryLog.realOlas}/5</span>
+                            <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
+                              {Number(selectedHistoryLog.realOlas) === 1 && "0.05m"}
+                              {Number(selectedHistoryLog.realOlas) === 2 && "0.20m"}
+                              {Number(selectedHistoryLog.realOlas) === 3 && "0.45m"}
+                              {Number(selectedHistoryLog.realOlas) === 4 && "0.80m"}
+                              {Number(selectedHistoryLog.realOlas) === 5 && "1.20m"}
+                            </span>
                           </div>
-                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[65px]">
+                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
                             <span className="block text-[8px] font-bold text-slate-400 uppercase">Resaca</span>
                             <span className="font-black text-red-500">{selectedHistoryLog.realResaca}/5</span>
+                            <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
+                              {Number(selectedHistoryLog.realResaca) === 1 && "Ninguna"}
+                              {Number(selectedHistoryLog.realResaca) === 2 && "Leve"}
+                              {Number(selectedHistoryLog.realResaca) === 3 && "Moderada"}
+                              {Number(selectedHistoryLog.realResaca) === 4 && "Fuerte"}
+                              {Number(selectedHistoryLog.realResaca) === 5 && "Extrema"}
+                            </span>
                           </div>
-                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[65px]">
+                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
                             <span className="block text-[8px] font-bold text-slate-400 uppercase">Deriva</span>
                             <span className="font-black text-indigo-600">{selectedHistoryLog.realCorriente}/5</span>
+                            <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
+                              {Number(selectedHistoryLog.realCorriente) === 1 && "Ninguna"}
+                              {Number(selectedHistoryLog.realCorriente) === 2 && "Leve"}
+                              {Number(selectedHistoryLog.realCorriente) === 3 && "Moderada"}
+                              {Number(selectedHistoryLog.realCorriente) === 4 && "Fuerte"}
+                              {Number(selectedHistoryLog.realCorriente) === 5 && "Extrema"}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -2079,49 +2100,82 @@ export default function App() {
                   <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
                     <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Observación Real (1 al 5)</span>
                     
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-700">Olas:</span>
-                      <div className="flex gap-1.5">
-                        {[1,2,3,4,5].map(v => (
-                          <button 
-                            type="button" key={v}
-                            onClick={() => setAdminRealOlas(v)}
-                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                          >
-                            {v}
-                          </button>
-                        ))}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-slate-700">Olas:</span>
+                        <div className="flex gap-1.5">
+                          {[1,2,3,4,5].map(v => (
+                            <button 
+                              type="button" key={v}
+                              onClick={() => setAdminRealOlas(v)}
+                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                            >
+                              {v}
+                            </button>
+                          ))}
+                        </div>
                       </div>
+                      {adminRealOlas && (
+                        <div className="text-[10px] text-right font-bold text-blue-600 italic">
+                          {adminRealOlas === 1 && "1/5 = 0.05m (Mar plano / Sin olas)"}
+                          {adminRealOlas === 2 && "2/5 = 0.20m (Olas muy pequeñas)"}
+                          {adminRealOlas === 3 && "3/5 = 0.45m (Olas medianas)"}
+                          {adminRealOlas === 4 && "4/5 = 0.80m (Olas grandes)"}
+                          {adminRealOlas === 5 && "5/5 = 1.20m (Olas muy grandes / Resaca)"}
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-700">Resaca:</span>
-                      <div className="flex gap-1.5">
-                        {[1,2,3,4,5].map(v => (
-                          <button 
-                            type="button" key={v}
-                            onClick={() => setAdminRealResaca(v)}
-                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                          >
-                            {v}
-                          </button>
-                        ))}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-slate-700">Resaca:</span>
+                        <div className="flex gap-1.5">
+                          {[1,2,3,4,5].map(v => (
+                            <button 
+                              type="button" key={v}
+                              onClick={() => setAdminRealResaca(v)}
+                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                            >
+                              {v}
+                            </button>
+                          ))}
+                        </div>
                       </div>
+                      {adminRealResaca && (
+                        <div className="text-[10px] text-right font-bold text-red-500 italic">
+                          {adminRealResaca === 1 && "1/5 = Sin resaca"}
+                          {adminRealResaca === 2 && "2/5 = Resaca leve"}
+                          {adminRealResaca === 3 && "3/5 = Resaca moderada"}
+                          {adminRealResaca === 4 && "4/5 = Resaca fuerte"}
+                          {adminRealResaca === 5 && "5/5 = Resaca extrema"}
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-700">Corriente (Deriva):</span>
-                      <div className="flex gap-1.5">
-                        {[1,2,3,4,5].map(v => (
-                          <button 
-                            type="button" key={v}
-                            onClick={() => setAdminRealCorriente(v)}
-                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                          >
-                            {v}
-                          </button>
-                        ))}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-slate-700">Corriente (Deriva):</span>
+                        <div className="flex gap-1.5">
+                          {[1,2,3,4,5].map(v => (
+                            <button 
+                              type="button" key={v}
+                              onClick={() => setAdminRealCorriente(v)}
+                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                            >
+                              {v}
+                            </button>
+                          ))}
+                        </div>
                       </div>
+                      {adminRealCorriente && (
+                        <div className="text-[10px] text-right font-bold text-indigo-600 italic">
+                          {adminRealCorriente === 1 && "1/5 = Sin deriva / corriente"}
+                          {adminRealCorriente === 2 && "2/5 = Deriva leve"}
+                          {adminRealCorriente === 3 && "3/5 = Deriva moderada"}
+                          {adminRealCorriente === 4 && "4/5 = Deriva fuerte"}
+                          {adminRealCorriente === 5 && "5/5 = Deriva extrema"}
+                        </div>
+                      )}
                     </div>
                   </div>
 
