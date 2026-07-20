@@ -1503,9 +1503,9 @@ export default function App() {
                         </div>
                         
                         {(() => {
-                          const appOlas = Number(selectedHistoryLog.appOlas);
+                          const appOlas = parseFloat((selectedHistoryLog.appOlas || "0").toString().replace(",", "."));
                           const swimmerScaleToMeters = (v) => {
-                            const val = Number(v);
+                            const val = parseFloat((v || "0").toString().replace(",", "."));
                             if (val === 1) return 0.05;
                             if (val === 2) return 0.20;
                             if (val === 3) return 0.45;
@@ -1553,7 +1553,7 @@ export default function App() {
                         <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
                           <span className="text-[9px] font-bold text-slate-400 uppercase">Windy (ECMWF)</span>
                           <span className="text-sm font-black text-indigo-600 mt-1">
-                            {selectedHistoryLog.modelEcmwfOlas ? `${Number(selectedHistoryLog.modelEcmwfOlas).toFixed(2)}m` : '—'}
+                            {selectedHistoryLog.modelEcmwfOlas ? `${parseFloat(selectedHistoryLog.modelEcmwfOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
                           </span>
                           <span className="text-[9px] text-slate-400 font-semibold mt-1">Modelo Satélite Bruto</span>
                         </div>
@@ -1561,7 +1561,7 @@ export default function App() {
                         <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
                           <span className="text-[9px] font-bold text-slate-400 uppercase">Windy (GFS)</span>
                           <span className="text-sm font-black text-sky-600 mt-1">
-                            {selectedHistoryLog.modelGfsOlas ? `${Number(selectedHistoryLog.modelGfsOlas).toFixed(2)}m` : '—'}
+                            {selectedHistoryLog.modelGfsOlas ? `${parseFloat(selectedHistoryLog.modelGfsOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
                           </span>
                           <span className="text-[9px] text-slate-400 font-semibold mt-1">Modelo Satélite Bruto</span>
                         </div>
@@ -1569,7 +1569,7 @@ export default function App() {
                         <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
                           <span className="text-[9px] font-bold text-slate-400 uppercase">TodoSurf</span>
                           <span className="text-sm font-black text-emerald-600 mt-1">
-                            {selectedHistoryLog.modelTodoSurfOlas ? `${Number(selectedHistoryLog.modelTodoSurfOlas).toFixed(2)}m` : '—'}
+                            {selectedHistoryLog.modelTodoSurfOlas ? `${parseFloat(selectedHistoryLog.modelTodoSurfOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
                           </span>
                           <span className="text-[9px] text-slate-400 font-semibold mt-1">Copernicus/NOAA</span>
                         </div>
@@ -1577,7 +1577,7 @@ export default function App() {
                         <div className="bg-white p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/10 text-center flex flex-col justify-center">
                           <span className="text-[9px] font-bold text-indigo-600 uppercase">Nuestra App (Orilla)</span>
                           <span className="text-sm font-black text-blue-600 mt-1">
-                            {selectedHistoryLog.appOlas ? `${Number(selectedHistoryLog.appOlas).toFixed(2)}m` : '—'}
+                            {selectedHistoryLog.appOlas ? `${parseFloat(selectedHistoryLog.appOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
                           </span>
                           <span className="text-[9px] font-black text-slate-600 mt-1">Score: {selectedHistoryLog.appScore}/100</span>
                         </div>
@@ -1585,7 +1585,7 @@ export default function App() {
                         <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center col-span-2 md:col-span-1">
                           <span className="text-[9px] font-bold text-slate-400 uppercase">Boya Real</span>
                           <span className="text-sm font-black text-slate-800 mt-1">
-                            {selectedHistoryLog.boyaAltura ? `${Number(selectedHistoryLog.boyaAltura).toFixed(2)}m` : '—'}
+                            {selectedHistoryLog.boyaAltura ? `${parseFloat(selectedHistoryLog.boyaAltura.toString().replace(",", ".")).toFixed(2)}m` : '—'}
                           </span>
                           <span className="text-[9px] text-slate-500 font-semibold mt-1">
                             {selectedHistoryLog.boyaDireccion ? `${getWindDirection(selectedHistoryLog.boyaDireccion)}` : ''}
