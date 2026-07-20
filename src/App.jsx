@@ -110,6 +110,13 @@ export default function App() {
   const [isSendingReport, setIsSendingReport] = useState(false);
   const [reportStatus, setReportStatus] = useState(null);
 
+  // Estados del selector histórico y diagnóstico (Fase 4)
+  const [selectedHistoryLog, setSelectedHistoryLog] = useState(null);
+  const [adminBoyaAltura, setAdminBoyaAltura] = useState('');
+  const [adminBoyaPeriodo, setAdminBoyaPeriodo] = useState('');
+  const [adminBoyaDireccion, setAdminBoyaDireccion] = useState('');
+  const [adminBoyaTemp, setAdminBoyaTemp] = useState('');
+
   // Previsiones detalladas (comparador)
   const [comparisonForecast, setComparisonForecast] = useState(null);
   const [isCompLoading, setIsCompLoading] = useState(false);
@@ -775,6 +782,20 @@ export default function App() {
     const todayForecast = beachData ? beachData[1] : null;
     const hourForecast = todayForecast ? todayForecast.hourly.find(h => h.time === `${currentHourIndex.toString().padStart(2, '0')}:00`) : null;
     
+    // Buscar previsiones de modelos brutos para esa hora en el comparador
+    let ecmwfVal = "";
+    let gfsVal = "";
+    let todoSurfVal = "";
+    
+    if (comparisonForecast) {
+      const matchedHour = comparisonForecast.find(h => h.time.startsWith(adminHoraNado.split(':')[0]));
+      if (matchedHour) {
+        ecmwfVal = matchedHour.waveEcmwf;
+        gfsVal = matchedHour.waveGfs;
+        todoSurfVal = matchedHour.waveEcmwf; // Copernicus/ECMWF
+      }
+    }
+
     const payload = {
       horaNado: adminHoraNado,
       playa: adminPlaya,
@@ -791,10 +812,13 @@ export default function App() {
       appVientoNudos: hourForecast ? hourForecast.windS : "",
       appVientoDir: hourForecast ? hourForecast.windDir : "",
       notasCalibracion: adminNotas,
-      boyaAltura: "", 
-      boyaPeriodo: "",
-      boyaDireccion: "",
-      boyaTemp: todayForecast ? todayForecast.temps.water : ""
+      boyaAltura: adminBoyaAltura, 
+      boyaPeriodo: adminBoyaPeriodo,
+      boyaDireccion: adminBoyaDireccion,
+      boyaTemp: adminBoyaTemp || (todayForecast ? todayForecast.temps.water : ""),
+      modelEcmwfOlas: ecmwfVal,
+      modelGfsOlas: gfsVal,
+      modelTodoSurfOlas: todoSurfVal
     };
 
     try {
@@ -808,6 +832,10 @@ export default function App() {
         setReportStatus({ type: 'success', text: '¡Calibración enviada con éxito a Google Sheets!' });
         setAdminSensaciones('');
         setAdminNotas('');
+        setAdminBoyaAltura('');
+        setAdminBoyaPeriodo('');
+        setAdminBoyaDireccion('');
+        setAdminBoyaTemp('');
         fetchCalibrationHistory();
         setTimeout(() => {
           setIsAdminModalOpen(false);
@@ -1432,151 +1460,313 @@ export default function App() {
               </div>
             ) : (
               /* PANEL DE DIAGNÓSTICO: BOYA VS PREVISIONES */
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300 text-left">
-                {/* Columna Izquierda: Historial de Calibraciones de Google Sheets */}
-                <div className="lg:col-span-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col h-fit gap-4">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wide">
-                      <History size={16} className="text-indigo-600" />
-                      Historial Real (Sheets)
-                    </h3>
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                      Google Sheets
-                    </span>
+              <div className="space-y-6 text-left w-full">
+                
+                {/* Selector de Nado Histórico y Ficha de Análisis */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 uppercase tracking-wide">
+                        <Search size={16} className="text-indigo-600" />
+                        Análisis Retrospectivo (A Toro Pasado)
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1">Selecciona una sesión real para auditar qué falló o acertó en los modelos satelitales.</p>
+                    </div>
+                    <select
+                      value={selectedHistoryLog ? calibrationHistory.indexOf(selectedHistoryLog) : ''}
+                      onChange={(e) => {
+                        const idx = e.target.value;
+                        setSelectedHistoryLog(idx !== '' ? calibrationHistory[idx] : null);
+                      }}
+                      className="border border-slate-300 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 bg-white shadow-sm focus:border-indigo-500 outline-none"
+                    >
+                      <option value="">-- Seleccionar Sesión Guardada --</option>
+                      {calibrationHistory.map((item, idx) => (
+                        <option key={idx} value={idx}>
+                          {new Date(item.fechaRegistro).toLocaleDateString('es-ES')} ({item.horaNado}) - {BEACHES[item.playa]?.name.split(',')[0]}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  
-                  <div className="space-y-4 max-h-[700px] overflow-y-auto pr-1">
-                    {isCalHistoryLoading ? (
-                      <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
-                        <Loader2 className="animate-spin" size={16} />
-                        <span className="text-xs font-semibold">Cargando base de datos...</span>
+
+                  {selectedHistoryLog ? (
+                    <div className="bg-gradient-to-br from-slate-50 to-indigo-50/20 border border-indigo-100 rounded-2xl p-5 mt-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200/60 pb-4 mb-4 gap-4">
+                        <div>
+                          <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                            🏖️ {BEACHES[selectedHistoryLog.playa]?.name} ({selectedHistoryLog.horaNado})
+                          </h4>
+                          <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Sesión registrada el {new Date(selectedHistoryLog.fechaRegistro).toLocaleString('es-ES')}</p>
+                        </div>
+                        
+                        {(() => {
+                          const appOlas = Number(selectedHistoryLog.appOlas);
+                          const swimmerScaleToMeters = (v) => {
+                            const val = Number(v);
+                            if (val === 1) return 0.05;
+                            if (val === 2) return 0.20;
+                            if (val === 3) return 0.45;
+                            if (val === 4) return 0.80;
+                            if (val === 5) return 1.20;
+                            return 0.3;
+                          };
+                          const swimmerRealM = swimmerScaleToMeters(selectedHistoryLog.realOlas);
+                          
+                          let diffPercent = 0;
+                          if (swimmerRealM > 0) {
+                            diffPercent = Math.round((Math.abs(appOlas - swimmerRealM) / swimmerRealM) * 100);
+                          }
+                          
+                          let badgeColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                          let badgeText = `Calibración Óptima (Desvío ${diffPercent}%)`;
+                          let suggestion = "El factor de escala dinámica de la boya se está adaptando correctamente a la orilla.";
+                          
+                          if (diffPercent > 35) {
+                            badgeColor = "bg-red-50 text-red-700 border-red-200";
+                            badgeText = `Desviación Alta (Desvío ${diffPercent}%)`;
+                            suggestion = appOlas > swimmerRealM 
+                              ? "Nuestra App estimó olas demasiado altas. Considera reducir manualmente el factor de escala." 
+                              : "Nuestra App estimó olas demasiado bajas. Considera elevar el factor de escala.";
+                          } else if (diffPercent > 15) {
+                            badgeColor = "bg-amber-50 text-amber-700 border-amber-200";
+                            badgeText = `Ajuste Ligero (Desvío ${diffPercent}%)`;
+                            suggestion = "La estimación local es aceptable, dentro del umbral de precisión ordinario.";
+                          }
+                          
+                          return (
+                            <div className="flex flex-col items-end gap-1">
+                              <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${badgeColor}`}>
+                                {badgeText}
+                              </span>
+                              <p className="text-[10px] text-slate-500 font-medium italic max-w-sm text-right mt-1">
+                                💡 {suggestion}
+                              </p>
+                            </div>
+                          );
+                        })()}
                       </div>
-                    ) : calibrationHistory.length === 0 ? (
-                      <p className="text-xs text-slate-400 font-medium text-center py-10">No hay registros de nado en la base de datos.</p>
-                    ) : (
-                      calibrationHistory.map((item, idx) => (
-                        <div key={idx} className="bg-slate-50 hover:bg-slate-100/80 p-4 rounded-xl border border-slate-200/60 shadow-sm transition-colors">
-                          <div className="flex justify-between items-start mb-2">
-                            <span className="text-xs font-bold text-slate-800 uppercase tracking-tight">
-                              🏖️ {BEACHES[item.playa]?.name.split(',')[0] || item.playa}
-                            </span>
-                            <span className="text-[10px] font-semibold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded">
-                              {item.horaNado}
-                            </span>
+
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase">Windy (ECMWF)</span>
+                          <span className="text-sm font-black text-indigo-600 mt-1">
+                            {selectedHistoryLog.modelEcmwfOlas ? `${Number(selectedHistoryLog.modelEcmwfOlas).toFixed(2)}m` : '—'}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-semibold mt-1">Modelo Satélite Bruto</span>
+                        </div>
+                        
+                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase">Windy (GFS)</span>
+                          <span className="text-sm font-black text-sky-600 mt-1">
+                            {selectedHistoryLog.modelGfsOlas ? `${Number(selectedHistoryLog.modelGfsOlas).toFixed(2)}m` : '—'}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-semibold mt-1">Modelo Satélite Bruto</span>
+                        </div>
+
+                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase">TodoSurf</span>
+                          <span className="text-sm font-black text-emerald-600 mt-1">
+                            {selectedHistoryLog.modelTodoSurfOlas ? `${Number(selectedHistoryLog.modelTodoSurfOlas).toFixed(2)}m` : '—'}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-semibold mt-1">Copernicus/NOAA</span>
+                        </div>
+
+                        <div className="bg-white p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/10 text-center flex flex-col justify-center">
+                          <span className="text-[9px] font-bold text-indigo-600 uppercase">Nuestra App (Orilla)</span>
+                          <span className="text-sm font-black text-blue-600 mt-1">
+                            {selectedHistoryLog.appOlas ? `${Number(selectedHistoryLog.appOlas).toFixed(2)}m` : '—'}
+                          </span>
+                          <span className="text-[9px] font-black text-slate-600 mt-1">Score: {selectedHistoryLog.appScore}/100</span>
+                        </div>
+
+                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center col-span-2 md:col-span-1">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase">Boya Real</span>
+                          <span className="text-sm font-black text-slate-800 mt-1">
+                            {selectedHistoryLog.boyaAltura ? `${Number(selectedHistoryLog.boyaAltura).toFixed(2)}m` : '—'}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-semibold mt-1">
+                            {selectedHistoryLog.boyaDireccion ? `${getWindDirection(selectedHistoryLog.boyaDireccion)}` : ''}
+                            {selectedHistoryLog.boyaPeriodo ? ` (${selectedHistoryLog.boyaPeriodo}s)` : ''}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white border border-slate-200/60 rounded-xl p-4 mt-3.5 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between shadow-sm">
+                        <div className="flex-grow text-left">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Sensaciones del Nadador</span>
+                          <p className="text-xs text-slate-700 italic font-medium mt-1">
+                            "{selectedHistoryLog.sensaciones || 'Sin comentarios registrados.'}"
+                          </p>
+                        </div>
+                        <div className="flex gap-3 shrink-0 text-center text-xs w-full md:w-auto justify-between md:justify-end">
+                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[65px]">
+                            <span className="block text-[8px] font-bold text-slate-400 uppercase">Ola</span>
+                            <span className="font-black text-blue-600">{selectedHistoryLog.realOlas}/5</span>
                           </div>
-                          
-                          <div className="grid grid-cols-3 gap-2 border-y border-slate-200/60 py-2 my-2 text-center text-xs">
-                            <div>
-                              <span className="block text-[9px] font-bold text-slate-400 uppercase">Ola</span>
-                              <span className="font-black text-blue-600">{item.realOlas}/5</span>
-                            </div>
-                            <div>
-                              <span className="block text-[9px] font-bold text-slate-400 uppercase">Viento</span>
-                              <span className="font-black text-slate-600">{item.realVientoFza}</span>
-                            </div>
-                            <div>
-                              <span className="block text-[9px] font-bold text-slate-400 uppercase">Deriva</span>
-                              <span className="font-black text-indigo-600">{item.realCorriente}/5</span>
-                            </div>
+                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[65px]">
+                            <span className="block text-[8px] font-bold text-slate-400 uppercase">Resaca</span>
+                            <span className="font-black text-red-500">{selectedHistoryLog.realResaca}/5</span>
                           </div>
-                          
-                          {item.sensaciones && (
-                            <p className="text-xs text-slate-600 italic leading-tight mb-2">
-                              "{item.sensaciones}"
-                            </p>
-                          )}
-                          
-                          {item.boyaAltura && (
-                            <div className="mt-2 pt-2 border-t border-slate-200/40 text-[9px] font-semibold text-slate-400 flex justify-between">
-                              <span>⚓ Boya Real: {item.boyaAltura}m</span>
-                              <span>🌡️ Agua: {item.boyaTemp}ºC</span>
-                            </div>
-                          )}
-                          
-                          <div className="mt-1.5 flex justify-between items-center text-[9px] text-slate-400 font-medium">
-                            <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
-                            <span>{new Date(item.fechaRegistro).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>
+                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[65px]">
+                            <span className="block text-[8px] font-bold text-slate-400 uppercase">Deriva</span>
+                            <span className="font-black text-indigo-600">{selectedHistoryLog.realCorriente}/5</span>
                           </div>
                         </div>
-                      ))
-                    )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 font-medium text-center py-6">Selecciona uno de los nados históricos arriba para ver la comparativa de desvíos.</p>
+                  )}
+                </div>
+
+                {/* Dos columnas del Comparador de Hoy */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in duration-300">
+                  {/* Columna Izquierda: Historial de Calibraciones de Google Sheets */}
+                  <div className="lg:col-span-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col h-fit gap-4">
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wide">
+                        <History size={16} className="text-indigo-600" />
+                        Historial Real (Sheets)
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-semibold uppercase bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                        Google Sheets
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-4 max-h-[700px] overflow-y-auto pr-1">
+                      {isCalHistoryLoading ? (
+                        <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
+                          <Loader2 className="animate-spin" size={16} />
+                          <span className="text-xs font-semibold">Cargando base de datos...</span>
+                        </div>
+                      ) : calibrationHistory.length === 0 ? (
+                        <p className="text-xs text-slate-400 font-medium text-center py-10">No hay registros de nado en la base de datos.</p>
+                      ) : (
+                        calibrationHistory.map((item, idx) => (
+                          <div key={idx} className="bg-slate-50 hover:bg-slate-100/80 p-4 rounded-xl border border-slate-200/60 shadow-sm transition-colors">
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="text-xs font-bold text-slate-800 uppercase tracking-tight">
+                                🏖️ {BEACHES[item.playa]?.name.split(',')[0] || item.playa}
+                              </span>
+                              <span className="text-[10px] font-semibold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded">
+                                {item.horaNado}
+                              </span>
+                            </div>
+                            
+                            <div className="grid grid-cols-3 gap-2 border-y border-slate-200/60 py-2 my-2 text-center text-xs">
+                              <div>
+                                <span className="block text-[9px] font-bold text-slate-400 uppercase">Ola</span>
+                                <span className="font-black text-blue-600">{item.realOlas}/5</span>
+                              </div>
+                              <div>
+                                <span className="block text-[9px] font-bold text-slate-400 uppercase">Viento</span>
+                                <span className="font-black text-slate-600">{item.realVientoFza}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[9px] font-bold text-slate-400 uppercase">Deriva</span>
+                                <span className="font-black text-indigo-600">{item.realCorriente}/5</span>
+                              </div>
+                            </div>
+                            
+                            {item.sensaciones && (
+                              <p className="text-xs text-slate-600 italic leading-tight mb-2">
+                                "{item.sensaciones}"
+                              </p>
+                            )}
+                            
+                            {item.boyaAltura && (
+                              <div className="mt-2 pt-2 border-t border-slate-200/40 text-[9px] font-semibold text-slate-400 flex justify-between">
+                                <span>⚓ Boya Real: {item.boyaAltura}m</span>
+                                <span>🌡️ Agua: {item.boyaTemp}ºC</span>
+                              </div>
+                            )}
+                            
+                            <div className="mt-1.5 flex justify-between items-center text-[9px] text-slate-400 font-medium">
+                              <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
+                              <span>{new Date(item.fechaRegistro).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Columna Derecha: Comparador de Modelos (GFS vs ECMWF vs Boya) */}
+                  <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-fit">
+                    <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                      <div className="flex items-center gap-3">
+                        <h3 className="font-bold text-slate-800 text-lg">Comparador de Previsiones</h3>
+                        <span className="text-[10px] text-indigo-600 font-semibold border border-indigo-200 bg-indigo-50 px-2 py-0.5 rounded-full">
+                          GFS vs ECMWF
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-500 font-bold bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1.5">
+                        <Anchor size={14} className="text-blue-500" /> Hoy ({new Date().getDate()} {new Date().toLocaleString('es-ES', { month: 'short' })})
+                      </span>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse min-w-[800px]">
+                        <thead>
+                          <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 bg-slate-50/30">
+                            <th className="px-5 py-4 font-bold border-r border-slate-100">Hora</th>
+                            <th className="px-4 py-4 font-bold text-center border-r border-slate-100 bg-indigo-50/30" colSpan="2">Windy (ECMWF)</th>
+                            <th className="px-4 py-4 font-bold text-center border-r border-slate-100 bg-sky-50/30" colSpan="2">Windy (GFS)</th>
+                            <th className="px-4 py-4 font-bold text-center bg-emerald-50/30" colSpan="2">TodoSurf (NOAA/Cope)</th>
+                          </tr>
+                          <tr className="text-slate-400 text-[10px] uppercase border-b border-slate-100 bg-slate-50/10">
+                            <th className="px-5 py-2 border-r border-slate-100"></th>
+                            <th className="px-4 py-2 text-center bg-indigo-50/10">Ola</th>
+                            <th className="px-4 py-2 text-center border-r border-slate-100 bg-indigo-50/10">Viento</th>
+                            <th className="px-4 py-2 text-center bg-sky-50/10">Ola</th>
+                            <th className="px-4 py-2 text-center border-r border-slate-100 bg-sky-50/10">Viento</th>
+                            <th className="px-4 py-2 text-center bg-emerald-50/10">Ola (m)</th>
+                            <th className="px-4 py-2 text-center bg-emerald-50/10">Periodo</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-sm">
+                          {isCompLoading ? (
+                            <tr>
+                              <td colSpan="7" className="py-20 text-center">
+                                <div className="flex items-center justify-center gap-2 text-slate-400">
+                                  <Loader2 className="animate-spin" size={24} />
+                                  <span className="font-bold">Calculando desvíos de satélites...</span>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : comparisonForecast ? (
+                            comparisonForecast.map((hour, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/55 transition-colors">
+                                <td className="px-5 py-3 font-bold text-slate-700 border-r border-slate-100">{hour.time}</td>
+                                
+                                {/* ECMWF */}
+                                <td className="px-4 py-3 text-center font-black text-blue-600 bg-indigo-50/5">{hour.waveEcmwf.toFixed(2)}m</td>
+                                <td className="px-4 py-3 text-center border-r border-slate-100 bg-indigo-50/5 font-semibold text-slate-700">
+                                  {hour.windEcmwf} kts <span className="text-[10px] text-slate-400">({getWindDirection(hour.windDirEcmwf)})</span>
+                                </td>
+                                
+                                {/* GFS */}
+                                <td className="px-4 py-3 text-center font-black text-blue-600 bg-sky-50/5">{hour.waveGfs.toFixed(2)}m</td>
+                                <td className="px-4 py-3 text-center border-r border-slate-100 bg-sky-50/5 font-semibold text-slate-700">
+                                  {hour.windGfs} kts <span className="text-[10px] text-slate-400">({getWindDirection(hour.windDirGfs)})</span>
+                                </td>
+                                
+                                {/* TodoSurf (Representado por Copernicus/NOAA) */}
+                                <td className="px-4 py-3 text-center font-black text-emerald-600 bg-emerald-50/5">{hour.waveEcmwf.toFixed(2)}m</td>
+                                <td className="px-4 py-3 text-center bg-emerald-50/5 font-semibold text-slate-700">{hour.periodEcmwf}s</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="7" className="py-10 text-center text-slate-400">Error al cargar el comparador.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
 
-                {/* Columna Derecha: Comparador de Modelos (GFS vs ECMWF vs Boya) */}
-                <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-fit">
-                  <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-bold text-slate-800 text-lg">Comparador de Previsiones</h3>
-                      <span className="text-[10px] text-indigo-600 font-semibold border border-indigo-200 bg-indigo-50 px-2 py-0.5 rounded-full">
-                        GFS vs ECMWF
-                      </span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-bold bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1.5">
-                      <Anchor size={14} className="text-blue-500" /> Hoy ({new Date().getDate()} {new Date().toLocaleString('es-ES', { month: 'short' })})
-                    </span>
-                  </div>
-                  
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[800px]">
-                      <thead>
-                        <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 bg-slate-50/30">
-                          <th className="px-5 py-4 font-bold border-r border-slate-100">Hora</th>
-                          <th className="px-4 py-4 font-bold text-center border-r border-slate-100 bg-indigo-50/30" colSpan="2">Windy (ECMWF)</th>
-                          <th className="px-4 py-4 font-bold text-center border-r border-slate-100 bg-sky-50/30" colSpan="2">Windy (GFS)</th>
-                          <th className="px-4 py-4 font-bold text-center bg-emerald-50/30" colSpan="2">TodoSurf (NOAA/Cope)</th>
-                        </tr>
-                        <tr className="text-slate-400 text-[10px] uppercase border-b border-slate-100 bg-slate-50/10">
-                          <th className="px-5 py-2 border-r border-slate-100"></th>
-                          <th className="px-4 py-2 text-center bg-indigo-50/10">Ola</th>
-                          <th className="px-4 py-2 text-center border-r border-slate-100 bg-indigo-50/10">Viento</th>
-                          <th className="px-4 py-2 text-center bg-sky-50/10">Ola</th>
-                          <th className="px-4 py-2 text-center border-r border-slate-100 bg-sky-50/10">Viento</th>
-                          <th className="px-4 py-2 text-center bg-emerald-50/10">Ola (m)</th>
-                          <th className="px-4 py-2 text-center bg-emerald-50/10">Periodo</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-sm">
-                        {isCompLoading ? (
-                          <tr>
-                            <td colSpan="7" className="py-20 text-center">
-                              <div className="flex items-center justify-center gap-2 text-slate-400">
-                                <Loader2 className="animate-spin" size={24} />
-                                <span className="font-bold">Calculando desvíos de satélites...</span>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : comparisonForecast ? (
-                          comparisonForecast.map((hour, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50/55 transition-colors">
-                              <td className="px-5 py-3 font-bold text-slate-700 border-r border-slate-100">{hour.time}</td>
-                              
-                              {/* ECMWF */}
-                              <td className="px-4 py-3 text-center font-black text-blue-600 bg-indigo-50/5">{hour.waveEcmwf.toFixed(2)}m</td>
-                              <td className="px-4 py-3 text-center border-r border-slate-100 bg-indigo-50/5 font-semibold text-slate-700">
-                                {hour.windEcmwf} kts <span className="text-[10px] text-slate-400">({getWindDirection(hour.windDirEcmwf)})</span>
-                              </td>
-                              
-                              {/* GFS */}
-                              <td className="px-4 py-3 text-center font-black text-blue-600 bg-sky-50/5">{hour.waveGfs.toFixed(2)}m</td>
-                              <td className="px-4 py-3 text-center border-r border-slate-100 bg-sky-50/5 font-semibold text-slate-700">
-                                {hour.windGfs} kts <span className="text-[10px] text-slate-400">({getWindDirection(hour.windDirGfs)})</span>
-                              </td>
-                              
-                              {/* TodoSurf (Representado por Copernicus/NOAA) */}
-                              <td className="px-4 py-3 text-center font-black text-emerald-600 bg-emerald-50/5">{hour.waveEcmwf.toFixed(2)}m</td>
-                              <td className="px-4 py-3 text-center bg-emerald-50/5 font-semibold text-slate-700">{hour.periodEcmwf}s</td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan="7" className="py-10 text-center text-slate-400">Error al cargar el comparador.</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
               </div>
             )}
           </>
@@ -1928,6 +2118,56 @@ export default function App() {
                             {v}
                           </button>
                         ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100/60 space-y-2 text-left">
+                    <span className="block text-[10px] font-black text-blue-700 uppercase tracking-wider mb-1">⚓ Datos de la Boya Real (Málaga) - Opcional</span>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Altura Boya (m)</label>
+                        <input 
+                          type="text" 
+                          value={adminBoyaAltura}
+                          onChange={(e) => setAdminBoyaAltura(e.target.value)}
+                          placeholder="Ej: 0.45"
+                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Periodo Boya (s)</label>
+                        <input 
+                          type="text" 
+                          value={adminBoyaPeriodo}
+                          onChange={(e) => setAdminBoyaPeriodo(e.target.value)}
+                          placeholder="Ej: 4.2"
+                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Dirección Boya (º)</label>
+                        <input 
+                          type="text" 
+                          value={adminBoyaDireccion}
+                          onChange={(e) => setAdminBoyaDireccion(e.target.value)}
+                          placeholder="Ej: 110"
+                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Temp Agua (ºC)</label>
+                        <input 
+                          type="text" 
+                          value={adminBoyaTemp}
+                          onChange={(e) => setAdminBoyaTemp(e.target.value)}
+                          placeholder="Ej: 21.5"
+                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                        />
                       </div>
                     </div>
                   </div>
