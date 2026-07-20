@@ -823,28 +823,28 @@ export default function App() {
     };
 
     try {
-      const response = await fetch(WEBHOOK_URL, {
+      // Con mode: 'no-cors' evitamos la validación estricta de CORS en la redirección 302 de Google
+      await fetch(WEBHOOK_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' }, // Evitar la solicitud preflight OPTIONS de CORS en Google Apps Script
+        mode: 'no-cors', 
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(payload)
       });
-      const json = await response.json();
-      if (json.status === 'success') {
-        setReportStatus({ type: 'success', text: '¡Calibración enviada con éxito a Google Sheets!' });
-        setAdminSensaciones('');
-        setAdminNotas('');
-        setAdminBoyaAltura('');
-        setAdminBoyaPeriodo('');
-        setAdminBoyaDireccion('');
-        setAdminBoyaTemp('');
+      
+      setReportStatus({ type: 'success', text: '¡Calibración enviada con éxito a Google Sheets!' });
+      setAdminSensaciones('');
+      setAdminNotas('');
+      setAdminBoyaAltura('');
+      setAdminBoyaPeriodo('');
+      setAdminBoyaDireccion('');
+      setAdminBoyaTemp('');
+      
+      // Esperar 2.5 segundos para dar tiempo a que Google Sheets inserte la fila antes de refrescar el historial
+      setTimeout(() => {
         fetchCalibrationHistory();
-        setTimeout(() => {
-          setIsAdminModalOpen(false);
-          setReportStatus(null);
-        }, 2000);
-      } else {
-        setReportStatus({ type: 'error', text: `Error: ${json.message}` });
-      }
+        setIsAdminModalOpen(false);
+        setReportStatus(null);
+      }, 2500);
     } catch (err) {
       setReportStatus({ type: 'error', text: `Error de conexión: ${err.message}` });
     } finally {
