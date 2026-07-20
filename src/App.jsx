@@ -1796,7 +1796,7 @@ export default function App() {
 
             </div>
           </div>
-        </div>
+        )}
       {isAdminModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
