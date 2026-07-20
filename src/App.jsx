@@ -790,7 +790,8 @@ export default function App() {
     let todoSurfVal = "";
     
     if (comparisonForecast) {
-      const matchedHour = comparisonForecast.find(h => h.time.startsWith(adminHoraNado.split(':')[0]));
+      const searchHour = (adminHoraNado || "").split(':')[0].trim().padStart(2, '0');
+      const matchedHour = comparisonForecast.find(h => h.time.startsWith(searchHour));
       if (matchedHour) {
         ecmwfVal = matchedHour.waveEcmwf;
         gfsVal = matchedHour.waveGfs;
