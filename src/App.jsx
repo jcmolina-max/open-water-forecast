@@ -825,7 +825,7 @@ export default function App() {
     try {
       const response = await fetch(WEBHOOK_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' }, // Evitar la solicitud preflight OPTIONS de CORS en Google Apps Script
         body: JSON.stringify(payload)
       });
       const json = await response.json();
