@@ -28,7 +28,8 @@ import {
   Zap,
   CloudFog,
   RefreshCw,
-  Copy
+  Copy,
+  Search
 } from 'lucide-react';
 
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
