@@ -708,8 +708,9 @@ export default function App() {
     setIsCalHistoryLoading(true);
     try {
       const response = await fetch(WEBHOOK_URL);
-      const json = await response.json();
-      if (json.status === 'success') {
+      const text = await response.text();
+      const json = JSON.parse(text);
+      if (json.status === 'success' || json.status === 'empty') {
         setCalibrationHistory(json.data || []);
       } else {
         console.error("Error reading sheets history:", json.message);
