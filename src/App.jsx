@@ -30,7 +30,7 @@ import {
   RefreshCw,
   Copy
 } from 'lucide-react';
-+import { Analytics } from '@vercel/analytics/react';
+import { Analytics } from '@vercel/analytics/react';
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
 const BEACHES = {
   misericordia: { name: "La Misericordia, Málaga", lat: 36.696, lon: -4.444, facing: 135 },
