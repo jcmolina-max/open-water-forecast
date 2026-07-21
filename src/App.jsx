@@ -819,6 +819,7 @@ export default function App() {
     let gfsVal = "";
     let todoSurfVal = "";
     
+    let foundInMemory = false;
     if (comparisonForecast) {
       const searchHour = (adminHoraNado || "").split(':')[0].trim().padStart(2, '0');
       const matchedHour = comparisonForecast.find(h => h.time.startsWith(searchHour));
@@ -826,6 +827,24 @@ export default function App() {
         ecmwfVal = matchedHour.waveEcmwf;
         gfsVal = matchedHour.waveGfs;
         todoSurfVal = matchedHour.waveEcmwf; // Copernicus/ECMWF
+        foundInMemory = true;
+      }
+    }
+
+    if (!foundInMemory) {
+      try {
+        const beach = BEACHES[adminPlaya];
+        const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height&models=best_match,ncep_gfswave016&timezone=Europe%2FMadrid`;
+        const res = await fetch(marineUrl).then(r => r.json());
+        const searchHour = (adminHoraNado || "").split(':')[0].trim().padStart(2, '0');
+        const matchedIdx = res.hourly.time.findIndex(t => t.split('T')[1].startsWith(searchHour));
+        if (matchedIdx !== -1) {
+          ecmwfVal = res.hourly.wave_height_marine_best_match[matchedIdx] || "";
+          gfsVal = res.hourly.wave_height_ncep_gfswave016[matchedIdx] || "";
+          todoSurfVal = ecmwfVal;
+        }
+      } catch (err) {
+        console.error("Error al rescatar previsiones satélite para Admin:", err);
       }
     }
 
@@ -898,6 +917,7 @@ export default function App() {
     let gfsVal = "";
     let todoSurfVal = "";
     
+    let foundInMemory = false;
     if (comparisonForecast) {
       const searchHour = (swimmerHoraNado || "").split(':')[0].trim().padStart(2, '0');
       const matchedHour = comparisonForecast.find(h => h.time.startsWith(searchHour));
@@ -905,6 +925,24 @@ export default function App() {
         ecmwfVal = matchedHour.waveEcmwf;
         gfsVal = matchedHour.waveGfs;
         todoSurfVal = matchedHour.waveEcmwf; // Copernicus/ECMWF
+        foundInMemory = true;
+      }
+    }
+
+    if (!foundInMemory) {
+      try {
+        const beach = BEACHES[swimmerPlaya];
+        const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height&models=best_match,ncep_gfswave016&timezone=Europe%2FMadrid`;
+        const res = await fetch(marineUrl).then(r => r.json());
+        const searchHour = (swimmerHoraNado || "").split(':')[0].trim().padStart(2, '0');
+        const matchedIdx = res.hourly.time.findIndex(t => t.split('T')[1].startsWith(searchHour));
+        if (matchedIdx !== -1) {
+          ecmwfVal = res.hourly.wave_height_marine_best_match[matchedIdx] || "";
+          gfsVal = res.hourly.wave_height_ncep_gfswave016[matchedIdx] || "";
+          todoSurfVal = ecmwfVal;
+        }
+      } catch (err) {
+        console.error("Error al rescatar previsiones satélite para Nadador:", err);
       }
     }
 
