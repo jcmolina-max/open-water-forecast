@@ -1695,10 +1695,16 @@ export default function App() {
                             <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
                               {Number(selectedHistoryLog.realOlas) === 1 && "0.05m"}
                               {Number(selectedHistoryLog.realOlas) === 2 && "0.20m"}
-                                                      {selectedHistoryLog.origenDato === 'Nadador' ? (
+                              {Number(selectedHistoryLog.realOlas) === 3 && "0.45m"}
+                              {Number(selectedHistoryLog.realOlas) === 4 && "0.80m"}
+                              {Number(selectedHistoryLog.realOlas) === 5 && "1.20m"}
+                            </span>
+                          </div>
+
+                          {selectedHistoryLog.origenDato === 'Nadador' ? (
                             <>
                               <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
-                                <span className="block text-[8px] font-bold text-slate-400 uppercase">Medusas</span>
+                                <span className="block text-[8px] font-bold text-slate-400 uppercase font-semibold">Medusas</span>
                                 <span className="font-black text-red-500 font-semibold">
                                   {Number(selectedHistoryLog.realResaca) === 1 && "No"}
                                   {Number(selectedHistoryLog.realResaca) === 3 && "Pocas"}
@@ -1742,7 +1748,6 @@ export default function App() {
                               </div>
                             </>
                           )}
-                        </div>
                         </div>
                       </div>
                     </div>
