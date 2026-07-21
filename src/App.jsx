@@ -119,6 +119,17 @@ export default function App() {
   const [adminBoyaDireccion, setAdminBoyaDireccion] = useState('');
   const [adminBoyaTemp, setAdminBoyaTemp] = useState('');
 
+  // Estados para el reporte público de nadadores (Comunidad)
+  const [isSwimmerModalOpen, setIsSwimmerModalOpen] = useState(false);
+  const [swimmerPlaya, setSwimmerPlaya] = useState('misericordia');
+  const [swimmerHoraNado, setSwimmerHoraNado] = useState('11:00');
+  const [swimmerRealOlas, setSwimmerRealOlas] = useState(3);
+  const [swimmerRealResaca, setSwimmerRealResaca] = useState(1);
+  const [swimmerRealCorriente, setSwimmerRealCorriente] = useState(1);
+  const [swimmerSensaciones, setSwimmerSensaciones] = useState('');
+  const [isSendingSwimmerReport, setIsSendingSwimmerReport] = useState(false);
+  const [swimmerReportStatus, setSwimmerReportStatus] = useState(null);
+
   // Previsiones detalladas (comparador)
   const [comparisonForecast, setComparisonForecast] = useState(null);
   const [isCompLoading, setIsCompLoading] = useState(false);
@@ -724,6 +735,10 @@ export default function App() {
   };
 
   useEffect(() => {
+    fetchCalibrationHistory();
+  }, [dataRefreshKey]);
+
+  useEffect(() => {
     if (activeTab !== 'comparison') return;
     
     const fetchComparisonData = async () => {
@@ -763,7 +778,6 @@ export default function App() {
     };
     
     fetchComparisonData();
-    fetchCalibrationHistory();
   }, [activeTab, selectedBeach]);
 
   const handleVerifyPin = (e) => {
@@ -852,6 +866,78 @@ export default function App() {
       setReportStatus({ type: 'error', text: `Error de conexión: ${err.message}` });
     } finally {
       setIsSendingReport(false);
+    }
+  };
+
+  const handleSendSwimmerReport = async (e) => {
+    e.preventDefault();
+    setIsSendingSwimmerReport(true);
+    setSwimmerReportStatus(null);
+    
+    const swimHour = parseInt((swimmerHoraNado || "").split(':')[0]) || 12;
+    const todayForecast = beachData ? beachData[1] : null;
+    const hourForecast = todayForecast ? todayForecast.hourly.find(h => h.time === `${swimHour.toString().padStart(2, '0')}:00`) : null;
+    
+    // Buscar previsiones de modelos brutos para esa hora en el comparador
+    let ecmwfVal = "";
+    let gfsVal = "";
+    let todoSurfVal = "";
+    
+    if (comparisonForecast) {
+      const searchHour = (swimmerHoraNado || "").split(':')[0].trim().padStart(2, '0');
+      const matchedHour = comparisonForecast.find(h => h.time.startsWith(searchHour));
+      if (matchedHour) {
+        ecmwfVal = matchedHour.waveEcmwf;
+        gfsVal = matchedHour.waveGfs;
+        todoSurfVal = matchedHour.waveEcmwf; // Copernicus/ECMWF
+      }
+    }
+
+    const payload = {
+      horaNado: swimmerHoraNado,
+      playa: swimmerPlaya,
+      realOlas: swimmerRealOlas,
+      realResaca: swimmerRealResaca,
+      realCorriente: swimmerRealCorriente,
+      realVientoFza: "",
+      realVientoDir: "",
+      sensaciones: swimmerSensaciones,
+      origenDato: "Nadador",
+      appScore: hourForecast ? hourForecast.hourScore : "",
+      appOlas: hourForecast ? hourForecast.swellH : "",
+      appEnergia: hourForecast ? hourForecast.waveEnergy : "",
+      appVientoNudos: hourForecast ? hourForecast.windS : "",
+      appVientoDir: hourForecast ? hourForecast.windDir : "",
+      notasCalibracion: "Reporte público de nadador",
+      boyaAltura: "", 
+      boyaPeriodo: "",
+      boyaDireccion: "",
+      boyaTemp: todayForecast ? todayForecast.temps.water : "",
+      modelEcmwfOlas: ecmwfVal,
+      modelGfsOlas: gfsVal,
+      modelTodoSurfOlas: todoSurfVal
+    };
+
+    try {
+      await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        mode: 'no-cors', 
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
+      
+      setSwimmerReportStatus({ type: 'success', text: '¡Tu reporte ha sido enviado con éxito! Muchas gracias.' });
+      setSwimmerSensaciones('');
+      
+      setTimeout(() => {
+        fetchCalibrationHistory();
+        setIsSwimmerModalOpen(false);
+        setSwimmerReportStatus(null);
+      }, 2500);
+    } catch (err) {
+      setSwimmerReportStatus({ type: 'error', text: `Error de conexión: ${err.message}` });
+    } finally {
+      setIsSendingSwimmerReport(false);
     }
   };
 
@@ -1609,33 +1695,54 @@ export default function App() {
                             <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
                               {Number(selectedHistoryLog.realOlas) === 1 && "0.05m"}
                               {Number(selectedHistoryLog.realOlas) === 2 && "0.20m"}
-                              {Number(selectedHistoryLog.realOlas) === 3 && "0.45m"}
-                              {Number(selectedHistoryLog.realOlas) === 4 && "0.80m"}
-                              {Number(selectedHistoryLog.realOlas) === 5 && "1.20m"}
-                            </span>
-                          </div>
-                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
-                            <span className="block text-[8px] font-bold text-slate-400 uppercase">Resaca</span>
-                            <span className="font-black text-red-500">{selectedHistoryLog.realResaca}/5</span>
-                            <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
-                              {Number(selectedHistoryLog.realResaca) === 1 && "Ninguna"}
-                              {Number(selectedHistoryLog.realResaca) === 2 && "Leve"}
-                              {Number(selectedHistoryLog.realResaca) === 3 && "Moderada"}
-                              {Number(selectedHistoryLog.realResaca) === 4 && "Fuerte"}
-                              {Number(selectedHistoryLog.realResaca) === 5 && "Extrema"}
-                            </span>
-                          </div>
-                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
-                            <span className="block text-[8px] font-bold text-slate-400 uppercase">Deriva</span>
-                            <span className="font-black text-indigo-600">{selectedHistoryLog.realCorriente}/5</span>
-                            <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
-                              {Number(selectedHistoryLog.realCorriente) === 1 && "Ninguna"}
-                              {Number(selectedHistoryLog.realCorriente) === 2 && "Leve"}
-                              {Number(selectedHistoryLog.realCorriente) === 3 && "Moderada"}
-                              {Number(selectedHistoryLog.realCorriente) === 4 && "Fuerte"}
-                              {Number(selectedHistoryLog.realCorriente) === 5 && "Extrema"}
-                            </span>
-                          </div>
+                                                      {selectedHistoryLog.origenDato === 'Nadador' ? (
+                            <>
+                              <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
+                                <span className="block text-[8px] font-bold text-slate-400 uppercase">Medusas</span>
+                                <span className="font-black text-red-500 font-semibold">
+                                  {Number(selectedHistoryLog.realResaca) === 1 && "No"}
+                                  {Number(selectedHistoryLog.realResaca) === 3 && "Pocas"}
+                                  {Number(selectedHistoryLog.realResaca) === 5 && "Muchas"}
+                                </span>
+                                <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">Reportado</span>
+                              </div>
+                              <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
+                                <span className="block text-[8px] font-bold text-slate-400 uppercase font-semibold">Agua</span>
+                                <span className="font-black text-indigo-600 font-semibold">
+                                  {Number(selectedHistoryLog.realCorriente) === 1 && "Limpia"}
+                                  {Number(selectedHistoryLog.realCorriente) === 3 && "Turbia"}
+                                  {Number(selectedHistoryLog.realCorriente) === 5 && "Sucia"}
+                                </span>
+                                <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">Reportado</span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
+                                <span className="block text-[8px] font-bold text-slate-400 uppercase">Resaca</span>
+                                <span className="font-black text-red-500">{selectedHistoryLog.realResaca}/5</span>
+                                <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
+                                  {Number(selectedHistoryLog.realResaca) === 1 && "Ninguna"}
+                                  {Number(selectedHistoryLog.realResaca) === 2 && "Leve"}
+                                  {Number(selectedHistoryLog.realResaca) === 3 && "Moderada"}
+                                  {Number(selectedHistoryLog.realResaca) === 4 && "Fuerte"}
+                                  {Number(selectedHistoryLog.realResaca) === 5 && "Extrema"}
+                                </span>
+                              </div>
+                              <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
+                                <span className="block text-[8px] font-bold text-slate-400 uppercase">Deriva</span>
+                                <span className="font-black text-indigo-600">{selectedHistoryLog.realCorriente}/5</span>
+                                <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
+                                  {Number(selectedHistoryLog.realCorriente) === 1 && "Ninguna"}
+                                  {Number(selectedHistoryLog.realCorriente) === 2 && "Leve"}
+                                  {Number(selectedHistoryLog.realCorriente) === 3 && "Moderada"}
+                                  {Number(selectedHistoryLog.realCorriente) === 4 && "Fuerte"}
+                                  {Number(selectedHistoryLog.realCorriente) === 5 && "Extrema"}
+                                </span>
+                              </div>
+                            </>
+                          )}
+                        </div>
                         </div>
                       </div>
                     </div>
@@ -1678,20 +1785,41 @@ export default function App() {
                               </span>
                             </div>
                             
-                            <div className="grid grid-cols-3 gap-2 border-y border-slate-200/60 py-2 my-2 text-center text-xs">
-                              <div>
-                                <span className="block text-[9px] font-bold text-slate-400 uppercase">Ola</span>
-                                <span className="font-black text-blue-600">{item.realOlas}/5</span>
+                            {item.origenDato === 'Nadador' ? (
+                              <div className="grid grid-cols-3 gap-2 border-y border-slate-200/60 py-2 my-2 text-center text-xs">
+                                <div>
+                                  <span className="block text-[9px] font-bold text-slate-400 uppercase font-semibold">Ola</span>
+                                  <span className="font-black text-blue-600">{item.realOlas}/5</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold text-slate-400 uppercase font-semibold">Medusas</span>
+                                  <span className="font-black text-red-600">
+                                    {item.realResaca === '1' || item.realResaca === 1 ? 'No' : item.realResaca === '3' || item.realResaca === 3 ? 'Pocas' : 'Muchas'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold text-slate-400 uppercase font-semibold">Agua</span>
+                                  <span className="font-black text-indigo-600">
+                                    {item.realCorriente === '1' || item.realCorriente === 1 ? 'Limpia' : item.realCorriente === '3' || item.realCorriente === 3 ? 'Turbia' : 'Sucia'}
+                                  </span>
+                                </div>
                               </div>
-                              <div>
-                                <span className="block text-[9px] font-bold text-slate-400 uppercase">Viento</span>
-                                <span className="font-black text-slate-600">{item.realVientoFza}</span>
+                            ) : (
+                              <div className="grid grid-cols-3 gap-2 border-y border-slate-200/60 py-2 my-2 text-center text-xs">
+                                <div>
+                                  <span className="block text-[9px] font-bold text-slate-400 uppercase">Ola</span>
+                                  <span className="font-black text-blue-600">{item.realOlas}/5</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold text-slate-400 uppercase">Viento</span>
+                                  <span className="font-black text-slate-600">{item.realVientoFza}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold text-slate-400 uppercase">Deriva</span>
+                                  <span className="font-black text-indigo-600">{item.realCorriente}/5</span>
+                                </div>
                               </div>
-                              <div>
-                                <span className="block text-[9px] font-bold text-slate-400 uppercase">Deriva</span>
-                                <span className="font-black text-indigo-600">{item.realCorriente}/5</span>
-                              </div>
-                            </div>
+                            )}
                             
                             {item.sensaciones && (
                               <p className="text-xs text-slate-600 italic leading-tight mb-2">
@@ -1797,30 +1925,114 @@ export default function App() {
           </>
         )}
 
-        {/* PANEL DE CALIBRACIÓN REDUCIDO (BANNER HORIZONTAL) */}
-        <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-5 max-w-full flex flex-col md:flex-row items-center justify-between shadow-sm gap-6">
-          <div className="flex flex-col md:flex-row items-center md:items-start gap-4 text-center md:text-left">
-            <div className="bg-white p-3 rounded-full shadow-sm shrink-0">
-              <Activity className="text-blue-600" size={24} />
-            </div>
+        {/* COMUNIDAD OPENWATER: FEED DE REPORTES Y ACCIÓN DE COLABORACIÓN */}
+        <div className="mt-8 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-4 gap-4">
             <div>
-              <h2 className="text-lg font-black text-slate-800">Ayúdanos a calibrar el algoritmo</h2>
-              <p className="text-slate-600 text-sm leading-tight mt-1 max-w-2xl">
-                Esta aplicación aprende con tu experiencia real en el agua. Si has ido a nadar hoy, dinos si la previsión ha acertado o si ha fallado.
-              </p>
-              <p className="text-xs text-slate-500 mt-2 font-medium">
-                * O envíanos un audio rápido contando tu experiencia al <strong className="text-indigo-600">WhatsApp del club</strong>.
+              <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                <Waves className="text-blue-600 animate-pulse" size={22} />
+                Comunidad OpenWater: ¿Cómo está el mar hoy?
+              </h2>
+              <p className="text-slate-500 text-xs font-semibold mt-1">
+                Reportes en tiempo real y sensaciones de los propios nadadores en la orilla.
               </p>
             </div>
+            <button
+              onClick={() => {
+                setSwimmerPlaya(selectedBeach);
+                const currentHour = new Date().getHours();
+                setSwimmerHoraNado(`${currentHour.toString().padStart(2, '0')}:00`);
+                setSwimmerRealOlas(3);
+                setSwimmerRealResaca(1);
+                setSwimmerRealCorriente(1);
+                setSwimmerSensaciones('');
+                setSwimmerReportStatus(null);
+                setIsSwimmerModalOpen(true);
+              }}
+              className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-5 rounded-xl transition-all shadow-md hover:shadow-lg text-xs flex items-center justify-center gap-2 shrink-0"
+            >
+              <Bot size={16} />
+              ¿Has nadado hoy? Reportar estado
+            </button>
           </div>
-          <a 
-            href="https://docs.google.com/forms/d/e/1FAIpQLSdTjdiGOAEtBYo6wjNRtMK1KpdAijJajxhp-_uUBpMhG0Y8YQ/viewform?usp=sharing&ouid=114554177440629903097" 
-            target="_blank" 
-            rel="noreferrer"
-            className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 text-sm w-full md:w-auto"
-          >
-            📝 Rellenar Formulario
-          </a>
+
+          {/* Feed de reportes */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {isCalHistoryLoading ? (
+              <div className="col-span-full flex items-center justify-center py-10 gap-2 text-slate-400">
+                <Loader2 className="animate-spin" size={18} />
+                <span className="text-xs font-bold">Cargando reportes de la comunidad...</span>
+              </div>
+            ) : calibrationHistory.filter(item => item.playa === selectedBeach).length === 0 ? (
+              <div className="col-span-full text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                <p className="text-xs text-slate-400 font-bold">No hay reportes de nadadores hoy para esta playa.</p>
+                <p className="text-[11px] text-slate-400 mt-1">Sé el primero en informar a la comunidad sobre el estado del agua.</p>
+              </div>
+            ) : (
+              calibrationHistory
+                .filter(item => item.playa === selectedBeach)
+                .slice(0, 3) // Mostrar los últimos 3 de esta playa
+                .map((item, idx) => (
+                  <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm flex flex-col justify-between hover:border-blue-100 hover:bg-blue-50/10 transition-all">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center text-xs">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                          <span className="text-sm">👤</span>
+                          <span>
+                            {item.origenDato === 'Web Admin' ? 'Admin' : 'Nadador Anónimo'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+                          {item.horaNado}
+                        </span>
+                      </div>
+
+                      {/* Ratings rápidos en píldoras */}
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-[10px] font-bold text-blue-700 rounded-md">
+                          🌊 Olas: {item.realOlas}/5
+                        </span>
+                        <span className="px-2 py-0.5 bg-red-50 border border-red-100 text-[10px] font-bold text-red-700 rounded-md">
+                          🪼 Resaca: {item.realResaca}/5
+                        </span>
+                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700 rounded-md">
+                          🧼 Deriva: {item.realCorriente}/5
+                        </span>
+                      </div>
+
+                      {item.sensaciones && (
+                        <p className="text-xs text-slate-600 font-medium leading-relaxed italic border-l-2 border-blue-200 pl-2">
+                          "{item.sensaciones}"
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-slate-200/40 flex justify-between items-center text-[9px] text-slate-400 font-semibold">
+                      <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
+                      <span>
+                        {(() => {
+                          try {
+                            const regDate = new Date(item.fechaRegistro);
+                            const today = new Date();
+                            const yesterday = new Date();
+                            yesterday.setDate(today.getDate() - 1);
+                            if (regDate.toDateString() === today.toDateString()) {
+                              return `Hoy, ${regDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
+                            } else if (regDate.toDateString() === yesterday.toDateString()) {
+                              return `Ayer`;
+                            } else {
+                              return regDate.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+                            }
+                          } catch (e) {
+                            return 'Hace poco';
+                          }
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+                ))
+            )}
+          </div>
         </div>
         
         {/* FOOTER LEGAL */}
@@ -2290,6 +2502,169 @@ export default function App() {
                   </button>
                 </form>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {isSwimmerModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+          role="presentation"
+          onClick={() => setIsSwimmerModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <Bot className="text-blue-600" size={20} />
+                <h3 className="text-base font-bold text-slate-800">Reportar Estado de la Playa</h3>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsSwimmerModalOpen(false)}
+                className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+              <form onSubmit={handleSendSwimmerReport} className="space-y-4 text-left">
+                <p className="text-xs text-slate-500 font-medium">Ayuda a otros nadadores compartiendo las condiciones actuales del agua en esta playa.</p>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Playa</label>
+                    <select 
+                      value={swimmerPlaya}
+                      onChange={(e) => setSwimmerPlaya(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
+                    >
+                      <option value="misericordia">La Misericordia</option>
+                      <option value="malagueta">La Malagueta</option>
+                      <option value="pedregalejo">Pedregalejo</option>
+                      <option value="los_alamos">Los Álamos</option>
+                      <option value="bajondillo">El Bajondillo</option>
+                      <option value="rincon_victoria">Rincón de la Victoria</option>
+                      <option value="cala_del_moral">La Cala del Moral</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Hora de Nado</label>
+                    <select 
+                      value={swimmerHoraNado}
+                      onChange={(e) => setSwimmerHoraNado(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
+                    >
+                      {Array.from({ length: 16 }, (_, i) => i + 6).map(h => {
+                        const timeStr = `${h.toString().padStart(2, '0')}:00`;
+                        return <option key={h} value={timeStr}>{timeStr}</option>;
+                      })}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                  <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Tu Evaluación (1 al 5)</span>
+                  
+                  {/* Olas */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-700">🌊 Ola en la Orilla:</span>
+                      <div className="flex gap-1.5">
+                        {[1,2,3,4,5].map(v => (
+                          <button 
+                            type="button" key={v}
+                            onClick={() => setSwimmerRealOlas(v)}
+                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {swimmerRealOlas && (
+                      <div className="text-[10px] text-right font-bold text-blue-600 italic">
+                        {swimmerRealOlas === 1 && "1/5 = Mar plato / Sin olas"}
+                        {swimmerRealOlas === 2 && "2/5 = Olas muy pequeñas en orilla"}
+                        {swimmerRealOlas === 3 && "3/5 = Olas medianas / picado"}
+                        {swimmerRealOlas === 4 && "4/5 = Rompiente fuerte en orilla"}
+                        {swimmerRealOlas === 5 && "5/5 = Muy fuerte / Mar de fondo / Resaca"}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Medusas */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-700">🪼 Presencia Medusas:</span>
+                      <div className="flex gap-1.5">
+                        {[1, 3, 5].map(v => (
+                          <button 
+                            type="button" key={v}
+                            onClick={() => setSwimmerRealResaca(v)}
+                            className={`px-2.5 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                          >
+                            {v === 1 && "Ninguna"}
+                            {v === 3 && "Pocas"}
+                            {v === 5 && "Muchas 🚩"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Corriente */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-700">🧼 Limpieza del Agua:</span>
+                      <div className="flex gap-1.5">
+                        {[1, 3, 5].map(v => (
+                          <button 
+                            type="button" key={v}
+                            onClick={() => setSwimmerRealCorriente(v)}
+                            className={`px-2.5 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                          >
+                            {v === 1 && "Limpia"}
+                            {v === 3 && "Turbia"}
+                            {v === 5 && "Sucia ⚠️"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Comentario o sensaciones (Opcional)</label>
+                  <textarea 
+                    value={swimmerSensaciones}
+                    onChange={(e) => setSwimmerSensaciones(e.target.value)}
+                    placeholder="Ej. 'El agua estaba plato pero fría, no hay medusas hoy...'"
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-blue-500"
+                    maxLength={150}
+                  />
+                </div>
+
+                {swimmerReportStatus && (
+                  <div className={`p-3 rounded-xl text-xs font-bold text-center border ${swimmerReportStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                    {swimmerReportStatus.text}
+                  </div>
+                )}
+
+                <button 
+                  type="submit"
+                  disabled={isSendingSwimmerReport}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-md text-xs flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isSendingSwimmerReport && <Loader2 size={14} className="animate-spin" />}
+                  Enviar Reporte Anónimo 🚀
+                </button>
+              </form>
             </div>
           </div>
         </div>
