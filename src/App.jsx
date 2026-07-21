@@ -1632,179 +1632,175 @@ export default function App() {
                     </select>
                   </div>
 
-                  {selectedHistoryLog ? (
-                    <div className="bg-gradient-to-br from-slate-50 to-indigo-50/20 border border-indigo-100 rounded-2xl p-5 mt-4">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200/60 pb-4 mb-4 gap-4">
-                        <div>
-                          <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                            🏖️ {BEACHES[selectedHistoryLog.playa]?.name} ({selectedHistoryLog.horaNado})
-                          </h4>
-                          <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Sesión registrada el {new Date(selectedHistoryLog.fechaRegistro).toLocaleString('es-ES')}</p>
-                        </div>
-                        
-                        {(() => {
-                          const appOlas = parseFloat((selectedHistoryLog.appOlas || "0").toString().replace(",", "."));
-                          const swimmerScaleToMeters = (v) => {
-                            const val = parseFloat((v || "0").toString().replace(",", "."));
-                            if (val === 1) return 0.05;
-                            if (val === 2) return 0.20;
-                            if (val === 3) return 0.45;
-                            if (val === 4) return 0.80;
-                            if (val === 5) return 1.20;
-                            return 0.3;
-                          };
-                          const swimmerRealM = swimmerScaleToMeters(selectedHistoryLog.realOlas);
+                  {selectedHistoryLog ? (() => {
+                    const parsedDetails = parseSwimmerSensaciones(selectedHistoryLog.sensaciones);
+                    const isSwimmer = selectedHistoryLog.origenDato === 'Nadador';
+                    
+                    const appOlas = parseFloat((selectedHistoryLog.appOlas || "0").toString().replace(",", "."));
+                    const swimmerScaleToMeters = (v) => {
+                      const val = parseFloat((v || "0").toString().replace(",", "."));
+                      if (val === 1) return 0.05;
+                      if (val === 2) return 0.20;
+                      if (val === 3) return 0.45;
+                      if (val === 4) return 0.80;
+                      if (val === 5) return 1.20;
+                      return 0.3;
+                    };
+                    const swimmerRealM = swimmerScaleToMeters(selectedHistoryLog.realOlas);
+                    
+                    let diffPercent = 0;
+                    if (swimmerRealM > 0) {
+                      diffPercent = Math.round((Math.abs(appOlas - swimmerRealM) / swimmerRealM) * 100);
+                    }
+                    
+                    let badgeColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                    let badgeText = `Calibración Óptima (Desvío ${diffPercent}%)`;
+                    let suggestion = "El factor de escala dinámica de la boya se está adaptando correctamente a la orilla.";
+                    
+                    if (diffPercent > 35) {
+                      badgeColor = "bg-red-50 text-red-700 border-red-200";
+                      badgeText = `Desviación Alta (Desvío ${diffPercent}%)`;
+                      suggestion = appOlas > swimmerRealM 
+                        ? "Nuestra App estimó olas demasiado altas. Considera reducir manualmente el factor de escala." 
+                        : "Nuestra App estimó olas demasiado bajas. Considera elevar el factor de escala.";
+                    } else if (diffPercent > 15) {
+                      badgeColor = "bg-amber-50 text-amber-700 border-amber-200";
+                      badgeText = `Ajuste Ligero (Desvío ${diffPercent}%)`;
+                      suggestion = "La estimación local es aceptable, dentro del umbral de precisión ordinario.";
+                    }
+
+                    return (
+                      <div className="bg-gradient-to-br from-slate-50 to-indigo-50/20 border border-indigo-100 rounded-2xl p-5 mt-4">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200/60 pb-4 mb-4 gap-4">
+                          <div>
+                            <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                              🏖️ {BEACHES[selectedHistoryLog.playa]?.name} ({selectedHistoryLog.horaNado})
+                            </h4>
+                            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Sesión registrada el {new Date(selectedHistoryLog.fechaRegistro).toLocaleString('es-ES')}</p>
+                          </div>
                           
-                          let diffPercent = 0;
-                          if (swimmerRealM > 0) {
-                            diffPercent = Math.round((Math.abs(appOlas - swimmerRealM) / swimmerRealM) * 100);
-                          }
-                          
-                          let badgeColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                          let badgeText = `Calibración Óptima (Desvío ${diffPercent}%)`;
-                          let suggestion = "El factor de escala dinámica de la boya se está adaptando correctamente a la orilla.";
-                          
-                          if (diffPercent > 35) {
-                            badgeColor = "bg-red-50 text-red-700 border-red-200";
-                            badgeText = `Desviación Alta (Desvío ${diffPercent}%)`;
-                            suggestion = appOlas > swimmerRealM 
-                              ? "Nuestra App estimó olas demasiado altas. Considera reducir manualmente el factor de escala." 
-                              : "Nuestra App estimó olas demasiado bajas. Considera elevar el factor de escala.";
-                          } else if (diffPercent > 15) {
-                            badgeColor = "bg-amber-50 text-amber-700 border-amber-200";
-                            badgeText = `Ajuste Ligero (Desvío ${diffPercent}%)`;
-                            suggestion = "La estimación local es aceptable, dentro del umbral de precisión ordinario.";
-                          }
-                          
-                          return (
-                            <div className="flex flex-col items-end gap-1">
-                              <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${badgeColor}`}>
-                                {badgeText}
-                              </span>
-                              <p className="text-[10px] text-slate-500 font-medium italic max-w-sm text-right mt-1">
-                                💡 {suggestion}
-                              </p>
-                            </div>
-                          );
-                        })()}
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase">Windy (ECMWF)</span>
-                          <span className="text-sm font-black text-indigo-600 mt-1">
-                            {selectedHistoryLog.modelEcmwfOlas ? `${parseFloat(selectedHistoryLog.modelEcmwfOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
-                          </span>
-                          <span className="text-[9px] text-slate-400 font-semibold mt-1">Modelo Satélite Bruto</span>
-                        </div>
-                        
-                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase">Windy (GFS)</span>
-                          <span className="text-sm font-black text-sky-600 mt-1">
-                            {selectedHistoryLog.modelGfsOlas ? `${parseFloat(selectedHistoryLog.modelGfsOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
-                          </span>
-                          <span className="text-[9px] text-slate-400 font-semibold mt-1">Modelo Satélite Bruto</span>
-                        </div>
-
-                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase">TodoSurf</span>
-                          <span className="text-sm font-black text-emerald-600 mt-1">
-                            {selectedHistoryLog.modelTodoSurfOlas ? `${parseFloat(selectedHistoryLog.modelTodoSurfOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
-                          </span>
-                          <span className="text-[9px] text-slate-400 font-semibold mt-1">Copernicus/NOAA</span>
-                        </div>
-
-                        <div className="bg-white p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/10 text-center flex flex-col justify-center">
-                          <span className="text-[9px] font-bold text-indigo-600 uppercase">Nuestra App (Orilla)</span>
-                          <span className="text-sm font-black text-blue-600 mt-1">
-                            {selectedHistoryLog.appOlas ? `${parseFloat(selectedHistoryLog.appOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
-                          </span>
-                          <span className="text-[9px] font-black text-slate-600 mt-1">Score: {selectedHistoryLog.appScore}/100</span>
-                        </div>
-
-                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center col-span-2 md:col-span-1">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase">Boya Real</span>
-                          <span className="text-sm font-black text-slate-800 mt-1">
-                            {selectedHistoryLog.boyaAltura ? `${parseFloat(selectedHistoryLog.boyaAltura.toString().replace(",", ".")).toFixed(2)}m` : '—'}
-                          </span>
-                          <span className="text-[9px] text-slate-500 font-semibold mt-1">
-                            {selectedHistoryLog.boyaDireccion ? `${getWindDirection(selectedHistoryLog.boyaDireccion)}` : ''}
-                            {selectedHistoryLog.boyaPeriodo ? ` (${selectedHistoryLog.boyaPeriodo}s)` : ''}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="bg-white border border-slate-200/60 rounded-xl p-4 mt-3.5 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between shadow-sm">
-                        <div className="flex-grow text-left">
-                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Sensaciones del Nadador</span>
-                          <p className="text-xs text-slate-700 italic font-medium mt-1">
-                            "{selectedHistoryLog.sensaciones || 'Sin comentarios registrados.'}"
-                          </p>
-                        </div>
-                        <div className="flex gap-3 shrink-0 text-center text-xs w-full md:w-auto justify-between md:justify-end">
-                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
-                            <span className="block text-[8px] font-bold text-slate-400 uppercase">Ola</span>
-                            <span className="font-black text-blue-600">{selectedHistoryLog.realOlas}/5</span>
-                            <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
-                              {Number(selectedHistoryLog.realOlas) === 1 && "0.05m"}
-                              {Number(selectedHistoryLog.realOlas) === 2 && "0.20m"}
-                              {Number(selectedHistoryLog.realOlas) === 3 && "0.45m"}
-                              {Number(selectedHistoryLog.realOlas) === 4 && "0.80m"}
-                              {Number(selectedHistoryLog.realOlas) === 5 && "1.20m"}
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${badgeColor}`}>
+                              {badgeText}
                             </span>
+                            <p className="text-[10px] text-slate-500 font-medium italic max-w-sm text-right mt-1">
+                              💡 {suggestion}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                          <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">Windy (ECMWF)</span>
+                            <span className="text-sm font-black text-indigo-600 mt-1">
+                              {selectedHistoryLog.modelEcmwfOlas ? `${parseFloat(selectedHistoryLog.modelEcmwfOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-semibold mt-1">Modelo Satélite Bruto</span>
+                          </div>
+                          
+                          <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">Windy (GFS)</span>
+                            <span className="text-sm font-black text-sky-600 mt-1">
+                              {selectedHistoryLog.modelGfsOlas ? `${parseFloat(selectedHistoryLog.modelGfsOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-semibold mt-1">Modelo Satélite Bruto</span>
                           </div>
 
-                          {selectedHistoryLog.origenDato === 'Nadador' ? (
-                            <>
-                              <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
-                                <span className="block text-[8px] font-bold text-slate-400 uppercase font-semibold">Medusas</span>
-                                <span className="font-black text-red-500 font-semibold">
-                                  {Number(selectedHistoryLog.realResaca) === 1 && "No"}
-                                  {Number(selectedHistoryLog.realResaca) === 3 && "Pocas"}
-                                  {Number(selectedHistoryLog.realResaca) === 5 && "Muchas"}
-                                </span>
-                                <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">Reportado</span>
-                              </div>
-                              <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
-                                <span className="block text-[8px] font-bold text-slate-400 uppercase font-semibold">Agua</span>
-                                <span className="font-black text-indigo-600 font-semibold">
-                                  {Number(selectedHistoryLog.realCorriente) === 1 && "Limpia"}
-                                  {Number(selectedHistoryLog.realCorriente) === 3 && "Turbia"}
-                                  {Number(selectedHistoryLog.realCorriente) === 5 && "Sucia"}
-                                </span>
-                                <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">Reportado</span>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
-                                <span className="block text-[8px] font-bold text-slate-400 uppercase">Resaca</span>
-                                <span className="font-black text-red-500">{selectedHistoryLog.realResaca}/5</span>
-                                <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
-                                  {Number(selectedHistoryLog.realResaca) === 1 && "Ninguna"}
-                                  {Number(selectedHistoryLog.realResaca) === 2 && "Leve"}
-                                  {Number(selectedHistoryLog.realResaca) === 3 && "Moderada"}
-                                  {Number(selectedHistoryLog.realResaca) === 4 && "Fuerte"}
-                                  {Number(selectedHistoryLog.realResaca) === 5 && "Extrema"}
-                                </span>
-                              </div>
-                              <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[75px] flex flex-col justify-between">
-                                <span className="block text-[8px] font-bold text-slate-400 uppercase">Deriva</span>
-                                <span className="font-black text-indigo-600">{selectedHistoryLog.realCorriente}/5</span>
-                                <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
-                                  {Number(selectedHistoryLog.realCorriente) === 1 && "Ninguna"}
-                                  {Number(selectedHistoryLog.realCorriente) === 2 && "Leve"}
-                                  {Number(selectedHistoryLog.realCorriente) === 3 && "Moderada"}
-                                  {Number(selectedHistoryLog.realCorriente) === 4 && "Fuerte"}
-                                  {Number(selectedHistoryLog.realCorriente) === 5 && "Extrema"}
-                                </span>
-                              </div>
-                            </>
-                          )}
+                          <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">TodoSurf</span>
+                            <span className="text-sm font-black text-emerald-600 mt-1">
+                              {selectedHistoryLog.modelTodoSurfOlas ? `${parseFloat(selectedHistoryLog.modelTodoSurfOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-semibold mt-1">Copernicus/NOAA</span>
+                          </div>
+
+                          <div className="bg-white p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/10 text-center flex flex-col justify-center">
+                            <span className="text-[9px] font-bold text-indigo-600 uppercase">Nuestra App (Orilla)</span>
+                            <span className="text-sm font-black text-blue-600 mt-1">
+                              {selectedHistoryLog.appOlas ? `${parseFloat(selectedHistoryLog.appOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
+                            </span>
+                            <span className="text-[9px] font-black text-slate-600 mt-1">Score: {selectedHistoryLog.appScore}/100</span>
+                          </div>
+
+                          <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center col-span-2 md:col-span-1">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">Boya Real</span>
+                            <span className="text-sm font-black text-slate-800 mt-1">
+                              {selectedHistoryLog.boyaAltura ? `${parseFloat(selectedHistoryLog.boyaAltura.toString().replace(",", ".")).toFixed(2)}m` : '—'}
+                            </span>
+                            <span className="text-[9px] text-slate-500 font-semibold mt-1">
+                              {selectedHistoryLog.boyaDireccion ? `${getWindDirection(selectedHistoryLog.boyaDireccion)}` : ''}
+                              {selectedHistoryLog.boyaPeriodo ? ` (${selectedHistoryLog.boyaPeriodo}s)` : ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200/60 rounded-xl p-4 mt-3.5 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between shadow-sm">
+                          <div className="flex-grow text-left">
+                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Sensaciones del Nadador</span>
+                            <p className="text-xs text-slate-700 italic font-medium mt-1">
+                              "{isSwimmer ? parsedDetails.comentario : (selectedHistoryLog.sensaciones || 'Sin comentarios registrados.')}"
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 shrink-0 text-center text-xs w-full md:w-auto justify-between md:justify-end">
+                            <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[70px] flex flex-col justify-between">
+                              <span className="block text-[8px] font-bold text-slate-400 uppercase">Ola</span>
+                              <span className="font-black text-blue-600">{selectedHistoryLog.realOlas}/5</span>
+                              <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
+                                {Number(selectedHistoryLog.realOlas) === 1 && "0.05m"}
+                                {Number(selectedHistoryLog.realOlas) === 2 && "0.20m"}
+                                {Number(selectedHistoryLog.realOlas) === 3 && "0.45m"}
+                                {Number(selectedHistoryLog.realOlas) === 4 && "0.80m"}
+                                {Number(selectedHistoryLog.realOlas) === 5 && "1.20m"}
+                              </span>
+                            </div>
+
+                            <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[70px] flex flex-col justify-between">
+                              <span className="block text-[8px] font-bold text-slate-400 uppercase">Resaca</span>
+                              <span className="font-black text-red-500">{selectedHistoryLog.realResaca}/5</span>
+                              <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
+                                {Number(selectedHistoryLog.realResaca) === 1 && "Ninguna"}
+                                {Number(selectedHistoryLog.realResaca) === 2 && "Leve"}
+                                {Number(selectedHistoryLog.realResaca) === 3 && "Moderada"}
+                                {Number(selectedHistoryLog.realResaca) === 4 && "Fuerte"}
+                                {Number(selectedHistoryLog.realResaca) === 5 && "Extrema"}
+                              </span>
+                            </div>
+
+                            <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[70px] flex flex-col justify-between">
+                              <span className="block text-[8px] font-bold text-slate-400 uppercase">Deriva</span>
+                              <span className="font-black text-indigo-600">{selectedHistoryLog.realCorriente}/5</span>
+                              <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">
+                                {Number(selectedHistoryLog.realCorriente) === 1 && "Ninguna"}
+                                {Number(selectedHistoryLog.realCorriente) === 2 && "Leve"}
+                                {Number(selectedHistoryLog.realCorriente) === 3 && "Moderada"}
+                                {Number(selectedHistoryLog.realCorriente) === 4 && "Fuerte"}
+                                {Number(selectedHistoryLog.realCorriente) === 5 && "Extrema"}
+                              </span>
+                            </div>
+
+                            {isSwimmer && (
+                              <>
+                                <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[70px] flex flex-col justify-between">
+                                  <span className="block text-[8px] font-bold text-slate-400 uppercase font-semibold">Medusas</span>
+                                  <span className="font-black text-rose-500 font-semibold">
+                                    {parsedDetails.medusas}
+                                  </span>
+                                  <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">Reportado</span>
+                                </div>
+                                <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 min-w-[70px] flex flex-col justify-between">
+                                  <span className="block text-[8px] font-bold text-slate-400 uppercase font-semibold">Agua</span>
+                                  <span className="font-black text-emerald-600 font-semibold">
+                                    {parsedDetails.agua}
+                                  </span>
+                                  <span className="block text-[8px] text-slate-400 font-semibold mt-0.5">Reportado</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ) : (
+                    );
+                  })() : (
                     <p className="text-xs text-slate-400 font-medium text-center py-6">Selecciona uno de los nados históricos arriba para ver la comparativa de desvíos.</p>
                   )}
                 </div>
