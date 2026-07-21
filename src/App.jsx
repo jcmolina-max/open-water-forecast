@@ -721,6 +721,23 @@ export default function App() {
     return '-';
   };
 
+  const getWindDirectionFullName = (degrees) => {
+    const dirStr = getWindDirection(degrees);
+    if (dirStr === "—" || dirStr === "-" || !dirStr) return dirStr;
+    const cleanDir = dirStr.replace(/[^A-Z]/g, '').trim();
+    const names = {
+      'N': 'Norte',
+      'NE': 'Nordeste',
+      'E': 'Levante',
+      'SE': 'Sureste',
+      'S': 'Sur',
+      'SO': 'Suroeste',
+      'O': 'Poniente',
+      'NO': 'Noroeste'
+    };
+    return names[cleanDir] ? `${dirStr} (${names[cleanDir]})` : dirStr;
+  };
+
   const parseSwimmerSensaciones = (text) => {
     if (!text) return { medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
     const match = text.match(/^\[Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
@@ -1441,34 +1458,33 @@ export default function App() {
                 )}
                 
                 <div className="hidden lg:block overflow-x-auto max-h-[800px] overflow-y-auto">
-                  <table className="w-full text-left border-collapse min-w-[980px] relative">
+                  <table className="w-full text-left border-collapse min-w-[840px] relative">
                     <thead className="sticky top-0 bg-white z-10 shadow-sm">
                       <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
-                        <th className="px-5 py-4 font-bold">Hora</th>
-                        <th className="px-4 py-4 font-bold text-center">Score</th>
-                        <th className="px-4 py-4 font-bold">Oleaje</th>
-                        <th className="px-4 py-4 font-bold text-center">
+                        <th className="px-3 py-4 font-bold">Hora</th>
+                        <th className="px-2 py-4 font-bold text-center">Score</th>
+                        <th className="px-2.5 py-4 font-bold">Oleaje</th>
+                        <th className="px-2 py-4 font-bold text-center">
                           <span className="block">Energía</span>
                           <span className="block text-[9px] font-semibold text-slate-400 normal-case tracking-normal mt-0.5">Oleaje (procedencia)</span>
                         </th>
-                        <th className="px-4 py-4 font-bold">Corrientes</th>
-                        <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Cielo</th>
-                        <th className={`px-4 py-4 font-bold ${isClimateDown ? 'text-slate-300' : ''}`}>Viento (kts)</th>
-                        <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>UV</th>
-                        <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Lluvia</th>
-                        <th className={`px-4 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Dir.</th>
+                        <th className="px-2.5 py-4 font-bold">Corrientes</th>
+                        <th className={`px-2 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Cielo</th>
+                        <th className={`px-2 py-4 font-bold ${isClimateDown ? 'text-slate-300' : ''}`}>Viento</th>
+                        <th className={`px-2 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>UV</th>
+                        <th className={`px-2 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Lluvia</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
                       {currentDayData.hourly.map((hour, idx) => (
                         <tr key={idx} className={`hover:bg-blue-50/50 transition-colors group ${selectedDay === 0 ? 'opacity-80' : ''}`}>
                           
-                          <td className="px-5 py-4">
+                          <td className="px-3 py-4">
                             <span className="font-bold text-slate-800 text-base">{hour.time}</span>
                           </td>
 
-                          <td className="px-4 py-4 text-center">
-                            <div className="flex flex-col items-center justify-center gap-1.5">
+                          <td className="px-2 py-4 text-center">
+                            <div className="flex flex-col items-center justify-center gap-1">
                               <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-xs
                                 ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
                                   hour.hourScore > 40 ? 'bg-amber-100 text-amber-700' : 
@@ -1478,14 +1494,14 @@ export default function App() {
                                 {hour.hourScore}
                               </span>
                               {hour.localRule && (
-                                <span className={`text-[9px] font-bold uppercase tracking-wide bg-white shadow-sm px-1.5 py-0.5 rounded border border-slate-100 ${hour.ruleColor}`}>
+                                <span className={`text-[8px] font-black uppercase tracking-normal bg-white shadow-sm px-1.5 py-0.5 rounded border border-slate-100 leading-tight max-w-[90px] text-center ${hour.ruleColor}`}>
                                   {hour.localRule}
                                 </span>
                               )}
                             </div>
                           </td>
                           
-                          <td className="px-4 py-4">
+                          <td className="px-2.5 py-4">
                             <div className="flex flex-col">
                               <div className="flex items-center gap-1">
                                 <span className={`font-black text-base ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
@@ -1501,7 +1517,7 @@ export default function App() {
                             </div>
                           </td>
 
-                          <td className="px-4 py-4 text-center">
+                          <td className="px-2 py-4 text-center">
                             <div
                               className="flex flex-col items-center justify-center gap-0.5"
                               title={`Energía ≈ altura² × T × coef. (${hour.energyCoef}). Dirección: procedencia del oleaje (modelo Open-Meteo, desde el norte).`}
@@ -1524,7 +1540,7 @@ export default function App() {
                             </div>
                           </td>
 
-                          <td className="px-4 py-4">
+                          <td className="px-2.5 py-4">
                             <div className="flex flex-col gap-1.5 justify-center items-start">
                               <span className={`text-xs whitespace-nowrap ${hour.ripColor}`} title="Riesgo de resaca (Arrastre hacia adentro)">
                                 Resaca: {hour.ripRisk}
@@ -1535,7 +1551,7 @@ export default function App() {
                             </div>
                           </td>
 
-                          <td className="px-4 py-4 text-center">
+                          <td className="px-2 py-4 text-center">
                             {isClimateDown ? (
                                 <span className="font-bold text-slate-300">-</span>
                             ) : (
@@ -1546,22 +1562,22 @@ export default function App() {
                             )}
                           </td>
 
-                          <td className="px-4 py-4">
+                          <td className="px-2 py-4">
                             {isClimateDown ? (
                                 <span className="font-bold text-slate-300 text-base">-</span>
                             ) : (
                                 <div className="flex flex-col">
-                                  <span className={`font-black text-base ${hour.windS > 15 ? 'text-amber-500' : 'text-slate-700'}`}>
-                                    {hour.windS} kts
+                                  <span className={`font-black text-sm whitespace-nowrap ${hour.windS > 15 ? 'text-amber-500' : 'text-slate-700'}`}>
+                                    {hour.windS} kts {getWindDirectionFullName(hour.windDir)}
                                   </span>
-                                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
                                     Rachas: {hour.gust}
                                   </span>
                                 </div>
                             )}
                           </td>
 
-                          <td className="px-4 py-4 text-center">
+                          <td className="px-2 py-4 text-center">
                             {isClimateDown ? (
                               <span className="font-bold text-slate-300">-</span>
                             ) : (
@@ -1574,7 +1590,7 @@ export default function App() {
                             )}
                           </td>
 
-                          <td className="px-4 py-4 text-center">
+                          <td className="px-2 py-4 text-center">
                              {isClimateDown ? (
                                 <span className="font-bold text-slate-300">-</span>
                              ) : (
@@ -1590,16 +1606,18 @@ export default function App() {
                              )}
                           </td>
 
-                          <td className="px-4 py-4 text-center">
-                            <span className={`font-bold text-xs ${isClimateDown ? 'text-slate-300' : 'text-slate-700'}`}>
-                              {getWindDirection(hour.windDir)}
-                            </span>
-                          </td>
-
                         </tr>
                       ))}
                     </tbody>
                     </table>
+                  </div>
+
+                  {/* Cabecera del acordeón móvil */}
+                  <div className="block lg:hidden flex px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 bg-slate-50/50 rounded-t-2xl mb-1.5">
+                    <span className="w-[45px]">Hora</span>
+                    <span className="flex-grow pl-4">Score</span>
+                    <span className="w-[60px] text-right">Oleaje</span>
+                    <span className="w-[75px] text-right pr-6">Viento</span>
                   </div>
 
                   {/* Vista en acordeón móvil (oculta en pantallas grandes) */}
