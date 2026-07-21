@@ -129,6 +129,8 @@ export default function App() {
   const [swimmerSensaciones, setSwimmerSensaciones] = useState('');
   const [isSendingSwimmerReport, setIsSendingSwimmerReport] = useState(false);
   const [swimmerReportStatus, setSwimmerReportStatus] = useState(null);
+  const [swimmerMedusas, setSwimmerMedusas] = useState('Ninguna');
+  const [swimmerAgua, setSwimmerAgua] = useState('Limpia');
 
   // Previsiones detalladas (comparador)
   const [comparisonForecast, setComparisonForecast] = useState(null);
@@ -716,6 +718,19 @@ export default function App() {
     return '-';
   };
 
+  const parseSwimmerSensaciones = (text) => {
+    if (!text) return { medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
+    const match = text.match(/^\[Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
+    if (match) {
+      return {
+        medusas: match[1].trim(),
+        agua: match[2].trim(),
+        comentario: match[3].trim()
+      };
+    }
+    return { medusas: 'Ninguna', agua: 'Limpia', comentario: text };
+  };
+
   const fetchCalibrationHistory = async () => {
     setIsCalHistoryLoading(true);
     try {
@@ -901,7 +916,7 @@ export default function App() {
       realCorriente: swimmerRealCorriente,
       realVientoFza: "",
       realVientoDir: "",
-      sensaciones: swimmerSensaciones,
+      sensaciones: `[Medusas: ${swimmerMedusas} | Agua: ${swimmerAgua}] ${swimmerSensaciones}`,
       origenDato: "Nadador",
       appScore: hourForecast ? hourForecast.hourScore : "",
       appOlas: hourForecast ? hourForecast.swellH : "",
@@ -1977,65 +1992,79 @@ export default function App() {
               calibrationHistory
                 .filter(item => item.playa === selectedBeach)
                 .slice(0, 3) // Mostrar los últimos 3 de esta playa
-                .map((item, idx) => (
-                  <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm flex flex-col justify-between hover:border-blue-100 hover:bg-blue-50/10 transition-all">
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center text-xs">
-                        <div className="flex items-center gap-1.5 font-bold text-slate-700">
-                          <span className="text-sm">👤</span>
-                          <span>
-                            {item.origenDato === 'Web Admin' ? 'Admin' : 'Nadador Anónimo'}
+                .map((item, idx) => {
+                  const parsed = parseSwimmerSensaciones(item.sensaciones);
+                  const isSwimmer = item.origenDato === 'Nadador';
+                  return (
+                    <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm flex flex-col justify-between hover:border-blue-100 hover:bg-blue-50/10 transition-all">
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center text-xs">
+                          <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                            <span className="text-sm">👤</span>
+                            <span>
+                              {item.origenDato === 'Web Admin' ? 'Admin' : 'Nadador Anónimo'}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+                            {item.horaNado}
                           </span>
                         </div>
-                        <span className="text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-                          {item.horaNado}
-                        </span>
+
+                        {/* Ratings rápidos en píldoras */}
+                        <div className="flex flex-wrap gap-1.5">
+                          <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-[10px] font-bold text-blue-700 rounded-md">
+                            🌊 Olas: {item.realOlas}/5
+                          </span>
+                          <span className="px-2 py-0.5 bg-red-50 border border-red-100 text-[10px] font-bold text-red-700 rounded-md">
+                            🔄 Resaca: {item.realResaca}/5
+                          </span>
+                          <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700 rounded-md">
+                            🧭 Deriva: {item.realCorriente}/5
+                          </span>
+                          {isSwimmer && (
+                            <>
+                              <span className="px-2 py-0.5 bg-rose-50 border border-rose-100 text-[10px] font-bold text-rose-700 rounded-md">
+                                🪼 Medusas: {parsed.medusas}
+                              </span>
+                              <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-[10px] font-bold text-emerald-700 rounded-md">
+                                🧼 Agua: {parsed.agua}
+                              </span>
+                            </>
+                          )}
+                        </div>
+
+                        {(isSwimmer ? parsed.comentario : item.sensaciones) && (
+                          <p className="text-xs text-slate-600 font-medium leading-relaxed italic border-l-2 border-blue-200 pl-2">
+                            "{isSwimmer ? parsed.comentario : item.sensaciones}"
+                          </p>
+                        )}
                       </div>
 
-                      {/* Ratings rápidos en píldoras */}
-                      <div className="flex flex-wrap gap-1.5">
-                        <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-[10px] font-bold text-blue-700 rounded-md">
-                          🌊 Olas: {item.realOlas}/5
-                        </span>
-                        <span className="px-2 py-0.5 bg-red-50 border border-red-100 text-[10px] font-bold text-red-700 rounded-md">
-                          🪼 Resaca: {item.realResaca}/5
-                        </span>
-                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700 rounded-md">
-                          🧼 Deriva: {item.realCorriente}/5
-                        </span>
-                      </div>
-
-                      {item.sensaciones && (
-                        <p className="text-xs text-slate-600 font-medium leading-relaxed italic border-l-2 border-blue-200 pl-2">
-                          "{item.sensaciones}"
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="mt-3 pt-3 border-t border-slate-200/40 flex justify-between items-center text-[9px] text-slate-400 font-semibold">
-                      <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
-                      <span>
-                        {(() => {
-                          try {
-                            const regDate = new Date(item.fechaRegistro);
-                            const today = new Date();
-                            const yesterday = new Date();
-                            yesterday.setDate(today.getDate() - 1);
-                            if (regDate.toDateString() === today.toDateString()) {
-                              return `Hoy, ${regDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
-                            } else if (regDate.toDateString() === yesterday.toDateString()) {
-                              return `Ayer`;
-                            } else {
-                              return regDate.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+                      <div className="mt-3 pt-3 border-t border-slate-200/40 flex justify-between items-center text-[9px] text-slate-400 font-semibold">
+                        <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
+                        <span>
+                          {(() => {
+                            try {
+                              const regDate = new Date(item.fechaRegistro);
+                              const today = new Date();
+                              const yesterday = new Date();
+                              yesterday.setDate(today.getDate() - 1);
+                              if (regDate.toDateString() === today.toDateString()) {
+                                return `Hoy, ${regDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
+                              } else if (regDate.toDateString() === yesterday.toDateString()) {
+                                return `Ayer`;
+                              } else {
+                                return regDate.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+                              }
+                            } catch (e) {
+                              return 'Hace poco';
                             }
-                          } catch (e) {
-                            return 'Hace poco';
-                          }
-                        })()}
-                      </span>
+                          })()}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
             )}
           </div>
         </div>
@@ -2558,7 +2587,7 @@ export default function App() {
                       <option value="cala_del_moral">La Cala del Moral</option>
                     </select>
                   </div>
-                  <div>
+                   <div>
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Hora de Nado</label>
                     <select 
                       value={swimmerHoraNado}
@@ -2573,19 +2602,19 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
-                  <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Tu Evaluación (1 al 5)</span>
+                <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-xs">
+                  <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Evaluación de la playa</span>
                   
                   {/* Olas */}
                   <div className="space-y-1">
-                    <div className="flex justify-between items-center text-xs">
+                    <div className="flex justify-between items-center">
                       <span className="font-bold text-slate-700">🌊 Ola en la Orilla:</span>
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-1">
                         {[1,2,3,4,5].map(v => (
                           <button 
                             type="button" key={v}
                             onClick={() => setSwimmerRealOlas(v)}
-                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}
                           >
                             {v}
                           </button>
@@ -2593,53 +2622,99 @@ export default function App() {
                       </div>
                     </div>
                     {swimmerRealOlas && (
-                      <div className="text-[10px] text-right font-bold text-blue-600 italic">
-                        {swimmerRealOlas === 1 && "1/5 = Mar plato / Sin olas"}
-                        {swimmerRealOlas === 2 && "2/5 = Olas muy pequeñas en orilla"}
+                      <div className="text-[9px] text-right font-bold text-blue-600 italic">
+                        {swimmerRealOlas === 1 && "1/5 = Mar plato"}
+                        {swimmerRealOlas === 2 && "2/5 = Olas muy pequeñas"}
                         {swimmerRealOlas === 3 && "3/5 = Olas medianas / picado"}
-                        {swimmerRealOlas === 4 && "4/5 = Rompiente fuerte en orilla"}
-                        {swimmerRealOlas === 5 && "5/5 = Muy fuerte / Mar de fondo / Resaca"}
+                        {swimmerRealOlas === 4 && "4/5 = Rompiente fuerte"}
+                        {swimmerRealOlas === 5 && "5/5 = Muy fuerte / Resaca"}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Resaca */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-slate-700">🔄 Resaca (Arrastre):</span>
+                      <div className="flex gap-1">
+                        {[1,2,3,4,5].map(v => (
+                          <button 
+                            type="button" key={v}
+                            onClick={() => setSwimmerRealResaca(v)}
+                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {swimmerRealResaca && (
+                      <div className="text-[9px] text-right font-bold text-red-500 italic">
+                        {swimmerRealResaca === 1 && "1/5 = Sin arrastre"}
+                        {swimmerRealResaca === 2 && "2/5 = Arrastre leve"}
+                        {swimmerRealResaca === 3 && "3/5 = Arrastre moderado"}
+                        {swimmerRealResaca === 4 && "4/5 = Arrastre fuerte"}
+                        {swimmerRealResaca === 5 && "5/5 = Arrastre extremo"}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Corriente */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-slate-700">🧭 Deriva (Corriente):</span>
+                      <div className="flex gap-1">
+                        {[1,2,3,4,5].map(v => (
+                          <button 
+                            type="button" key={v}
+                            onClick={() => setSwimmerRealCorriente(v)}
+                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {swimmerRealCorriente && (
+                      <div className="text-[9px] text-right font-bold text-indigo-600 italic">
+                        {swimmerRealCorriente === 1 && "1/5 = Sin corriente"}
+                        {swimmerRealCorriente === 2 && "2/5 = Corriente leve"}
+                        {swimmerRealCorriente === 3 && "3/5 = Corriente moderada"}
+                        {swimmerRealCorriente === 4 && "4/5 = Corriente fuerte"}
+                        {swimmerRealCorriente === 5 && "5/5 = Corriente extrema"}
                       </div>
                     )}
                   </div>
 
                   {/* Medusas */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-700">🪼 Presencia Medusas:</span>
-                      <div className="flex gap-1.5">
-                        {[1, 3, 5].map(v => (
-                          <button 
-                            type="button" key={v}
-                            onClick={() => setSwimmerRealResaca(v)}
-                            className={`px-2.5 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                          >
-                            {v === 1 && "Ninguna"}
-                            {v === 3 && "Pocas"}
-                            {v === 5 && "Muchas 🚩"}
-                          </button>
-                        ))}
-                      </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-200/50">
+                    <span className="font-bold text-slate-700 flex items-center gap-1">🪼 Medusas:</span>
+                    <div className="flex gap-1">
+                      {['Ninguna', 'Pocas', 'Muchas'].map(v => (
+                        <button 
+                          type="button" key={v}
+                          onClick={() => setSwimmerMedusas(v)}
+                          className={`px-2.5 py-1 rounded-full font-bold text-[10px] flex items-center justify-center transition-colors ${swimmerMedusas === v ? 'bg-rose-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}
+                        >
+                          {v === 'Muchas' ? 'Muchas 🚩' : v}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  {/* Corriente */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-700">🧼 Limpieza del Agua:</span>
-                      <div className="flex gap-1.5">
-                        {[1, 3, 5].map(v => (
-                          <button 
-                            type="button" key={v}
-                            onClick={() => setSwimmerRealCorriente(v)}
-                            className={`px-2.5 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                          >
-                            {v === 1 && "Limpia"}
-                            {v === 3 && "Turbia"}
-                            {v === 5 && "Sucia ⚠️"}
-                          </button>
-                        ))}
-                      </div>
+                  {/* Limpieza */}
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-200/50">
+                    <span className="font-bold text-slate-700 flex items-center gap-1">🧼 Agua:</span>
+                    <div className="flex gap-1">
+                      {['Limpia', 'Turbia', 'Sucia'].map(v => (
+                        <button 
+                          type="button" key={v}
+                          onClick={() => setSwimmerAgua(v)}
+                          className={`px-2.5 py-1 rounded-full font-bold text-[10px] flex items-center justify-center transition-colors ${swimmerAgua === v ? 'bg-emerald-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}
+                        >
+                          {v === 'Sucia' ? 'Sucia ⚠️' : v}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
