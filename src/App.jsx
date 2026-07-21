@@ -29,7 +29,9 @@ import {
   CloudFog,
   RefreshCw,
   Copy,
-  Search
+  Search,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
@@ -93,6 +95,7 @@ export default function App() {
   
   // Estados de calibración y administración (Fase 2)
   const [activeTab, setActiveTab] = useState('forecast'); // 'forecast' | 'comparison'
+  const [expandedHourIdx, setExpandedHourIdx] = useState(null);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [adminPin, setAdminPin] = useState('');
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
@@ -1437,7 +1440,7 @@ export default function App() {
                   </div>
                 )}
                 
-                <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
+                <div className="hidden lg:block overflow-x-auto max-h-[800px] overflow-y-auto">
                   <table className="w-full text-left border-collapse min-w-[980px] relative">
                     <thead className="sticky top-0 bg-white z-10 shadow-sm">
                       <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
@@ -1596,13 +1599,173 @@ export default function App() {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
-                </div>
+                    </table>
+                  </div>
+
+                  {/* Vista en acordeón móvil (oculta en pantallas grandes) */}
+                  <div className="block lg:hidden space-y-3 max-h-[800px] overflow-y-auto pr-1">
+                    {currentDayData.hourly.map((hour, idx) => {
+                      const isExpanded = expandedHourIdx === idx;
+                      return (
+                        <div 
+                          key={idx} 
+                          className={`bg-white border rounded-2xl shadow-sm transition-all overflow-hidden ${
+                            isExpanded ? 'border-indigo-400 ring-1 ring-indigo-400/30' : 'border-slate-200 hover:border-slate-300'
+                          } ${selectedDay === 0 ? 'opacity-80' : ''}`}
+                        >
+                          {/* Cabecera del Acordeón (Siempre visible) */}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedHourIdx(isExpanded ? null : idx)}
+                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors text-left"
+                          >
+                            <div className="flex items-center gap-3.5">
+                              {/* Hora */}
+                              <span className="font-bold text-slate-800 text-base min-w-[45px]">{hour.time}</span>
+                              
+                              {/* Score y alerta local */}
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full font-bold text-[10px]
+                                  ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
+                                    hour.hourScore > 40 ? 'bg-amber-100 text-amber-700' : 
+                                    hour.localRule === "Tormenta ⚡" ? 'bg-yellow-100 text-yellow-700' :
+                                    hour.localRule === "Niebla 🌫️" ? 'bg-slate-200 text-slate-600' :
+                                    'bg-red-100 text-red-700'}`}>
+                                  Score: {hour.hourScore}
+                                </span>
+                                {hour.localRule && (
+                                  <span className={`text-[8px] font-black uppercase tracking-wide px-1 rounded ${hour.ruleColor}`}>
+                                    {hour.localRule}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                              {/* Olas */}
+                              <div className="text-right">
+                                <span className={`font-black text-sm block ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
+                                  {hour.swellH}m
+                                </span>
+                                <span className="text-[9px] font-semibold text-slate-400 block uppercase tracking-wide">
+                                  P: {hour.period}s
+                                </span>
+                              </div>
+
+                              {/* Viento */}
+                              {!isClimateDown && (
+                                <div className="text-right min-w-[50px]">
+                                  <span className={`font-black text-xs block ${hour.windS > 15 ? 'text-amber-500' : 'text-slate-700'}`}>
+                                    {hour.windS} kts
+                                  </span>
+                                  <span className="text-[9px] font-semibold text-slate-400 block">
+                                    {getWindDirection(hour.windDir)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Icono de estado */}
+                              <div className="text-slate-400">
+                                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              </div>
+                            </div>
+                          </button>
+
+                          {/* Detalles desplegables */}
+                          {isExpanded && (
+                            <div className="px-4 pb-4 pt-2 border-t border-slate-100 bg-slate-50/40 text-xs text-slate-600 space-y-3 animate-in slide-in-from-top-2 duration-200">
+                              <div className="grid grid-cols-2 gap-3">
+                                {/* Tarjeta de Olas & Energía */}
+                                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Energía y Oleaje</span>
+                                  <div className="mt-1 font-semibold text-slate-700">
+                                    <span className="font-black text-slate-800 text-sm block">{hour.waveEnergy} Kj</span>
+                                    <span className="text-[9px] text-slate-400 block">Coeficiente: ×{hour.energyCoef}</span>
+                                    {hour.swellDir != null && !Number.isNaN(Number(hour.swellDir)) && (
+                                      <span className="text-[9px] text-slate-500 block mt-0.5">
+                                        Dirección: {getWindDirection(Number(hour.swellDir))} ({Math.round(Number(hour.swellDir))}°)
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Tarjeta de Resaca y Corriente */}
+                                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Corrientes y Resaca</span>
+                                  <div className="mt-1 space-y-1">
+                                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${hour.ripColor}`}>
+                                      Resaca: {hour.ripRisk}
+                                    </span>
+                                    <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${hour.drift.color}`}>
+                                      <span>{hour.drift.icon}</span> <span>{hour.drift.short}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Tarjeta de Viento y Rachas */}
+                                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Viento</span>
+                                  <div className="mt-1 font-semibold text-slate-700">
+                                    {isClimateDown ? (
+                                      <span className="text-slate-400">—</span>
+                                    ) : (
+                                      <>
+                                        <span className="font-black text-slate-800 text-sm block">{hour.windS} kts</span>
+                                        <span className="text-[9px] text-slate-400 block">Rachas: {hour.gust} kts</span>
+                                        <span className="text-[9px] text-slate-500 block">Procedencia: {getWindDirection(hour.windDir)} ({hour.windDir}°)</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Tarjeta de Cielo y Clima */}
+                                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Cielo y Lluvia</span>
+                                  <div className="mt-1 font-semibold text-slate-700 flex items-center gap-2">
+                                    {isClimateDown ? (
+                                      <span className="text-slate-400">—</span>
+                                    ) : (
+                                      <>
+                                        <span className="text-2xl" title={`Nubosidad: ${hour.cloudCover}%`}>{hour.skyIcon}</span>
+                                        <div>
+                                          <span className="text-[10px] block">Nubes: {hour.cloudCover}%</span>
+                                          <span className="text-[10px] text-blue-600 block">
+                                            Lluvia: {hour.rainProb}% {hour.rainMm > 0 ? `(${hour.rainMm}mm)` : ''}
+                                          </span>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Tarjeta inferior para UV y Visibilidad */}
+                              {!isClimateDown && (
+                                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
+                                  <div>
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide block">Índice UV</span>
+                                    <span className={`font-black text-sm ${hour.uv >= 6 ? 'text-amber-600' : 'text-slate-700'}`}>
+                                      {hour.uv === '-' || hour.uv === undefined || hour.uv === null ? '-' : Number(hour.uv).toFixed(1)}
+                                    </span>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide block">Visibilidad</span>
+                                    <span className="font-bold text-slate-700 text-xs">
+                                      {hour.visibility ? `${(hour.visibility / 1000).toFixed(1)} km` : 'Excelente'}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
               </div>
 
               </div>
             ) : (
-              /* PANEL DE DIAGNÓSTICO: BOYA VS PREVISIONES */
               <div className="space-y-6 text-left w-full">
                 
                 {/* Selector de Nado Histórico y Ficha de Análisis */}
