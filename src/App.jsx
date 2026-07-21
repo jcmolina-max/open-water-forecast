@@ -1457,171 +1457,16 @@ export default function App() {
                   </div>
                 )}
                 
-                <div className="hidden lg:block overflow-x-auto max-h-[800px] overflow-y-auto">
-                  <table className="w-full text-left border-collapse min-w-[840px] relative">
-                    <thead className="sticky top-0 bg-white z-10 shadow-sm">
-                      <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
-                        <th className="px-3 py-4 font-bold">Hora</th>
-                        <th className="px-2 py-4 font-bold text-center">Score</th>
-                        <th className="px-2.5 py-4 font-bold">Oleaje</th>
-                        <th className="px-2 py-4 font-bold text-center">
-                          <span className="block">Energía</span>
-                          <span className="block text-[9px] font-semibold text-slate-400 normal-case tracking-normal mt-0.5">Oleaje (procedencia)</span>
-                        </th>
-                        <th className="px-2.5 py-4 font-bold">Corrientes</th>
-                        <th className={`px-2 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Cielo</th>
-                        <th className={`px-2 py-4 font-bold ${isClimateDown ? 'text-slate-300' : ''}`}>Viento</th>
-                        <th className={`px-2 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>UV</th>
-                        <th className={`px-2 py-4 font-bold text-center ${isClimateDown ? 'text-slate-300' : ''}`}>Lluvia</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm">
-                      {currentDayData.hourly.map((hour, idx) => (
-                        <tr key={idx} className={`hover:bg-blue-50/50 transition-colors group ${selectedDay === 0 ? 'opacity-80' : ''}`}>
-                          
-                          <td className="px-3 py-4">
-                            <span className="font-bold text-slate-800 text-base">{hour.time}</span>
-                          </td>
-
-                          <td className="px-2 py-4 text-center">
-                            <div className="flex flex-col items-center justify-center gap-1">
-                              <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-xs
-                                ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
-                                  hour.hourScore > 40 ? 'bg-amber-100 text-amber-700' : 
-                                  hour.localRule === "Tormenta ⚡" ? 'bg-yellow-100 text-yellow-700 border border-yellow-400' :
-                                  hour.localRule === "Niebla 🌫️" ? 'bg-slate-200 text-slate-600 border border-slate-300' :
-                                  'bg-red-100 text-red-700'}`}>
-                                {hour.hourScore}
-                              </span>
-                              {hour.localRule && (
-                                <span className={`text-[8px] font-black uppercase tracking-normal bg-white shadow-sm px-1.5 py-0.5 rounded border border-slate-100 leading-tight max-w-[90px] text-center ${hour.ruleColor}`}>
-                                  {hour.localRule}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          
-                          <td className="px-2.5 py-4">
-                            <div className="flex flex-col">
-                              <div className="flex items-center gap-1">
-                                <span className={`font-black text-base ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
-                                  {hour.swellH}m
-                                </span>
-                                {hour.localRule === "Escudo Activo" && (
-                                  <ShieldAlert size={14} className="text-indigo-400" title={`Atenuado. Ola original satélite: ${hour.rawSwellH}m`} />
-                                )}
-                              </div>
-                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                                P: {hour.period}s
-                              </span>
-                            </div>
-                          </td>
-
-                          <td className="px-2 py-4 text-center">
-                            <div
-                              className="flex flex-col items-center justify-center gap-0.5"
-                              title={`Energía ≈ altura² × T × coef. (${hour.energyCoef}). Dirección: procedencia del oleaje (modelo Open-Meteo, desde el norte).`}
-                            >
-                              <span className={`font-black text-base ${hour.waveEnergy > 50 ? 'text-orange-500' : 'text-slate-700'}`}>
-                                {hour.waveEnergy}
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-400 uppercase">Kj</span>
-                              <span className="text-[9px] font-semibold text-slate-400">×{hour.energyCoef}</span>
-                              <span className="text-[10px] font-bold text-slate-600 leading-tight mt-0.5">
-                                {hour.swellDir != null && !Number.isNaN(Number(hour.swellDir)) ? (
-                                  <>
-                                    <span className="block">{getWindDirection(Number(hour.swellDir))}</span>
-                                    <span className="block text-[9px] font-semibold text-slate-400">{Math.round(Number(hour.swellDir))}°</span>
-                                  </>
-                                ) : (
-                                  <span className="text-slate-400 font-semibold">—</span>
-                                )}
-                              </span>
-                            </div>
-                          </td>
-
-                          <td className="px-2.5 py-4">
-                            <div className="flex flex-col gap-1.5 justify-center items-start">
-                              <span className={`text-xs whitespace-nowrap ${hour.ripColor}`} title="Riesgo de resaca (Arrastre hacia adentro)">
-                                Resaca: {hour.ripRisk}
-                              </span>
-                              <div className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-50 border border-slate-100 whitespace-nowrap ${hour.drift.color}`} title="Deriva lateral (Empuje paralelo a la orilla)">
-                                <span>{hour.drift.icon}</span> <span>{hour.drift.short}</span>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="px-2 py-4 text-center">
-                            {isClimateDown ? (
-                                <span className="font-bold text-slate-300">-</span>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center">
-                                  <span className="text-xl" title={`Nubosidad: ${hour.cloudCover}%`}>{hour.skyIcon}</span>
-                                  <span className="text-[10px] font-bold text-slate-400">{hour.cloudCover}%</span>
-                                </div>
-                            )}
-                          </td>
-
-                          <td className="px-2 py-4">
-                            {isClimateDown ? (
-                                <span className="font-bold text-slate-300 text-base">-</span>
-                            ) : (
-                                <div className="flex flex-col">
-                                  <span className={`font-black text-sm whitespace-nowrap ${hour.windS > 15 ? 'text-amber-500' : 'text-slate-700'}`}>
-                                    {hour.windS} kts {getWindDirectionFullName(hour.windDir)}
-                                  </span>
-                                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-                                    Rachas: {hour.gust}
-                                  </span>
-                                </div>
-                            )}
-                          </td>
-
-                          <td className="px-2 py-4 text-center">
-                            {isClimateDown ? (
-                              <span className="font-bold text-slate-300">-</span>
-                            ) : (
-                              <span
-                                className={`font-bold text-sm ${typeof hour.uv === 'number' && hour.uv >= 6 ? 'text-amber-600' : 'text-slate-600'}`}
-                                title="Índice UV horario (protección solar en superficie)"
-                              >
-                                {hour.uv === '-' || hour.uv === undefined || hour.uv === null ? '-' : Number(hour.uv).toFixed(1)}
-                              </span>
-                            )}
-                          </td>
-
-                          <td className="px-2 py-4 text-center">
-                             {isClimateDown ? (
-                                <span className="font-bold text-slate-300">-</span>
-                             ) : (
-                                <div className="flex flex-col items-center justify-center">
-                                  {hour.rainProb > 10 && <Droplets size={14} className="text-blue-400 mb-0.5" />}
-                                  <span className={`font-bold text-sm ${hour.rainProb > 10 ? 'text-blue-600' : 'text-slate-500'}`}>
-                                    {hour.rainProb}%
-                                  </span>
-                                  <span className="text-[10px] font-semibold text-slate-400">
-                                    {hour.rainMm > 0 ? `(${hour.rainMm}mm)` : '(0mm)'}
-                                  </span>
-                                </div>
-                             )}
-                          </td>
-
-                        </tr>
-                      ))}
-                    </tbody>
-                    </table>
+                  {/* Cabecera del acordeón horario (visible en PC y móvil) */}
+                  <div className="flex px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 bg-slate-50/50 rounded-t-2xl mb-1.5">
+                    <span className="w-[50px] md:w-[80px]">Hora</span>
+                    <span className="flex-grow pl-4 md:pl-8">Score</span>
+                    <span className="w-[70px] md:w-[120px] text-right">Oleaje</span>
+                    <span className="w-[85px] md:w-[150px] text-right pr-6 md:pr-10">Viento</span>
                   </div>
 
-                  {/* Cabecera del acordeón móvil */}
-                  <div className="block lg:hidden flex px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 bg-slate-50/50 rounded-t-2xl mb-1.5">
-                    <span className="w-[45px]">Hora</span>
-                    <span className="flex-grow pl-4">Score</span>
-                    <span className="w-[60px] text-right">Oleaje</span>
-                    <span className="w-[75px] text-right pr-6">Viento</span>
-                  </div>
-
-                  {/* Vista en acordeón móvil (oculta en pantallas grandes) */}
-                  <div className="block lg:hidden space-y-3 max-h-[800px] overflow-y-auto pr-1">
+                  {/* Listado en acordeón interactivo (para PC y móvil) */}
+                  <div className="space-y-3 max-h-[800px] overflow-y-auto pr-1">
                     {currentDayData.hourly.map((hour, idx) => {
                       const isExpanded = expandedHourIdx === idx;
                       return (
@@ -1631,19 +1476,18 @@ export default function App() {
                             isExpanded ? 'border-indigo-400 ring-1 ring-indigo-400/30' : 'border-slate-200 hover:border-slate-300'
                           } ${selectedDay === 0 ? 'opacity-80' : ''}`}
                         >
-                          {/* Cabecera del Acordeón (Siempre visible) */}
                           <button
                             type="button"
                             onClick={() => setExpandedHourIdx(isExpanded ? null : idx)}
                             className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors text-left"
                           >
-                            <div className="flex items-center gap-3.5">
+                            <div className="flex items-center gap-3.5 flex-grow">
                               {/* Hora */}
-                              <span className="font-bold text-slate-800 text-base min-w-[45px]">{hour.time}</span>
+                              <span className="font-bold text-slate-800 text-sm md:text-base min-w-[50px] md:min-w-[80px]">{hour.time}</span>
                               
                               {/* Score y alerta local */}
-                              <div className="flex flex-col items-start gap-0.5">
-                                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full font-bold text-[10px]
+                              <div className="flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2 pl-0 md:pl-4">
+                                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full font-bold text-[10px] md:text-xs
                                   ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
                                     hour.hourScore > 40 ? 'bg-amber-100 text-amber-700' : 
                                     hour.localRule === "Tormenta ⚡" ? 'bg-yellow-100 text-yellow-700' :
@@ -1652,17 +1496,17 @@ export default function App() {
                                   Score: {hour.hourScore}
                                 </span>
                                 {hour.localRule && (
-                                  <span className={`text-[8px] font-black uppercase tracking-wide px-1 rounded ${hour.ruleColor}`}>
+                                  <span className={`text-[8px] md:text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded ${hour.ruleColor}`}>
                                     {hour.localRule}
                                   </span>
                                 )}
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-4 md:gap-8 shrink-0">
                               {/* Olas */}
-                              <div className="text-right">
-                                <span className={`font-black text-sm block ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
+                              <div className="text-right min-w-[70px] md:min-w-[120px]">
+                                <span className={`font-black text-sm md:text-base block ${hour.swellH > 0.8 ? 'text-red-500' : 'text-blue-600'}`}>
                                   {hour.swellH}m
                                 </span>
                                 <span className="text-[9px] font-semibold text-slate-400 block uppercase tracking-wide">
@@ -1672,29 +1516,29 @@ export default function App() {
 
                               {/* Viento */}
                               {!isClimateDown && (
-                                <div className="text-right min-w-[50px]">
-                                  <span className={`font-black text-xs block ${hour.windS > 15 ? 'text-amber-500' : 'text-slate-700'}`}>
+                                <div className="text-right min-w-[85px] md:min-w-[150px]">
+                                  <span className={`font-black text-xs md:text-sm block ${hour.windS > 15 ? 'text-amber-500' : 'text-slate-700'}`}>
                                     {hour.windS} kts
                                   </span>
-                                  <span className="text-[9px] font-semibold text-slate-400 block">
+                                  <span className="text-[9px] font-semibold text-slate-400 block truncate max-w-[80px] md:max-w-none">
                                     {getWindDirection(hour.windDir)}
                                   </span>
                                 </div>
                               )}
 
                               {/* Icono de estado */}
-                              <div className="text-slate-400">
+                              <div className="text-slate-400 pr-1 md:pr-3">
                                 {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                               </div>
                             </div>
                           </button>
 
-                          {/* Detalles desplegables */}
+                          {/* Detalles desplegables (Rejilla de 2 cols en móvil y 4 cols en PC) */}
                           {isExpanded && (
                             <div className="px-4 pb-4 pt-2 border-t border-slate-100 bg-slate-50/40 text-xs text-slate-600 space-y-3 animate-in slide-in-from-top-2 duration-200">
-                              <div className="grid grid-cols-2 gap-3">
+                              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
                                 {/* Tarjeta de Olas & Energía */}
-                                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                                <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
                                   <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Energía y Oleaje</span>
                                   <div className="mt-1 font-semibold text-slate-700">
                                     <span className="font-black text-slate-800 text-sm block">{hour.waveEnergy} Kj</span>
@@ -1708,7 +1552,7 @@ export default function App() {
                                 </div>
 
                                 {/* Tarjeta de Resaca y Corriente */}
-                                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                                <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
                                   <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Corrientes y Resaca</span>
                                   <div className="mt-1 space-y-1">
                                     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${hour.ripColor}`}>
@@ -1721,7 +1565,7 @@ export default function App() {
                                 </div>
 
                                 {/* Tarjeta de Viento y Rachas */}
-                                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                                <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
                                   <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Viento</span>
                                   <div className="mt-1 font-semibold text-slate-700">
                                     {isClimateDown ? (
@@ -1730,14 +1574,14 @@ export default function App() {
                                       <>
                                         <span className="font-black text-slate-800 text-sm block">{hour.windS} kts</span>
                                         <span className="text-[9px] text-slate-400 block">Rachas: {hour.gust} kts</span>
-                                        <span className="text-[9px] text-slate-500 block">Procedencia: {getWindDirection(hour.windDir)} ({hour.windDir}°)</span>
+                                        <span className="text-[9px] text-slate-500 block">Procedencia: {getWindDirectionFullName(hour.windDir)} ({hour.windDir}°)</span>
                                       </>
                                     )}
                                   </div>
                                 </div>
 
                                 {/* Tarjeta de Cielo y Clima */}
-                                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                                <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
                                   <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Cielo y Lluvia</span>
                                   <div className="mt-1 font-semibold text-slate-700 flex items-center gap-2">
                                     {isClimateDown ? (
@@ -1757,9 +1601,9 @@ export default function App() {
                                 </div>
                               </div>
 
-                              {/* Tarjeta inferior para UV y Visibilidad */}
+                              {/* Tarjeta inferior para UV y Visibilidad (Ocupa todo el ancho: 2 cols en móvil y 4 cols en PC) */}
                               {!isClimateDown && (
-                                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
+                                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between col-span-2 lg:col-span-4">
                                   <div>
                                     <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide block">Índice UV</span>
                                     <span className={`font-black text-sm ${hour.uv >= 6 ? 'text-amber-600' : 'text-slate-700'}`}>
@@ -1780,6 +1624,7 @@ export default function App() {
                       );
                     })}
                   </div>
+
               </div>
 
               </div>
