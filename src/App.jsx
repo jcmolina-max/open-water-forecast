@@ -796,6 +796,24 @@ export default function App() {
     }
   };
 
+  const formatBoyaTemp = (val) => {
+    if (!val) return '—';
+    const str = val.toString().trim();
+    if (str.includes('-') && str.includes('T')) {
+      try {
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+          const day = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric' });
+          const month = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', month: 'numeric' });
+          return `${day}.${month}`;
+        }
+      } catch (e) {
+        // Fallback
+      }
+    }
+    return str.replace(',', '.');
+  };
+
   const fetchCalibrationHistory = async () => {
     setIsCalHistoryLoading(true);
     try {
@@ -1061,8 +1079,12 @@ export default function App() {
   };
 
   // Buscar la medición de temperatura física más reciente registrada por la boya en el historial
-  const latestBuoyReport = calibrationHistory.find(item => item.boyaTemp && item.boyaTemp !== "" && !isNaN(parseFloat(item.boyaTemp)));
-  const latestBuoyTemp = latestBuoyReport ? parseFloat(latestBuoyReport.boyaTemp.toString().replace(",", ".")).toFixed(1) : null;
+  const latestBuoyReport = calibrationHistory.find(item => {
+    if (!item.boyaTemp || item.boyaTemp === "") return false;
+    const formatted = formatBoyaTemp(item.boyaTemp);
+    return formatted !== '—' && !isNaN(parseFloat(formatted));
+  });
+  const latestBuoyTemp = latestBuoyReport ? formatBoyaTemp(latestBuoyReport.boyaTemp) : null;
   const latestBuoyDate = latestBuoyReport ? new Date(latestBuoyReport.fechaRegistro) : null;
 
   const currentDayData = beachData ? beachData[selectedDay] : null;
@@ -2019,7 +2041,7 @@ export default function App() {
                             {item.boyaAltura && (
                               <div className="mt-2 pt-2 border-t border-slate-200/40 text-[9px] font-semibold text-slate-400 flex justify-between">
                                 <span>⚓ Boya Real: {item.boyaAltura}m</span>
-                                <span>🌡️ Agua: {item.boyaTemp}ºC</span>
+                                <span>🌡️ Agua: {formatBoyaTemp(item.boyaTemp)}ºC</span>
                               </div>
                             )}
                             
