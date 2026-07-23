@@ -134,6 +134,7 @@ export default function App() {
   const [swimmerReportStatus, setSwimmerReportStatus] = useState(null);
   const [swimmerMedusas, setSwimmerMedusas] = useState('Ninguna');
   const [swimmerAgua, setSwimmerAgua] = useState('Limpia');
+  const [swimmerName, setSwimmerName] = useState('');
 
   // Previsiones detalladas (comparador)
   const [comparisonForecast, setComparisonForecast] = useState(null);
@@ -739,16 +740,60 @@ export default function App() {
   };
 
   const parseSwimmerSensaciones = (text) => {
-    if (!text) return { medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
-    const match = text.match(/^\[Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
-    if (match) {
+    if (!text) return { nombre: 'Anónimo', medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
+    
+    // 1. Intentar hacer coincidir el formato nuevo con Nombre, Medusas y Agua
+    const matchNew = text.match(/^\[Nombre:\s*([^|]+)\s*\|\s*Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
+    if (matchNew) {
       return {
-        medusas: match[1].trim(),
-        agua: match[2].trim(),
-        comentario: match[3].trim()
+        nombre: matchNew[1].trim(),
+        medusas: matchNew[2].trim(),
+        agua: matchNew[3].trim(),
+        comentario: matchNew[4].trim()
       };
     }
-    return { medusas: 'Ninguna', agua: 'Limpia', comentario: text };
+    
+    // 2. Intentar hacer coincidir el formato antiguo con solo Medusas y Agua
+    const matchOld = text.match(/^\[Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
+    if (matchOld) {
+      return {
+        nombre: 'Anónimo',
+        medusas: matchOld[1].trim(),
+        agua: matchOld[2].trim(),
+        comentario: matchOld[3].trim()
+      };
+    }
+    
+    // 3. Caso por defecto si no tiene corchetes
+    return {
+      nombre: 'Anónimo',
+      medusas: 'Ninguna',
+      agua: 'Limpia',
+      comentario: text
+    };
+  };
+
+  const formatFriendlyDate = (dateString) => {
+    try {
+      const regDate = new Date(dateString);
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+      
+      const timeStr = regDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      
+      if (regDate.toDateString() === today.toDateString()) {
+        return `Hoy, ${timeStr}`;
+      } else if (regDate.toDateString() === yesterday.toDateString()) {
+        return `Ayer, ${timeStr}`;
+      } else {
+        const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
+        const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+        return `${capitalizedDay}, ${regDate.getDate()} ${regDate.toLocaleString('es-ES', { month: 'short' })}`;
+      }
+    } catch (e) {
+      return 'Hace poco';
+    }
   };
 
   const fetchCalibrationHistory = async () => {
@@ -974,7 +1019,7 @@ export default function App() {
       realCorriente: swimmerRealCorriente,
       realVientoFza: "",
       realVientoDir: "",
-      sensaciones: `[Medusas: ${swimmerMedusas} | Agua: ${swimmerAgua}] ${swimmerSensaciones}`,
+      sensaciones: `[Nombre: ${swimmerName.trim() || 'Anónimo'} | Medusas: ${swimmerMedusas} | Agua: ${swimmerAgua}] ${swimmerSensaciones}`,
       origenDato: "Nadador",
       appScore: hourForecast ? hourForecast.hourScore : "",
       appOlas: hourForecast ? hourForecast.swellH : "",
@@ -1001,6 +1046,7 @@ export default function App() {
       
       setSwimmerReportStatus({ type: 'success', text: '¡Tu reporte ha sido enviado con éxito! Muchas gracias.' });
       setSwimmerSensaciones('');
+      setSwimmerName('');
       
       setTimeout(() => {
         fetchCalibrationHistory();
@@ -1013,6 +1059,11 @@ export default function App() {
       setIsSendingSwimmerReport(false);
     }
   };
+
+  // Buscar la medición de temperatura física más reciente registrada por la boya en el historial
+  const latestBuoyReport = calibrationHistory.find(item => item.boyaTemp && item.boyaTemp !== "" && !isNaN(parseFloat(item.boyaTemp)));
+  const latestBuoyTemp = latestBuoyReport ? parseFloat(latestBuoyReport.boyaTemp.toString().replace(",", ".")).toFixed(1) : null;
+  const latestBuoyDate = latestBuoyReport ? new Date(latestBuoyReport.fechaRegistro) : null;
 
   const currentDayData = beachData ? beachData[selectedDay] : null;
 
@@ -1198,7 +1249,7 @@ export default function App() {
                 {/* Tarjeta 1: Score de Seguridad */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center relative">
                   <div className="absolute top-3 left-3 text-[8px] text-slate-300 font-semibold uppercase tracking-widest opacity-70">
-                    Algoritmo Propio
+                    Algoritmo matemático
                   </div>
                   <h2 className="text-slate-500 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
                     <Activity size={18} className="text-blue-500"/> Seguridad Media {isClimateDown && "(Solo Olas)"}
@@ -1221,29 +1272,64 @@ export default function App() {
                   <p className={`mt-5 font-black text-lg ${currentDayData.score > 70 ? 'text-emerald-600' : currentDayData.score > 40 ? 'text-amber-600' : 'text-red-600'}`}>
                     {currentDayData.score > 70 ? 'Nado Seguro' : currentDayData.score > 40 ? 'Precaución: Mar Agitado' : 'No Recomendado Nadar'}
                   </p>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1 block">
+                    Cálculo por algoritmo matemático
+                  </span>
                 </div>
 
                 {/* Tarjeta 2: Temperaturas */}
-                <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center ${isClimateDown ? 'opacity-70' : ''}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Thermometer size={24}/></div>
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <p className="text-sm text-slate-500 font-medium">Agua</p>
-                      </div>
-                      <p className="text-xl font-bold text-slate-800">{currentDayData.temps.water}ºC</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Modelo marino (mediodía)</p>
-                    </div>
+                <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4 ${isClimateDown ? 'opacity-70' : ''}`}>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
+                    <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+                      <Thermometer size={16} className="text-blue-500"/> Temperaturas
+                    </h3>
+                    <span className="text-[10px] text-indigo-500 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100/50">
+                      Previsión vs Real
+                    </span>
                   </div>
-                  <div className="h-10 w-px bg-slate-200"></div>
-                  <div className="flex items-center gap-3">
-                    <div className={isClimateDown ? "bg-slate-50 p-2 rounded-lg text-slate-400" : "bg-orange-50 p-2 rounded-lg text-orange-500"}><Sun size={24}/></div>
-                    <div>
-                      <p className="text-sm text-slate-500 font-medium">Aire <span className="text-xs">({currentDayData.dayLabel.split(' ')[0]})</span></p>
-                      <p className={`text-xl font-bold ${isClimateDown ? 'text-slate-400' : 'text-slate-800'}`}>
-                        {currentDayData.temps.air === "-" ? "- ºC" : `${currentDayData.temps.air}ºC`}
-                      </p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Predicción Modelo</p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Agua / Mar */}
+                    <div className="space-y-2 text-left">
+                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Temperatura del Agua</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Prevista */}
+                        <div className="bg-blue-50/40 border border-blue-100/50 rounded-xl p-2.5 text-left">
+                          <span className="block text-[8px] font-bold text-blue-500 uppercase tracking-wider">Satélite</span>
+                          <span className="text-base font-black text-blue-700">{currentDayData.temps.water}ºC</span>
+                          <span className="block text-[8px] text-blue-400 font-semibold mt-0.5">Modelo previsto</span>
+                        </div>
+                        
+                        {/* Real (Boya) */}
+                        <div className="bg-indigo-50/40 border border-indigo-100/50 rounded-xl p-2.5 text-left relative overflow-hidden">
+                          <span className="block text-[8px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
+                            ⚓ Boya Real
+                          </span>
+                          <span className="text-base font-black text-indigo-800">
+                            {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '— ºC'}
+                          </span>
+                          <span className="block text-[8px] text-indigo-500/70 font-semibold mt-0.5">
+                            {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate).split(',')[0]}` : 'Sin datos'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Aire */}
+                    <div className="space-y-2 text-left flex flex-col justify-between">
+                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Temperatura del Aire</span>
+                      <div className="bg-orange-50/40 border border-orange-100/50 rounded-xl p-2.5 flex items-center justify-between h-full">
+                        <div>
+                          <span className="block text-[8px] font-bold text-orange-500 uppercase tracking-wider">Ambiente ({currentDayData.dayLabel.split(' ')[0]})</span>
+                          <span className={`text-base font-black ${isClimateDown ? 'text-slate-400' : 'text-orange-700'}`}>
+                            {currentDayData.temps.air === "-" ? "- ºC" : `${currentDayData.temps.air}ºC`}
+                          </span>
+                          <span className="block text-[8px] text-orange-400 font-semibold mt-0.5">Predicción Modelo</span>
+                        </div>
+                        <div className={isClimateDown ? "text-slate-400" : "text-orange-500"}>
+                          <Sun size={24}/>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1762,7 +1848,9 @@ export default function App() {
 
                         <div className="bg-white border border-slate-200/60 rounded-xl p-4 mt-3.5 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between shadow-sm">
                           <div className="flex-grow text-left">
-                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Sensaciones del Nadador</span>
+                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                              Sensaciones de: <strong className="text-indigo-500 font-bold">{isSwimmer && parsedDetails.nombre !== 'Anónimo' ? parsedDetails.nombre : 'Nadador'}</strong>
+                            </span>
                             <p className="text-xs text-slate-700 italic font-medium mt-1">
                               "{isSwimmer ? parsedDetails.comentario : (selectedHistoryLog.sensaciones || 'Sin comentarios registrados.')}"
                             </p>
@@ -1860,8 +1948,8 @@ export default function App() {
                               <span className="text-xs font-bold text-slate-800 uppercase tracking-tight">
                                 🏖️ {BEACHES[item.playa]?.name.split(',')[0] || item.playa}
                               </span>
-                              <span className="text-[10px] font-semibold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded">
-                                {item.horaNado}
+                              <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded" title="Hora de nado en el agua">
+                                Nado: {item.horaNado}
                               </span>
                             </div>
                             
@@ -1901,11 +1989,32 @@ export default function App() {
                               </div>
                             )}
                             
-                            {item.sensaciones && (
-                              <p className="text-xs text-slate-600 italic leading-tight mb-2">
-                                "{item.sensaciones}"
-                              </p>
-                            )}
+                            {(() => {
+                              if (item.sensaciones) {
+                                if (item.origenDato === 'Nadador') {
+                                  const parsed = parseSwimmerSensaciones(item.sensaciones);
+                                  return (
+                                    <div className="space-y-1">
+                                      {parsed.nombre && parsed.nombre !== 'Anónimo' && (
+                                        <p className="text-[10px] font-bold text-slate-500 text-left">👤 {parsed.nombre}</p>
+                                      )}
+                                      {parsed.comentario && (
+                                        <p className="text-xs text-slate-600 italic leading-tight mb-2 text-left">
+                                          "{parsed.comentario}"
+                                        </p>
+                                      )}
+                                    </div>
+                                  );
+                                } else {
+                                  return (
+                                    <p className="text-xs text-slate-600 italic leading-tight mb-2 text-left">
+                                      "{item.sensaciones}"
+                                    </p>
+                                  );
+                                }
+                              }
+                              return null;
+                            })()}
                             
                             {item.boyaAltura && (
                               <div className="mt-2 pt-2 border-t border-slate-200/40 text-[9px] font-semibold text-slate-400 flex justify-between">
@@ -1916,7 +2025,9 @@ export default function App() {
                             
                             <div className="mt-1.5 flex justify-between items-center text-[9px] text-slate-400 font-medium">
                               <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
-                              <span>{new Date(item.fechaRegistro).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>
+                              <span>
+                                Reportado: <strong>{formatFriendlyDate(item.fechaRegistro)}</strong>
+                              </span>
                             </div>
                           </div>
                         ))
@@ -2062,11 +2173,11 @@ export default function App() {
                           <div className="flex items-center gap-1.5 font-bold text-slate-700">
                             <span className="text-sm">👤</span>
                             <span>
-                              {item.origenDato === 'Web Admin' ? 'Admin' : 'Nadador Anónimo'}
+                              {item.origenDato === 'Web Admin' ? 'Admin' : (parsed.nombre && parsed.nombre !== 'Anónimo' ? parsed.nombre : 'Nadador Anónimo')}
                             </span>
                           </div>
-                          <span className="text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-                            {item.horaNado}
+                          <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full" title="Hora de nado en el agua">
+                            Nado: {item.horaNado}
                           </span>
                         </div>
 
@@ -2103,23 +2214,7 @@ export default function App() {
                       <div className="mt-3 pt-3 border-t border-slate-200/40 flex justify-between items-center text-[9px] text-slate-400 font-semibold">
                         <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
                         <span>
-                          {(() => {
-                            try {
-                              const regDate = new Date(item.fechaRegistro);
-                              const today = new Date();
-                              const yesterday = new Date();
-                              yesterday.setDate(today.getDate() - 1);
-                              if (regDate.toDateString() === today.toDateString()) {
-                                return `Hoy, ${regDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
-                              } else if (regDate.toDateString() === yesterday.toDateString()) {
-                                return `Ayer`;
-                              } else {
-                                return regDate.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
-                              }
-                            } catch (e) {
-                              return 'Hace poco';
-                            }
-                          })()}
+                          Reportado: <strong>{formatFriendlyDate(item.fechaRegistro)}</strong>
                         </span>
                       </div>
                     </div>
@@ -2660,6 +2755,19 @@ export default function App() {
                       })}
                     </select>
                   </div>
+                {/* Campo opcional: Nombre del Nadador */}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">
+                    👤 ¿Tu Nombre? (Opcional)
+                  </label>
+                  <input 
+                    type="text" 
+                    value={swimmerName} 
+                    onChange={(e) => setSwimmerName(e.target.value)} 
+                    placeholder="Ej. Juan, María... (deja vacío para ser Anónimo)" 
+                    maxLength={25}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white placeholder-slate-400 focus:border-indigo-500 outline-none"
+                  />
                 </div>
 
                 <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-xs">
