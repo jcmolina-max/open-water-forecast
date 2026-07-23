@@ -950,7 +950,7 @@ export default function App() {
       boyaAltura: adminBoyaAltura, 
       boyaPeriodo: adminBoyaPeriodo,
       boyaDireccion: adminBoyaDireccion,
-      boyaTemp: adminBoyaTemp || (todayForecast ? todayForecast.temps.water : ""),
+      boyaTemp: adminBoyaTemp || "",
       modelEcmwfOlas: ecmwfVal,
       modelGfsOlas: gfsVal,
       modelTodoSurfOlas: todoSurfVal
@@ -1048,7 +1048,7 @@ export default function App() {
       boyaAltura: "", 
       boyaPeriodo: "",
       boyaDireccion: "",
-      boyaTemp: todayForecast ? todayForecast.temps.water : "",
+      boyaTemp: "",
       modelEcmwfOlas: ecmwfVal,
       modelGfsOlas: gfsVal,
       modelTodoSurfOlas: todoSurfVal
