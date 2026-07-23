@@ -2755,6 +2755,7 @@ export default function App() {
                       })}
                     </select>
                   </div>
+                </div>
                 {/* Campo opcional: Nombre del Nadador */}
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">
