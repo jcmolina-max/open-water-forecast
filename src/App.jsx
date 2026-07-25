@@ -135,6 +135,10 @@ export default function App() {
   const [swimmerMedusas, setSwimmerMedusas] = useState('Ninguna');
   const [swimmerAgua, setSwimmerAgua] = useState('Limpia');
   const [swimmerName, setSwimmerName] = useState('');
+  const [isSyncingBuoy, setIsSyncingBuoy] = useState(false);
+  const [swimmerIsOnlyMessage, setSwimmerIsOnlyMessage] = useState(false);
+  const [adminIsAlert, setAdminIsAlert] = useState(false);
+  const [visibleReportsCount, setVisibleReportsCount] = useState(3);
 
   // Previsiones detalladas (comparador)
   const [comparisonForecast, setComparisonForecast] = useState(null);
@@ -814,6 +818,33 @@ export default function App() {
     return str.replace(',', '.');
   };
 
+  const formatSwimFriendly = (dateVal, swimHour) => {
+    if (!dateVal) return swimHour || '—';
+    try {
+      const regDate = new Date(dateVal);
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+      
+      const hourSuffix = swimHour ? `, ${swimHour}` : '';
+      
+      if (regDate.toDateString() === today.toDateString()) {
+        return `Hoy${hourSuffix}`;
+      } else if (regDate.toDateString() === yesterday.toDateString()) {
+        return `Ayer${hourSuffix}`;
+      } else {
+        const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
+        const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+        const dayNum = regDate.getDate();
+        const monthStr = regDate.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
+        const timeBrackets = swimHour ? ` (${swimHour})` : '';
+        return `${capitalizedDay}, ${dayNum} ${monthStr}${timeBrackets}`;
+      }
+    } catch (e) {
+      return swimHour || '—';
+    }
+  };
+
   const fetchCalibrationHistory = async () => {
     setIsCalHistoryLoading(true);
     try {
@@ -946,7 +977,7 @@ export default function App() {
       appEnergia: hourForecast ? hourForecast.waveEnergy : "",
       appVientoNudos: hourForecast ? hourForecast.windS : "",
       appVientoDir: hourForecast ? hourForecast.windDir : "",
-      notasCalibracion: adminNotas,
+      notasCalibracion: adminIsAlert ? `[ALERTA_OFICIAL] ${adminNotas}` : adminNotas,
       boyaAltura: adminBoyaAltura, 
       boyaPeriodo: adminBoyaPeriodo,
       boyaDireccion: adminBoyaDireccion,
@@ -968,6 +999,7 @@ export default function App() {
       setReportStatus({ type: 'success', text: '¡Calibración enviada con éxito a Google Sheets!' });
       setAdminSensaciones('');
       setAdminNotas('');
+      setAdminIsAlert(false);
       setAdminBoyaAltura('');
       setAdminBoyaPeriodo('');
       setAdminBoyaDireccion('');
@@ -1032,19 +1064,21 @@ export default function App() {
     const payload = {
       horaNado: swimmerHoraNado,
       playa: swimmerPlaya,
-      realOlas: swimmerRealOlas,
-      realResaca: swimmerRealResaca,
-      realCorriente: swimmerRealCorriente,
+      realOlas: swimmerIsOnlyMessage ? "" : swimmerRealOlas,
+      realResaca: swimmerIsOnlyMessage ? "" : swimmerRealResaca,
+      realCorriente: swimmerIsOnlyMessage ? "" : swimmerRealCorriente,
       realVientoFza: "",
       realVientoDir: "",
-      sensaciones: `[Nombre: ${swimmerName.trim() || 'Anónimo'} | Medusas: ${swimmerMedusas} | Agua: ${swimmerAgua}] ${swimmerSensaciones}`,
+      sensaciones: swimmerIsOnlyMessage 
+        ? `[Nombre: ${swimmerName.trim() || 'Anónimo'} | Medusas: - | Agua: -] ${swimmerSensaciones}`
+        : `[Nombre: ${swimmerName.trim() || 'Anónimo'} | Medusas: ${swimmerMedusas} | Agua: ${swimmerAgua}] ${swimmerSensaciones}`,
       origenDato: "Nadador",
       appScore: hourForecast ? hourForecast.hourScore : "",
       appOlas: hourForecast ? hourForecast.swellH : "",
       appEnergia: hourForecast ? hourForecast.waveEnergy : "",
       appVientoNudos: hourForecast ? hourForecast.windS : "",
       appVientoDir: hourForecast ? hourForecast.windDir : "",
-      notasCalibracion: "Reporte público de nadador",
+      notasCalibracion: swimmerIsOnlyMessage ? "Mensaje libre de nadador" : "Reporte público de nadador",
       boyaAltura: "", 
       boyaPeriodo: "",
       boyaDireccion: "",
@@ -1065,6 +1099,7 @@ export default function App() {
       setSwimmerReportStatus({ type: 'success', text: '¡Tu reporte ha sido enviado con éxito! Muchas gracias.' });
       setSwimmerSensaciones('');
       setSwimmerName('');
+      setSwimmerIsOnlyMessage(false);
       
       setTimeout(() => {
         fetchCalibrationHistory();
@@ -1075,6 +1110,53 @@ export default function App() {
       setSwimmerReportStatus({ type: 'error', text: `Error de conexión: ${err.message}` });
     } finally {
       setIsSendingSwimmerReport(false);
+    }
+  };
+
+  const handleSyncBuoy = async () => {
+    setIsSyncingBuoy(true);
+    const now = new Date();
+    const currentHourStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    const payload = {
+      horaNado: currentHourStr,
+      playa: selectedBeach,
+      realOlas: "",
+      realResaca: "",
+      realCorriente: "",
+      realVientoFza: "",
+      realVientoDir: "",
+      sensaciones: "Sincronización automática de boya",
+      origenDato: "Sincronización Boya",
+      appScore: "",
+      appOlas: "",
+      appEnergia: "",
+      appVientoNudos: "",
+      appVientoDir: "",
+      notasCalibracion: "Actualización forzada de boya real",
+      boyaAltura: "", 
+      boyaPeriodo: "",
+      boyaDireccion: "",
+      boyaTemp: "",
+      modelEcmwfOlas: "",
+      modelGfsOlas: "",
+      modelTodoSurfOlas: ""
+    };
+
+    try {
+      await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        mode: 'no-cors', 
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
+      setTimeout(() => {
+        fetchCalibrationHistory();
+        setIsSyncingBuoy(false);
+      }, 2000);
+    } catch (err) {
+      console.error("Error al sincronizar boya:", err);
+      setIsSyncingBuoy(false);
     }
   };
 
@@ -1143,7 +1225,10 @@ export default function App() {
               <MapPin className="text-slate-400 ml-1 md:ml-2 shrink-0" size={20} />
               <select 
                 value={selectedBeach} 
-                onChange={(e) => setSelectedBeach(e.target.value)}
+                onChange={(e) => {
+                  setSelectedBeach(e.target.value);
+                  setVisibleReportsCount(3);
+                }}
                 className="bg-transparent font-bold text-slate-700 py-1.5 pr-4 pl-1 md:pl-2 outline-none w-full md:min-w-[14rem] md:max-w-[22rem] cursor-pointer text-ellipsis overflow-hidden"
               >
                 <option value="misericordia">La Misericordia</option>
@@ -1324,10 +1409,21 @@ export default function App() {
                         
                         {/* Real (Boya) */}
                         <div className="bg-indigo-50/40 border border-indigo-100/50 rounded-xl p-2.5 text-left relative overflow-hidden">
-                          <span className="block text-[8px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
-                            ⚓ Boya Real
-                          </span>
-                          <span className="text-base font-black text-indigo-800">
+                          <div className="flex justify-between items-center">
+                            <span className="block text-[8px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
+                              ⚓ Boya Real
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleSyncBuoy}
+                              disabled={isSyncingBuoy}
+                              title="Sincronizar boya en tiempo real"
+                              className="text-indigo-500 hover:text-indigo-700 transition-colors disabled:opacity-50 p-0.5"
+                            >
+                              <RefreshCw size={10} className={isSyncingBuoy ? "animate-spin" : ""} />
+                            </button>
+                          </div>
+                          <span className="text-base font-black text-indigo-800 block mt-0.5">
                             {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '— ºC'}
                           </span>
                           <span className="block text-[8px] text-indigo-500/70 font-semibold mt-0.5">
@@ -1749,21 +1845,30 @@ export default function App() {
                       </h4>
                       <p className="text-xs text-slate-500 mt-1">Selecciona una sesión real para auditar qué falló o acertó en los modelos satelitales.</p>
                     </div>
-                    <select
-                      value={selectedHistoryLog ? calibrationHistory.indexOf(selectedHistoryLog) : ''}
-                      onChange={(e) => {
-                        const idx = e.target.value;
-                        setSelectedHistoryLog(idx !== '' ? calibrationHistory[idx] : null);
-                      }}
-                      className="border border-slate-300 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 bg-white shadow-sm focus:border-indigo-500 outline-none"
-                    >
-                      <option value="">-- Seleccionar Sesión Guardada --</option>
-                      {calibrationHistory.map((item, idx) => (
-                        <option key={idx} value={idx}>
-                          {new Date(item.fechaRegistro).toLocaleDateString('es-ES')} ({item.horaNado}) - {BEACHES[item.playa]?.name.split(',')[0]}
-                        </option>
-                      ))}
-                    </select>
+                    {(() => {
+                      const calibrationLogsOnly = calibrationHistory.filter(item => 
+                        item.realOlas && 
+                        item.realOlas !== "" && 
+                        !(item.origenDato === 'Web Admin' && item.notasCalibracion && item.notasCalibracion.includes('[ALERTA_OFICIAL]'))
+                      );
+                      return (
+                        <select
+                          value={selectedHistoryLog ? calibrationLogsOnly.indexOf(selectedHistoryLog) : ''}
+                          onChange={(e) => {
+                            const idx = e.target.value;
+                            setSelectedHistoryLog(idx !== '' ? calibrationLogsOnly[idx] : null);
+                          }}
+                          className="border border-slate-300 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 bg-white shadow-sm focus:border-indigo-500 outline-none"
+                        >
+                          <option value="">-- Seleccionar Sesión Guardada --</option>
+                          {calibrationLogsOnly.map((item, idx) => (
+                            <option key={idx} value={idx}>
+                              {new Date(item.fechaRegistro).toLocaleDateString('es-ES')} ({item.horaNado}) - {BEACHES[item.playa]?.name.split(',')[0]}
+                            </option>
+                          ))}
+                        </select>
+                      );
+                    })()}
                   </div>
 
                   {selectedHistoryLog ? (() => {
@@ -1970,12 +2075,18 @@ export default function App() {
                               <span className="text-xs font-bold text-slate-800 uppercase tracking-tight">
                                 🏖️ {BEACHES[item.playa]?.name.split(',')[0] || item.playa}
                               </span>
-                              <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded" title="Hora de nado en el agua">
-                                Nado: {item.horaNado}
+                              <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded" title="Día y hora de la sesión de nado">
+                                Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
                               </span>
                             </div>
                             
-                            {item.origenDato === 'Nadador' ? (
+                            {(!item.realOlas && item.realOlas !== 0) ? (
+                              <div className="bg-indigo-50/30 border border-indigo-100/50 rounded-lg p-2 my-2 text-left">
+                                <span className="inline-block text-[8px] font-black text-indigo-600 bg-indigo-100/60 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                                  📢 Mensaje Comunidad
+                                </span>
+                              </div>
+                            ) : item.origenDato === 'Nadador' ? (
                               <div className="grid grid-cols-3 gap-2 border-y border-slate-200/60 py-2 my-2 text-center text-xs">
                                 <div>
                                   <span className="block text-[9px] font-bold text-slate-400 uppercase font-semibold">Ola</span>
@@ -2170,80 +2281,165 @@ export default function App() {
           </div>
 
           {/* Feed de reportes */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {isCalHistoryLoading ? (
-              <div className="col-span-full flex items-center justify-center py-10 gap-2 text-slate-400">
-                <Loader2 className="animate-spin" size={18} />
-                <span className="text-xs font-bold">Cargando reportes de la comunidad...</span>
-              </div>
-            ) : calibrationHistory.filter(item => item.playa === selectedBeach).length === 0 ? (
-              <div className="col-span-full text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                <p className="text-xs text-slate-400 font-bold">No hay reportes de nadadores hoy para esta playa.</p>
-                <p className="text-[11px] text-slate-400 mt-1">Sé el primero en informar a la comunidad sobre el estado del agua.</p>
-              </div>
-            ) : (
-              calibrationHistory
-                .filter(item => item.playa === selectedBeach)
-                .slice(0, 3) // Mostrar los últimos 3 de esta playa
-                .map((item, idx) => {
-                  const parsed = parseSwimmerSensaciones(item.sensaciones);
-                  const isSwimmer = item.origenDato === 'Nadador';
-                  return (
-                    <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm flex flex-col justify-between hover:border-blue-100 hover:bg-blue-50/10 transition-all">
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center text-xs">
-                          <div className="flex items-center gap-1.5 font-bold text-slate-700">
-                            <span className="text-sm">👤</span>
-                            <span>
-                              {item.origenDato === 'Web Admin' ? 'Admin' : (parsed.nombre && parsed.nombre !== 'Anónimo' ? parsed.nombre : 'Nadador Anónimo')}
-                            </span>
-                          </div>
-                          <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full" title="Hora de nado en el agua">
-                            Nado: {item.horaNado}
-                          </span>
-                        </div>
+          {(() => {
+            const latestAlert = calibrationHistory.find(item => 
+              item.playa === selectedBeach && 
+              item.origenDato === 'Web Admin' && 
+              item.notasCalibracion && 
+              item.notasCalibracion.includes('[ALERTA_OFICIAL]')
+            );
+            
+            const filteredReports = calibrationHistory.filter(item => 
+              item.playa === selectedBeach && 
+              !(item.origenDato === 'Web Admin' && item.notasCalibracion && item.notasCalibracion.includes('[ALERTA_OFICIAL]'))
+            );
 
-                        {/* Ratings rápidos en píldoras */}
-                        <div className="flex flex-wrap gap-1.5">
-                          <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-[10px] font-bold text-blue-700 rounded-md">
-                            🌊 Olas: {item.realOlas}/5
-                          </span>
-                          <span className="px-2 py-0.5 bg-red-50 border border-red-100 text-[10px] font-bold text-red-700 rounded-md">
-                            🔄 Resaca: {item.realResaca}/5
-                          </span>
-                          <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700 rounded-md">
-                            🧭 Deriva: {item.realCorriente}/5
-                          </span>
-                          {isSwimmer && (
-                            <>
-                              <span className="px-2 py-0.5 bg-rose-50 border border-rose-100 text-[10px] font-bold text-rose-700 rounded-md">
-                                🪼 Medusas: {parsed.medusas}
-                              </span>
-                              <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-[10px] font-bold text-emerald-700 rounded-md">
-                                🧼 Agua: {parsed.agua}
-                              </span>
-                            </>
-                          )}
-                        </div>
-
-                        {(isSwimmer ? parsed.comentario : item.sensaciones) && (
-                          <p className="text-xs text-slate-600 font-medium leading-relaxed italic border-l-2 border-blue-200 pl-2">
-                            "{isSwimmer ? parsed.comentario : item.sensaciones}"
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="mt-3 pt-3 border-t border-slate-200/40 flex justify-between items-center text-[9px] text-slate-400 font-semibold">
-                        <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
-                        <span>
-                          Reportado: <strong>{formatFriendlyDate(item.fechaRegistro)}</strong>
-                        </span>
-                      </div>
+            return (
+              <>
+                {latestAlert && (
+                  <div className="mb-5 bg-rose-50 border border-rose-200/60 rounded-2xl p-4 shadow-sm text-left flex items-start gap-3 w-full border-l-4 border-l-rose-500">
+                    <span className="text-xl shrink-0">⚠️</span>
+                    <div className="flex-grow">
+                      <span className="inline-block text-[8px] font-black text-rose-600 bg-rose-100/60 px-2 py-0.5 rounded-full uppercase tracking-wider mb-1">
+                        Alerta Oficial del Administrador
+                      </span>
+                      <p className="text-xs font-bold text-rose-800 leading-tight">
+                        {latestAlert.notasCalibracion.replace('[ALERTA_OFICIAL]', '').trim() || (latestAlert.sensaciones || 'Aviso de seguridad')}
+                      </p>
+                      <span className="block text-[8px] text-rose-500/70 font-semibold mt-1">
+                        Registrado: {formatFriendlyDate(latestAlert.fechaRegistro)}
+                      </span>
                     </div>
-                  );
-                })
-            )}
-          </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {isCalHistoryLoading ? (
+                    <div className="col-span-full flex items-center justify-center py-10 gap-2 text-slate-400">
+                      <Loader2 className="animate-spin" size={18} />
+                      <span className="text-xs font-bold">Cargando reportes de la comunidad...</span>
+                    </div>
+                  ) : filteredReports.length === 0 ? (
+                    <div className="col-span-full text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-xs text-slate-400 font-bold">No hay reportes de nadadores hoy para esta playa.</p>
+                      <p className="text-[11px] text-slate-400 mt-1">Sé el primero en informar a la comunidad sobre el estado del agua.</p>
+                    </div>
+                  ) : (
+                    filteredReports
+                      .slice(0, visibleReportsCount)
+                      .map((item, idx) => {
+                        const parsed = parseSwimmerSensaciones(item.sensaciones);
+                        const isSwimmer = item.origenDato === 'Nadador';
+                        const isMessageOnly = !item.realOlas && item.realOlas !== 0;
+
+                        if (isMessageOnly) {
+                          return (
+                            <div key={idx} className="bg-indigo-50/10 p-4 rounded-xl border border-indigo-100/50 shadow-sm flex flex-col justify-between hover:border-indigo-200 hover:bg-indigo-50/20 transition-all text-left">
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-center text-xs">
+                                  <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                                    <span className="text-sm">💬</span>
+                                    <span>
+                                      {item.origenDato === 'Web Admin' ? 'Admin' : (parsed.nombre && parsed.nombre !== 'Anónimo' ? parsed.nombre : 'Nadador Anónimo')}
+                                    </span>
+                                    <span className="inline-block text-[8px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                      Mensaje
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+                                    Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
+                                  </span>
+                                </div>
+
+                                {parsed.comentario && (
+                                  <p className="text-xs text-slate-700 font-semibold leading-relaxed italic border-l-2 border-indigo-300 pl-2">
+                                    "{parsed.comentario}"
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="mt-3 pt-3 border-t border-slate-200/40 flex justify-between items-center text-[9px] text-slate-400 font-semibold">
+                                <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
+                                <span>
+                                  Reportado: <strong>{formatFriendlyDate(item.fechaRegistro)}</strong>
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm flex flex-col justify-between hover:border-blue-100 hover:bg-blue-50/10 transition-all text-left">
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center text-xs">
+                                <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                                  <span className="text-sm">👤</span>
+                                  <span>
+                                    {item.origenDato === 'Web Admin' ? 'Admin' : (parsed.nombre && parsed.nombre !== 'Anónimo' ? parsed.nombre : 'Nadador Anónimo')}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full" title="Hora de nado en el agua">
+                                  Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
+                                </span>
+                              </div>
+
+                              {/* Ratings rápidos en píldoras */}
+                              <div className="flex flex-wrap gap-1.5">
+                                <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-[10px] font-bold text-blue-700 rounded-md">
+                                  🌊 Olas: {item.realOlas}/5
+                                </span>
+                                <span className="px-2 py-0.5 bg-red-50 border border-red-100 text-[10px] font-bold text-red-700 rounded-md">
+                                  🔄 Resaca: {item.realResaca}/5
+                                </span>
+                                <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700 rounded-md">
+                                  🧭 Deriva: {item.realCorriente}/5
+                                </span>
+                                {isSwimmer && (
+                                  <>
+                                    <span className="px-2 py-0.5 bg-rose-50 border border-rose-100 text-[10px] font-bold text-rose-700 rounded-md">
+                                      🪼 Medusas: {parsed.medusas}
+                                    </span>
+                                    <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-[10px] font-bold text-emerald-700 rounded-md">
+                                      🧼 Agua: {parsed.agua}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+
+                              {(isSwimmer ? parsed.comentario : item.sensaciones) && (
+                                <p className="text-xs text-slate-600 font-medium leading-relaxed italic border-l-2 border-blue-200 pl-2">
+                                  "{isSwimmer ? parsed.comentario : item.sensaciones}"
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="mt-3 pt-3 border-t border-slate-200/40 flex justify-between items-center text-[9px] text-slate-400 font-semibold">
+                              <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
+                              <span>
+                                Reportado: <strong>{formatFriendlyDate(item.fechaRegistro)}</strong>
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                  )}
+                </div>
+
+                {filteredReports.length > visibleReportsCount && (
+                  <div className="flex justify-center mt-6">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleReportsCount(prev => prev + 3)}
+                      className="bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 font-bold py-2 px-5 rounded-xl border border-slate-200 shadow-sm transition-all text-xs flex items-center gap-1.5"
+                    >
+                      <span>Mostrar más comentarios</span>
+                      <ChevronDown size={14} />
+                    </button>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
         
         {/* FOOTER LEGAL */}
@@ -2697,6 +2893,20 @@ export default function App() {
                     />
                   </div>
 
+                  {/* Publicar como alerta oficial */}
+                  <div className="flex items-center gap-2 p-1">
+                    <input
+                      type="checkbox"
+                      id="adminIsAlert"
+                      checked={adminIsAlert}
+                      onChange={(e) => setAdminIsAlert(e.target.checked)}
+                      className="w-3.5 h-3.5 text-rose-600 border-slate-300 rounded focus:ring-rose-500 cursor-pointer"
+                    />
+                    <label htmlFor="adminIsAlert" className="text-[11px] font-black text-rose-600 select-none cursor-pointer">
+                      ⚠️ Publicar como Alerta Oficial Destacada en la web
+                    </label>
+                  </div>
+
                   {reportStatus && (
                     <div className={`p-3 rounded-xl text-xs font-bold text-center border ${reportStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
                       {reportStatus.text}
@@ -2793,8 +3003,23 @@ export default function App() {
                   />
                 </div>
 
-                <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-xs">
-                  <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Evaluación de la playa</span>
+                {/* Toggle para publicar solo un mensaje/aviso */}
+                <div className="flex items-center gap-2 p-1">
+                  <input
+                    type="checkbox"
+                    id="swimmerIsOnlyMessage"
+                    checked={swimmerIsOnlyMessage}
+                    onChange={(e) => setSwimmerIsOnlyMessage(e.target.checked)}
+                    className="w-3.5 h-3.5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <label htmlFor="swimmerIsOnlyMessage" className="text-[11px] font-black text-indigo-600 select-none cursor-pointer">
+                    📢 Publicar solo un mensaje/aviso (sin valoraciones físicas)
+                  </label>
+                </div>
+
+                {!swimmerIsOnlyMessage && (
+                  <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-xs">
+                    <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Evaluación de la playa</span>
                   
                   {/* Olas */}
                   <div className="space-y-1">
@@ -2909,13 +3134,17 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+              )}
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Comentario o sensaciones (Opcional)</label>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                    {swimmerIsOnlyMessage ? 'Mensaje o aviso de la comunidad (Obligatorio)' : 'Comentario o sensaciones (Opcional)'}
+                  </label>
                   <textarea 
                     value={swimmerSensaciones}
                     onChange={(e) => setSwimmerSensaciones(e.target.value)}
-                    placeholder="Ej. 'El agua estaba plato pero fría, no hay medusas hoy...'"
+                    placeholder={swimmerIsOnlyMessage ? "Ej. '¿Quién se apunta a nadar a las 19:00?' o 'Mar de fondo fuerte, precaución hoy...'" : "Ej. 'El agua estaba plato pero fría, no hay medusas hoy...'"}
+                    required={swimmerIsOnlyMessage}
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-blue-500"
                     maxLength={150}
                   />
@@ -2933,7 +3162,7 @@ export default function App() {
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-md text-xs flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {isSendingSwimmerReport && <Loader2 size={14} className="animate-spin" />}
-                  Enviar Reporte Anónimo 🚀
+                  {swimmerIsOnlyMessage ? 'Enviar Mensaje a la Comunidad 🚀' : 'Enviar Reporte Anónimo 🚀'}
                 </button>
               </form>
             </div>
