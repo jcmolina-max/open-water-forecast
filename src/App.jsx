@@ -166,6 +166,7 @@ export default function App() {
     const relevantLogs = calibrationHistory.filter(log => {
       if (log.playa !== beachKey) return false;
       if (!log.boyaAltura || Number(log.boyaAltura) === 0) return false;
+      if (!log.realOlas || log.realOlas === "") return false;
       
       if (log.boyaDireccion && currentDirection) {
         let diff = Math.abs(Number(log.boyaDireccion) - currentDirection);
@@ -845,6 +846,34 @@ export default function App() {
     }
   };
 
+  const getRecordType = (item) => {
+    const orig = item.origenDato || "";
+    const notes = item.notasCalibracion || "";
+    const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
+    
+    if (notes.includes('[ALERTA_OFICIAL]') || orig === 'Admin: Alerta') {
+      return 'admin_alert';
+    }
+    
+    if (orig === 'Sincronización Boya' || orig === 'Boya: Sincronización') {
+      return 'buoy_sync';
+    }
+    
+    if (orig === 'Nadador: Mensaje' || (orig === 'Nadador' && !hasOlas)) {
+      return 'swimmer_msg';
+    }
+    
+    if (orig === 'Admin: Calibración' || (orig === 'Web Admin' && hasOlas)) {
+      return 'admin_report';
+    }
+    
+    if (orig === 'Nadador: Reporte' || (orig === 'Nadador' && hasOlas)) {
+      return 'swimmer_report';
+    }
+    
+    return 'swimmer_report';
+  };
+
   const fetchCalibrationHistory = async () => {
     setIsCalHistoryLoading(true);
     try {
@@ -971,7 +1000,7 @@ export default function App() {
       realVientoFza: adminRealVientoFza,
       realVientoDir: adminRealVientoDir,
       sensaciones: adminSensaciones,
-      origenDato: "Web Admin",
+      origenDato: adminIsAlert ? "Admin: Alerta" : "Admin: Calibración",
       appScore: hourForecast ? hourForecast.hourScore : "",
       appOlas: hourForecast ? hourForecast.swellH : "",
       appEnergia: hourForecast ? hourForecast.waveEnergy : "",
@@ -1072,7 +1101,7 @@ export default function App() {
       sensaciones: swimmerIsOnlyMessage 
         ? `[Nombre: ${swimmerName.trim() || 'Anónimo'} | Medusas: - | Agua: -] ${swimmerSensaciones}`
         : `[Nombre: ${swimmerName.trim() || 'Anónimo'} | Medusas: ${swimmerMedusas} | Agua: ${swimmerAgua}] ${swimmerSensaciones}`,
-      origenDato: "Nadador",
+      origenDato: swimmerIsOnlyMessage ? "Nadador: Mensaje" : "Nadador: Reporte",
       appScore: hourForecast ? hourForecast.hourScore : "",
       appOlas: hourForecast ? hourForecast.swellH : "",
       appEnergia: hourForecast ? hourForecast.waveEnergy : "",
@@ -1127,7 +1156,7 @@ export default function App() {
       realVientoFza: "",
       realVientoDir: "",
       sensaciones: "Sincronización automática de boya",
-      origenDato: "Sincronización Boya",
+      origenDato: "Boya: Sincronización",
       appScore: "",
       appOlas: "",
       appEnergia: "",
@@ -2069,101 +2098,154 @@ export default function App() {
                       ) : calibrationHistory.length === 0 ? (
                         <p className="text-xs text-slate-400 font-medium text-center py-10">No hay registros de nado en la base de datos.</p>
                       ) : (
-                        calibrationHistory.map((item, idx) => (
-                          <div key={idx} className="bg-slate-50 hover:bg-slate-100/80 p-4 rounded-xl border border-slate-200/60 shadow-sm transition-colors">
-                            <div className="flex justify-between items-start mb-2">
-                              <span className="text-xs font-bold text-slate-800 uppercase tracking-tight">
-                                🏖️ {BEACHES[item.playa]?.name.split(',')[0] || item.playa}
+                        calibrationHistory.map((item, idx) => {
+                          const recType = getRecordType(item);
+                          const parsed = parseSwimmerSensaciones(item.sensaciones);
+                          
+                          let bgClass = "bg-slate-50 hover:bg-slate-100/80 border-slate-200/60";
+                          let typeBadge = null;
+                          
+                          if (recType === 'buoy_sync') {
+                            bgClass = "bg-blue-50/20 hover:bg-blue-50/45 border-blue-100/60";
+                            typeBadge = (
+                              <span className="text-[8px] font-black text-blue-600 bg-blue-100/70 px-1.5 py-0.5 rounded">
+                                ⚓ Boya Real
                               </span>
-                              <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded" title="Día y hora de la sesión de nado">
-                                Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
+                            );
+                          } else if (recType === 'swimmer_msg') {
+                            bgClass = "bg-indigo-50/25 hover:bg-indigo-50/45 border-indigo-100/60";
+                            typeBadge = (
+                              <span className="text-[8px] font-black text-indigo-600 bg-indigo-100/60 px-1.5 py-0.5 rounded">
+                                💬 Mensaje
                               </span>
-                            </div>
-                            
-                            {(!item.realOlas && item.realOlas !== 0) ? (
-                              <div className="bg-indigo-50/30 border border-indigo-100/50 rounded-lg p-2 my-2 text-left">
-                                <span className="inline-block text-[8px] font-black text-indigo-600 bg-indigo-100/60 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
-                                  📢 Mensaje Comunidad
+                            );
+                          } else if (recType === 'admin_alert') {
+                            bgClass = "bg-rose-50/45 hover:bg-rose-50/70 border-rose-100/80 border-l-4 border-l-rose-500 animate-pulse";
+                            typeBadge = (
+                              <span className="text-[8px] font-black text-rose-600 bg-rose-100/70 px-1.5 py-0.5 rounded">
+                                ⚠️ Alerta Admin
+                              </span>
+                            );
+                          } else if (recType === 'admin_report') {
+                            bgClass = "bg-violet-50/15 hover:bg-violet-50/30 border-violet-100/60";
+                            typeBadge = (
+                              <span className="text-[8px] font-black text-violet-600 bg-violet-100/70 px-1.5 py-0.5 rounded">
+                                📋 Calibración
+                              </span>
+                            );
+                          } else {
+                            typeBadge = (
+                              <span className="text-[8px] font-black text-emerald-600 bg-emerald-100/70 px-1.5 py-0.5 rounded">
+                                👤 Reporte Nado
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <div key={idx} className={`${bgClass} p-4 rounded-xl border shadow-sm transition-all text-left`}>
+                              <div className="flex justify-between items-start mb-2.5">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-xs font-bold text-slate-800 uppercase tracking-tight leading-none">
+                                    🏖️ {BEACHES[item.playa]?.name.split(',')[0] || item.playa}
+                                  </span>
+                                  <div className="mt-0.5 flex gap-1 items-center">
+                                    {typeBadge}
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded leading-none shrink-0" title="Día y hora de la sesión de nado">
+                                  Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
                                 </span>
                               </div>
-                            ) : item.origenDato === 'Nadador' ? (
-                              <div className="grid grid-cols-3 gap-2 border-y border-slate-200/60 py-2 my-2 text-center text-xs">
-                                <div>
-                                  <span className="block text-[9px] font-bold text-slate-400 uppercase font-semibold">Ola</span>
-                                  <span className="font-black text-blue-600">{item.realOlas}/5</span>
+
+                              {recType === 'buoy_sync' ? (
+                                <div className="grid grid-cols-3 gap-2 border-y border-blue-100/60 py-2 my-2 text-center text-xs">
+                                  <div>
+                                    <span className="block text-[8px] font-bold text-slate-400 uppercase">Altura</span>
+                                    <span className="font-black text-blue-600">{item.boyaAltura ? `${item.boyaAltura}m` : '—'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-[8px] font-bold text-slate-400 uppercase">Periodo</span>
+                                    <span className="font-black text-slate-600">{item.boyaPeriodo ? `${item.boyaPeriodo}s` : '—'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-[8px] font-bold text-slate-400 uppercase">Temp</span>
+                                    <span className="font-black text-indigo-600">{item.boyaTemp ? `${formatBoyaTemp(item.boyaTemp)}ºC` : '—'}</span>
+                                  </div>
                                 </div>
-                                <div>
-                                  <span className="block text-[9px] font-bold text-slate-400 uppercase font-semibold">Medusas</span>
-                                  <span className="font-black text-red-600">
-                                    {item.realResaca === '1' || item.realResaca === 1 ? 'No' : item.realResaca === '3' || item.realResaca === 3 ? 'Pocas' : 'Muchas'}
-                                  </span>
+                              ) : (recType === 'swimmer_msg' || recType === 'admin_alert') ? (
+                                // No rating grid for message-only / alerts
+                                null
+                              ) : recType === 'swimmer_report' ? (
+                                <div className="grid grid-cols-3 gap-2 border-y border-slate-200/60 py-2 my-2 text-center text-xs">
+                                  <div>
+                                    <span className="block text-[9px] font-bold text-slate-400 uppercase font-semibold">Ola</span>
+                                    <span className="font-black text-blue-600">{item.realOlas}/5</span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-[9px] font-bold text-slate-400 uppercase font-semibold">Medusas</span>
+                                    <span className="font-black text-red-600">
+                                      {item.realResaca === '1' || item.realResaca === 1 ? 'No' : item.realResaca === '3' || item.realResaca === 3 ? 'Pocas' : 'Muchas'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-[9px] font-bold text-slate-400 uppercase font-semibold">Agua</span>
+                                    <span className="font-black text-indigo-600">
+                                      {item.realCorriente === '1' || item.realCorriente === 1 ? 'Limpia' : item.realCorriente === '3' || item.realCorriente === 3 ? 'Turbia' : 'Sucia'}
+                                    </span>
+                                  </div>
                                 </div>
-                                <div>
-                                  <span className="block text-[9px] font-bold text-slate-400 uppercase font-semibold">Agua</span>
-                                  <span className="font-black text-indigo-600">
-                                    {item.realCorriente === '1' || item.realCorriente === 1 ? 'Limpia' : item.realCorriente === '3' || item.realCorriente === 3 ? 'Turbia' : 'Sucia'}
-                                  </span>
+                              ) : (
+                                <div className="grid grid-cols-3 gap-2 border-y border-slate-200/60 py-2 my-2 text-center text-xs">
+                                  <div>
+                                    <span className="block text-[9px] font-bold text-slate-400 uppercase">Ola</span>
+                                    <span className="font-black text-blue-600">{item.realOlas}/5</span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-[9px] font-bold text-slate-400 uppercase">Viento</span>
+                                    <span className="font-black text-slate-600">{item.realVientoFza || '—'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-[9px] font-bold text-slate-400 uppercase">Deriva</span>
+                                    <span className="font-black text-indigo-600">{item.realCorriente}/5</span>
+                                  </div>
                                 </div>
-                              </div>
-                            ) : (
-                              <div className="grid grid-cols-3 gap-2 border-y border-slate-200/60 py-2 my-2 text-center text-xs">
-                                <div>
-                                  <span className="block text-[9px] font-bold text-slate-400 uppercase">Ola</span>
-                                  <span className="font-black text-blue-600">{item.realOlas}/5</span>
-                                </div>
-                                <div>
-                                  <span className="block text-[9px] font-bold text-slate-400 uppercase">Viento</span>
-                                  <span className="font-black text-slate-600">{item.realVientoFza}</span>
-                                </div>
-                                <div>
-                                  <span className="block text-[9px] font-bold text-slate-400 uppercase">Deriva</span>
-                                  <span className="font-black text-indigo-600">{item.realCorriente}/5</span>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {(() => {
-                              if (item.sensaciones) {
-                                if (item.origenDato === 'Nadador') {
-                                  const parsed = parseSwimmerSensaciones(item.sensaciones);
+                              )}
+
+                              {(() => {
+                                const isSwimmerType = recType === 'swimmer_report' || recType === 'swimmer_msg';
+                                const displayComment = isSwimmerType ? parsed.comentario : (recType === 'admin_alert' ? item.notasCalibracion.replace('[ALERTA_OFICIAL]', '').trim() : item.sensaciones);
+                                
+                                if (displayComment && recType !== 'buoy_sync') {
                                   return (
                                     <div className="space-y-1">
-                                      {parsed.nombre && parsed.nombre !== 'Anónimo' && (
+                                      {isSwimmerType && parsed.nombre && parsed.nombre !== 'Anónimo' && (
                                         <p className="text-[10px] font-bold text-slate-500 text-left">👤 {parsed.nombre}</p>
                                       )}
-                                      {parsed.comentario && (
-                                        <p className="text-xs text-slate-600 italic leading-tight mb-2 text-left">
-                                          "{parsed.comentario}"
-                                        </p>
-                                      )}
+                                      <p className="text-xs text-slate-600 italic leading-tight mb-2 text-left">
+                                        "{displayComment}"
+                                      </p>
                                     </div>
                                   );
-                                } else {
-                                  return (
-                                    <p className="text-xs text-slate-600 italic leading-tight mb-2 text-left">
-                                      "{item.sensaciones}"
-                                    </p>
-                                  );
                                 }
-                              }
-                              return null;
-                            })()}
-                            
-                            {item.boyaAltura && (
-                              <div className="mt-2 pt-2 border-t border-slate-200/40 text-[9px] font-semibold text-slate-400 flex justify-between">
-                                <span>⚓ Boya Real: {item.boyaAltura}m</span>
-                                <span>🌡️ Agua: {formatBoyaTemp(item.boyaTemp)}ºC</span>
+                                return null;
+                              })()}
+
+                              {item.boyaAltura && recType !== 'buoy_sync' && (
+                                <div className="mt-2 pt-2 border-t border-slate-200/40 text-[9px] font-semibold text-slate-400 flex justify-between">
+                                  <span>⚓ Boya Real: {item.boyaAltura}m</span>
+                                  <span>🌡️ Agua: {formatBoyaTemp(item.boyaTemp)}ºC</span>
+                                </div>
+                              )}
+
+                              <div className="mt-2 pt-2 border-t border-slate-200/20 flex justify-between items-center text-[9px] text-slate-400 font-medium">
+                                <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato.split(':')[0]}</strong></span>
+                                <span>
+                                  Reportado: <strong>{formatFriendlyDate(item.fechaRegistro)}</strong>
+                                </span>
                               </div>
-                            )}
-                            
-                            <div className="mt-1.5 flex justify-between items-center text-[9px] text-slate-400 font-medium">
-                              <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
-                              <span>
-                                Reportado: <strong>{formatFriendlyDate(item.fechaRegistro)}</strong>
-                              </span>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -2328,89 +2410,122 @@ export default function App() {
                     filteredReports
                       .slice(0, visibleReportsCount)
                       .map((item, idx) => {
+                        const recType = getRecordType(item);
                         const parsed = parseSwimmerSensaciones(item.sensaciones);
-                        const isSwimmer = item.origenDato === 'Nadador';
-                        const isMessageOnly = !item.realOlas && item.realOlas !== 0;
-
-                        if (isMessageOnly) {
-                          return (
-                            <div key={idx} className="bg-indigo-50/10 p-4 rounded-xl border border-indigo-100/50 shadow-sm flex flex-col justify-between hover:border-indigo-200 hover:bg-indigo-50/20 transition-all text-left">
-                              <div className="space-y-3">
-                                <div className="flex justify-between items-center text-xs">
-                                  <div className="flex items-center gap-1.5 font-bold text-slate-700">
-                                    <span className="text-sm">💬</span>
-                                    <span>
-                                      {item.origenDato === 'Web Admin' ? 'Admin' : (parsed.nombre && parsed.nombre !== 'Anónimo' ? parsed.nombre : 'Nadador Anónimo')}
-                                    </span>
-                                    <span className="inline-block text-[8px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                      Mensaje
-                                    </span>
-                                  </div>
-                                  <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-                                    Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
-                                  </span>
-                                </div>
-
-                                {parsed.comentario && (
-                                  <p className="text-xs text-slate-700 font-semibold leading-relaxed italic border-l-2 border-indigo-300 pl-2">
-                                    "{parsed.comentario}"
-                                  </p>
-                                )}
-                              </div>
-
-                              <div className="mt-3 pt-3 border-t border-slate-200/40 flex justify-between items-center text-[9px] text-slate-400 font-semibold">
-                                <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
-                                <span>
-                                  Reportado: <strong>{formatFriendlyDate(item.fechaRegistro)}</strong>
-                                </span>
-                              </div>
-                            </div>
+                        
+                        let bgClass = "bg-slate-50 border-slate-200/60 hover:bg-blue-50/10 hover:border-blue-100";
+                        let typeBadge = null;
+                        
+                        if (recType === 'buoy_sync') {
+                          bgClass = "bg-blue-50/20 border-blue-100/50 hover:bg-blue-50/35 hover:border-blue-200";
+                          typeBadge = (
+                            <span className="inline-block text-[8px] font-black text-blue-600 bg-blue-100/60 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              ⚓ Lectura Boya
+                            </span>
+                          );
+                        } else if (recType === 'swimmer_msg') {
+                          bgClass = "bg-indigo-50/10 border-indigo-100/50 hover:bg-indigo-50/20 hover:border-indigo-200";
+                          typeBadge = (
+                            <span className="inline-block text-[8px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              💬 Mensaje
+                            </span>
+                          );
+                        } else if (recType === 'admin_report') {
+                          bgClass = "bg-violet-50/10 border-violet-100/50 hover:bg-violet-50/20 hover:border-violet-200";
+                          typeBadge = (
+                            <span className="inline-block text-[8px] font-black text-violet-600 bg-violet-100/60 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              📋 Calibración
+                            </span>
+                          );
+                        } else {
+                          bgClass = "bg-slate-50 border-slate-200/60 hover:bg-blue-50/10 hover:border-blue-100";
+                          typeBadge = (
+                            <span className="inline-block text-[8px] font-black text-emerald-600 bg-emerald-100/60 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              👤 Reporte Nado
+                            </span>
                           );
                         }
 
                         return (
-                          <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm flex flex-col justify-between hover:border-blue-100 hover:bg-blue-50/10 transition-all text-left">
+                          <div key={idx} className={`${bgClass} p-4 rounded-xl border shadow-sm flex flex-col justify-between transition-all text-left`}>
                             <div className="space-y-3">
                               <div className="flex justify-between items-center text-xs">
                                 <div className="flex items-center gap-1.5 font-bold text-slate-700">
-                                  <span className="text-sm">👤</span>
-                                  <span>
-                                    {item.origenDato === 'Web Admin' ? 'Admin' : (parsed.nombre && parsed.nombre !== 'Anónimo' ? parsed.nombre : 'Nadador Anónimo')}
+                                  <span className="text-sm">
+                                    {recType === 'buoy_sync' ? '⚓' : recType === 'admin_report' ? '📋' : recType === 'swimmer_msg' ? '💬' : '👤'}
                                   </span>
+                                  <span>
+                                    {recType === 'buoy_sync' ? 'Boya Real Málaga' : (item.origenDato.startsWith('Admin') ? 'Admin' : (parsed.nombre && parsed.nombre !== 'Anónimo' ? parsed.nombre : 'Nadador Anónimo'))}
+                                  </span>
+                                  {typeBadge}
                                 </div>
-                                <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full" title="Hora de nado en el agua">
+                                <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
                                   Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
                                 </span>
                               </div>
 
-                              {/* Ratings rápidos en píldoras */}
-                              <div className="flex flex-wrap gap-1.5">
-                                <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-[10px] font-bold text-blue-700 rounded-md">
-                                  🌊 Olas: {item.realOlas}/5
-                                </span>
-                                <span className="px-2 py-0.5 bg-red-50 border border-red-100 text-[10px] font-bold text-red-700 rounded-md">
-                                  🔄 Resaca: {item.realResaca}/5
-                                </span>
-                                <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700 rounded-md">
-                                  🧭 Deriva: {item.realCorriente}/5
-                                </span>
-                                {isSwimmer && (
-                                  <>
-                                    <span className="px-2 py-0.5 bg-rose-50 border border-rose-100 text-[10px] font-bold text-rose-700 rounded-md">
-                                      🪼 Medusas: {parsed.medusas}
-                                    </span>
-                                    <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-[10px] font-bold text-emerald-700 rounded-md">
-                                      🧼 Agua: {parsed.agua}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-
-                              {(isSwimmer ? parsed.comentario : item.sensaciones) && (
-                                <p className="text-xs text-slate-600 font-medium leading-relaxed italic border-l-2 border-blue-200 pl-2">
-                                  "{isSwimmer ? parsed.comentario : item.sensaciones}"
-                                </p>
+                              {recType === 'buoy_sync' ? (
+                                <div className="grid grid-cols-3 gap-2 border-y border-blue-100/60 py-2 my-2 text-center text-xs bg-white/50 rounded-lg">
+                                  <div>
+                                    <span className="block text-[8px] font-bold text-slate-400 uppercase">Altura</span>
+                                    <span className="font-black text-blue-600">{item.boyaAltura ? `${item.boyaAltura}m` : '—'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-[8px] font-bold text-slate-400 uppercase">Periodo</span>
+                                    <span className="font-black text-slate-600">{item.boyaPeriodo ? `${item.boyaPeriodo}s` : '—'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-[8px] font-bold text-slate-400 uppercase">Temp</span>
+                                    <span className="font-black text-indigo-600">{item.boyaTemp ? `${formatBoyaTemp(item.boyaTemp)}ºC` : '—'}</span>
+                                  </div>
+                                </div>
+                              ) : (recType === 'swimmer_msg') ? (
+                                null
+                              ) : recType === 'swimmer_report' ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-[10px] font-bold text-blue-700 rounded-md">
+                                    🌊 Olas: {item.realOlas}/5
+                                  </span>
+                                  <span className="px-2 py-0.5 bg-red-50 border border-red-100 text-[10px] font-bold text-red-700 rounded-md">
+                                    🔄 Resaca: {item.realResaca}/5
+                                  </span>
+                                  <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700 rounded-md">
+                                    🧭 Deriva: {item.realCorriente}/5
+                                  </span>
+                                  <span className="px-2 py-0.5 bg-rose-50 border border-rose-100 text-[10px] font-bold text-rose-700 rounded-md">
+                                    🪼 Medusas: {parsed.medusas}
+                                  </span>
+                                  <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-[10px] font-bold text-emerald-700 rounded-md">
+                                    🧼 Agua: {parsed.agua}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap gap-1.5">
+                                  <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-[10px] font-bold text-blue-700 rounded-md">
+                                    🌊 Olas: {item.realOlas}/5
+                                  </span>
+                                  <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-700 rounded-md">
+                                    💨 Viento: {item.realVientoFza || '—'}
+                                  </span>
+                                  <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700 rounded-md">
+                                    🧭 Deriva: {item.realCorriente}/5
+                                  </span>
+                                </div>
                               )}
+
+                              {(() => {
+                                const isSwimmerType = recType === 'swimmer_report' || recType === 'swimmer_msg';
+                                const displayComment = isSwimmerType ? parsed.comentario : item.sensaciones;
+                                
+                                if (displayComment && recType !== 'buoy_sync') {
+                                  return (
+                                    <p className="text-xs text-slate-600 font-medium leading-relaxed italic border-l-2 border-blue-200 pl-2">
+                                      "{displayComment}"
+                                    </p>
+                                  );
+                                }
+                                return null;
+                              })()}
                             </div>
 
                             <div className="mt-3 pt-3 border-t border-slate-200/40 flex justify-between items-center text-[9px] text-slate-400 font-semibold">
