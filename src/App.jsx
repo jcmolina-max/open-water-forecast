@@ -3106,7 +3106,8 @@ export default function App() {
                       ))}
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
