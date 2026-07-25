@@ -818,6 +818,33 @@ export default function App() {
     return str.replace(',', '.');
   };
 
+  const formatSwimFriendly = (dateVal, swimHour) => {
+    if (!dateVal) return swimHour || '—';
+    try {
+      const regDate = new Date(dateVal);
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+      
+      const hourSuffix = swimHour ? `, ${swimHour}` : '';
+      
+      if (regDate.toDateString() === today.toDateString()) {
+        return `Hoy${hourSuffix}`;
+      } else if (regDate.toDateString() === yesterday.toDateString()) {
+        return `Ayer${hourSuffix}`;
+      } else {
+        const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
+        const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+        const dayNum = regDate.getDate();
+        const monthStr = regDate.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
+        const timeBrackets = swimHour ? ` (${swimHour})` : '';
+        return `${capitalizedDay}, ${dayNum} ${monthStr}${timeBrackets}`;
+      }
+    } catch (e) {
+      return swimHour || '—';
+    }
+  };
+
   const fetchCalibrationHistory = async () => {
     setIsCalHistoryLoading(true);
     try {
@@ -2048,8 +2075,8 @@ export default function App() {
                               <span className="text-xs font-bold text-slate-800 uppercase tracking-tight">
                                 🏖️ {BEACHES[item.playa]?.name.split(',')[0] || item.playa}
                               </span>
-                              <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded" title="Hora de nado en el agua">
-                                Nado: {item.horaNado}
+                              <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded" title="Día y hora de la sesión de nado">
+                                Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
                               </span>
                             </div>
                             
@@ -2320,7 +2347,7 @@ export default function App() {
                                     </span>
                                   </div>
                                   <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-                                    Hora: {item.horaNado}
+                                    Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
                                   </span>
                                 </div>
 
@@ -2352,7 +2379,7 @@ export default function App() {
                                   </span>
                                 </div>
                                 <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full" title="Hora de nado en el agua">
-                                  Nado: {item.horaNado}
+                                  Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
                                 </span>
                               </div>
 
