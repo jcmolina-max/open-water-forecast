@@ -135,6 +135,7 @@ export default function App() {
   const [swimmerMedusas, setSwimmerMedusas] = useState('Ninguna');
   const [swimmerAgua, setSwimmerAgua] = useState('Limpia');
   const [swimmerName, setSwimmerName] = useState('');
+  const [isSyncingBuoy, setIsSyncingBuoy] = useState(false);
 
   // Previsiones detalladas (comparador)
   const [comparisonForecast, setComparisonForecast] = useState(null);
@@ -1078,6 +1079,53 @@ export default function App() {
     }
   };
 
+  const handleSyncBuoy = async () => {
+    setIsSyncingBuoy(true);
+    const now = new Date();
+    const currentHourStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    const payload = {
+      horaNado: currentHourStr,
+      playa: selectedBeach,
+      realOlas: "",
+      realResaca: "",
+      realCorriente: "",
+      realVientoFza: "",
+      realVientoDir: "",
+      sensaciones: "Sincronización automática de boya",
+      origenDato: "Sincronización Boya",
+      appScore: "",
+      appOlas: "",
+      appEnergia: "",
+      appVientoNudos: "",
+      appVientoDir: "",
+      notasCalibracion: "Actualización forzada de boya real",
+      boyaAltura: "", 
+      boyaPeriodo: "",
+      boyaDireccion: "",
+      boyaTemp: "",
+      modelEcmwfOlas: "",
+      modelGfsOlas: "",
+      modelTodoSurfOlas: ""
+    };
+
+    try {
+      await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        mode: 'no-cors', 
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
+      setTimeout(() => {
+        fetchCalibrationHistory();
+        setIsSyncingBuoy(false);
+      }, 2000);
+    } catch (err) {
+      console.error("Error al sincronizar boya:", err);
+      setIsSyncingBuoy(false);
+    }
+  };
+
   // Buscar la medición de temperatura física más reciente registrada por la boya en el historial
   const latestBuoyReport = calibrationHistory.find(item => {
     if (!item.boyaTemp || item.boyaTemp === "") return false;
@@ -1324,10 +1372,21 @@ export default function App() {
                         
                         {/* Real (Boya) */}
                         <div className="bg-indigo-50/40 border border-indigo-100/50 rounded-xl p-2.5 text-left relative overflow-hidden">
-                          <span className="block text-[8px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
-                            ⚓ Boya Real
-                          </span>
-                          <span className="text-base font-black text-indigo-800">
+                          <div className="flex justify-between items-center">
+                            <span className="block text-[8px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
+                              ⚓ Boya Real
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleSyncBuoy}
+                              disabled={isSyncingBuoy}
+                              title="Sincronizar boya en tiempo real"
+                              className="text-indigo-500 hover:text-indigo-700 transition-colors disabled:opacity-50 p-0.5"
+                            >
+                              <RefreshCw size={10} className={isSyncingBuoy ? "animate-spin" : ""} />
+                            </button>
+                          </div>
+                          <span className="text-base font-black text-indigo-800 block mt-0.5">
                             {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '— ºC'}
                           </span>
                           <span className="block text-[8px] text-indigo-500/70 font-semibold mt-0.5">
