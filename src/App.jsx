@@ -2366,14 +2366,12 @@ export default function App() {
           {(() => {
             const latestAlert = calibrationHistory.find(item => 
               item.playa === selectedBeach && 
-              item.origenDato === 'Web Admin' && 
-              item.notasCalibracion && 
-              item.notasCalibracion.includes('[ALERTA_OFICIAL]')
+              getRecordType(item) === 'admin_alert'
             );
             
             const filteredReports = calibrationHistory.filter(item => 
               item.playa === selectedBeach && 
-              !(item.origenDato === 'Web Admin' && item.notasCalibracion && item.notasCalibracion.includes('[ALERTA_OFICIAL]'))
+              getRecordType(item) !== 'admin_alert'
             );
 
             return (
@@ -2386,7 +2384,7 @@ export default function App() {
                         Alerta Oficial del Administrador
                       </span>
                       <p className="text-xs font-bold text-rose-800 leading-tight">
-                        {latestAlert.notasCalibracion.replace('[ALERTA_OFICIAL]', '').trim() || (latestAlert.sensaciones || 'Aviso de seguridad')}
+                        {(latestAlert.notasCalibracion || '').replace('[ALERTA_OFICIAL]', '').trim() || (latestAlert.sensaciones || 'Aviso de seguridad')}
                       </p>
                       <span className="block text-[8px] text-rose-500/70 font-semibold mt-1">
                         Registrado: {formatFriendlyDate(latestAlert.fechaRegistro)}
