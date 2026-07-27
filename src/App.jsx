@@ -85,6 +85,228 @@ const getDynamicWaveEnergyCoefficient = (waveDirDeg, period) => {
 
 const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec";
 
+const HourlySvgChart = ({ hourlyData }) => {
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+
+  if (!hourlyData || hourlyData.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-48 text-slate-400 text-xs font-semibold">
+        No hay datos disponibles para graficar.
+      </div>
+    );
+  }
+
+  const maxSwell = Math.max(1.0, ...hourlyData.map(h => parseFloat(h.swellH) || 0));
+  const maxWind = Math.max(20, ...hourlyData.map(h => parseFloat(h.windS) || 0));
+
+  const width = 500;
+  const height = 180;
+  const paddingLeft = 35;
+  const paddingRight = 35;
+  const paddingTop = 20;
+  const paddingBottom = 25;
+
+  const chartWidth = width - paddingLeft - paddingRight;
+  const chartHeight = height - paddingTop - paddingBottom;
+
+  const getX = (index) => paddingLeft + (index * (chartWidth / 23));
+  const getYSwell = (val) => {
+    const v = parseFloat(val) || 0;
+    return height - paddingBottom - (v / maxSwell * chartHeight);
+  };
+  const getYWind = (val) => {
+    const v = parseFloat(val) || 0;
+    return height - paddingBottom - (v / maxWind * chartHeight);
+  };
+
+  let swellAreaPoints = `M ${getX(0)} ${height - paddingBottom}`;
+  let swellLinePoints = "";
+  
+  hourlyData.forEach((h, idx) => {
+    const x = getX(idx);
+    const y = getYSwell(h.swellH);
+    swellAreaPoints += ` L ${x} ${y}`;
+    swellLinePoints += (idx === 0 ? "M" : " L") + ` ${x} ${y}`;
+  });
+  swellAreaPoints += ` L ${getX(23)} ${height - paddingBottom} Z`;
+
+  let windLinePoints = "";
+  hourlyData.forEach((h, idx) => {
+    const x = getX(idx);
+    const y = getYWind(h.windS);
+    windLinePoints += (idx === 0 ? "M" : " L") + ` ${x} ${y}`;
+  });
+
+  const hoveredData = hoveredIdx !== null ? hourlyData[hoveredIdx] : null;
+
+  return (
+    <div className="relative bg-white p-4 rounded-xl border border-slate-100 shadow-inner flex flex-col items-center">
+      <div className="flex justify-between items-center w-full text-[10px] font-bold text-slate-500 mb-3 px-2 border-b border-slate-100 pb-2">
+        <div className="flex gap-4">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 bg-blue-500 rounded-full inline-block"></span>
+            Oleaje (máx: {maxSwell.toFixed(2)}m)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-0.5 bg-orange-500 border-t border-orange-500 border-dashed inline-block"></span>
+            Viento (máx: {maxWind.toFixed(1)}kt)
+          </span>
+        </div>
+        <span className="text-slate-400">Desliza para ver detalle</span>
+      </div>
+
+      <div className="w-full overflow-x-auto select-none">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full min-w-[450px] overflow-visible">
+          <defs>
+            <linearGradient id="swellGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          {[0, 0.25, 0.5, 0.75, 1.0].map((ratio, idx) => {
+            const y = paddingTop + ratio * chartHeight;
+            return (
+              <line
+                key={idx}
+                x1={paddingLeft}
+                y1={y}
+                x2={width - paddingRight}
+                y2={y}
+                stroke="#f1f5f9"
+                strokeWidth="1"
+              />
+            );
+          })}
+
+          <path d={swellAreaPoints} fill="url(#swellGrad)" />
+          <path d={swellLinePoints} stroke="#3b82f6" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <path d={windLinePoints} stroke="#ea580c" strokeWidth="2" strokeDasharray="4 3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+
+          {hoveredIdx !== null && (
+            <line
+              x1={getX(hoveredIdx)}
+              y1={paddingTop}
+              x2={getX(hoveredIdx)}
+              y2={height - paddingBottom}
+              stroke="#cbd5e1"
+              strokeWidth="1"
+              strokeDasharray="2 2"
+            />
+          )}
+
+          {hourlyData.map((h, idx) => {
+            const x = getX(idx);
+            const y = getYSwell(h.swellH);
+            const isHovered = hoveredIdx === idx;
+            return (
+              <circle
+                key={idx}
+                cx={x}
+                cy={y}
+                r={isHovered ? 4.5 : 2}
+                fill={isHovered ? "#1d4ed8" : "#3b82f6"}
+                stroke="white"
+                strokeWidth={isHovered ? 1.5 : 0.5}
+                className="transition-all duration-100"
+              />
+            );
+          })}
+
+          {hourlyData.map((h, idx) => {
+            const x = getX(idx);
+            const y = getYWind(h.windS);
+            const isHovered = hoveredIdx === idx;
+            return (
+              <circle
+                key={idx}
+                cx={x}
+                cy={y}
+                r={isHovered ? 4 : 1.5}
+                fill={isHovered ? "#c2410c" : "#ea580c"}
+                stroke="white"
+                strokeWidth={isHovered ? 1.5 : 0.5}
+                className="transition-all duration-100"
+              />
+            );
+          })}
+
+          {hourlyData.map((h, idx) => {
+            if (idx % 3 !== 0) return null;
+            return (
+              <text
+                key={idx}
+                x={getX(idx)}
+                y={height - 8}
+                textAnchor="middle"
+                fontSize="8"
+                fontWeight="black"
+                fill="#94a3b8"
+              >
+                {h.time}
+              </text>
+            );
+          })}
+
+          <text x={5} y={paddingTop + 5} fontSize="8" fontWeight="bold" fill="#3b82f6" textAnchor="start">
+            {maxSwell.toFixed(1)}m
+          </text>
+          <text x={5} y={height - paddingBottom} fontSize="8" fontWeight="bold" fill="#3b82f6" textAnchor="start">
+            0.0m
+          </text>
+
+          <text x={width - 5} y={paddingTop + 5} fontSize="8" fontWeight="bold" fill="#ea580c" textAnchor="end">
+            {maxWind.toFixed(0)}kt
+          </text>
+          <text x={width - 5} y={height - paddingBottom} fontSize="8" fontWeight="bold" fill="#ea580c" textAnchor="end">
+            0kt
+          </text>
+
+          {hourlyData.map((h, idx) => {
+            const x = getX(idx) - (chartWidth / 46);
+            const w = chartWidth / 23;
+            return (
+              <rect
+                key={idx}
+                x={x}
+                y={paddingTop}
+                width={w}
+                height={chartHeight}
+                fill="transparent"
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredIdx(idx)}
+                onMouseMove={() => setHoveredIdx(idx)}
+                onMouseLeave={() => setHoveredIdx(null)}
+              />
+            );
+          })}
+        </svg>
+      </div>
+
+      {hoveredIdx !== null && hoveredData && (
+        <div className="absolute top-[48px] left-1/2 transform -translate-x-1/2 bg-slate-800/95 border border-slate-700 text-white rounded-xl py-2 px-3 shadow-xl flex items-center gap-3 animate-in zoom-in-95 duration-100 z-30">
+          <div className="border-r border-slate-700 pr-2">
+            <span className="block text-[8px] font-bold text-slate-400 uppercase">Hora</span>
+            <span className="text-sm font-black text-white">{hoveredData.time}</span>
+          </div>
+          <div>
+            <span className="block text-[8px] font-bold text-blue-400 uppercase">🌊 Ola</span>
+            <span className="text-xs font-black">{hoveredData.swellH}m</span>
+          </div>
+          <div>
+            <span className="block text-[8px] font-bold text-orange-400 uppercase">💨 Viento</span>
+            <span className="text-xs font-black">{hoveredData.windS}kt</span>
+          </div>
+          <div>
+            <span className="block text-[8px] font-bold text-emerald-400 uppercase">🎯 Score</span>
+            <span className="text-xs font-black">{hoveredData.hourScore}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function App() {
   const [selectedBeach, setSelectedBeach] = useState('misericordia');
   // Por defecto seleccionamos "Hoy" (Índice 1, ya que Ayer es 0)
@@ -96,6 +318,8 @@ export default function App() {
   // Estados de calibración y administración (Fase 2)
   const [activeTab, setActiveTab] = useState('forecast'); // 'forecast' | 'comparison'
   const [expandedHourIdx, setExpandedHourIdx] = useState(null);
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'chart'
+  const [totalVisits, setTotalVisits] = useState(0);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [adminPin, setAdminPin] = useState('');
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
@@ -260,7 +484,7 @@ export default function App() {
 
       // 2. SATÉLITE MARINO
       try {
-        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature&timezone=Europe%2FMadrid&past_days=2`);
+        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,sea_level_height_msl&timezone=Europe%2FMadrid&past_days=2`);
       } catch (e) {
          setErrorDetails({ general: `El satélite marino no responde: ${e.message}` });
          setIsLoading(false);
@@ -315,6 +539,58 @@ export default function App() {
               wqDesc = `Posible arrastre. Lluvia acum: ${rainSum.toFixed(1)}mm.`;
           }
 
+          // ----- DETECCION DE MAREAS DEL DIA (24 HORAS DE ESTE OFFSET) -----
+          let dayTides = [];
+          for (let hourOffset = 0; hourOffset < 24; hourOffset++) {
+            const idx = baseIndex + hourOffset;
+            const val = marineJson?.hourly?.sea_level_height_msl?.[idx];
+            const valNum = val !== undefined && val !== null ? Number(val) : 0.0;
+            dayTides.push({ time: `${hourOffset.toString().padStart(2, '0')}:00`, height: valNum });
+          }
+
+          let detectedTides = [];
+          for (let j = 0; j < 24; j++) {
+            const curr = dayTides[j].height;
+            const prev = j > 0 ? dayTides[j - 1].height : (marineJson?.hourly?.sea_level_height_msl?.[baseIndex - 1] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex - 1]) : curr);
+            const next = j < 23 ? dayTides[j + 1].height : (marineJson?.hourly?.sea_level_height_msl?.[baseIndex + 24] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex + 24]) : curr);
+
+            if (j > 0 && j < 23) {
+              if (curr > prev && curr > next) {
+                detectedTides.push({ type: 'Pleamar', time: dayTides[j].time, height: curr });
+              } else if (curr < prev && curr < next) {
+                detectedTides.push({ type: 'Bajamar', time: dayTides[j].time, height: curr });
+              }
+            } else if (j === 0) {
+              if (curr > next && curr > prev) {
+                detectedTides.push({ type: 'Pleamar', time: dayTides[j].time, height: curr });
+              } else if (curr < next && curr < prev) {
+                detectedTides.push({ type: 'Bajamar', time: dayTides[j].time, height: curr });
+              }
+            } else if (j === 23) {
+              if (curr > prev && curr > next) {
+                detectedTides.push({ type: 'Pleamar', time: dayTides[j].time, height: curr });
+              } else if (curr < prev && curr < next) {
+                detectedTides.push({ type: 'Bajamar', time: dayTides[j].time, height: curr });
+              }
+            }
+          }
+
+          let tideState = "Marea Parada (Estacionaria) ⏸️";
+          if (offset === 0) {
+            const currentHourVal = marineJson?.hourly?.sea_level_height_msl?.[baseIndex + currentSystemHour] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex + currentSystemHour]) : 0;
+            const nextHourVal = marineJson?.hourly?.sea_level_height_msl?.[baseIndex + ((currentSystemHour + 1) % 24)] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex + ((currentSystemHour + 1) % 24)]) : currentHourVal;
+            const diff = nextHourVal - currentHourVal;
+            if (diff > 0.01) {
+              tideState = "Subiendo (Llenante) 📈";
+            } else if (diff < -0.01) {
+              tideState = "Bajando (Vaciante) 📉";
+            } else {
+              tideState = "Marea Parada (Estacionaria) ⏸️";
+            }
+          }
+          
+          const dailyMaxSeaLevel = Math.max(...dayTides.map(t => t.height));
+
           let translatedHourlyData = [];
           let totalScore = 0;
           let maxScore = -1;
@@ -336,6 +612,8 @@ export default function App() {
             const waveDir = marineJson.hourly?.wave_direction?.[i];
             
             const displayHour = i % 24;
+            const hourSeaLevel = marineJson?.hourly?.sea_level_height_msl?.[i] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[i]) : 0.0;
+            const isHighTideHour = hourSeaLevel >= (dailyMaxSeaLevel - 0.08);
             const windKmh = localClimateDown ? 0 : (weatherJson?.hourly?.wind_speed_10m?.[i] || 0);
             let windKnots = Math.round(windKmh / 1.852);
             let gustKnots = localClimateDown ? 0 : Math.round((weatherJson?.hourly?.wind_gusts_10m?.[i] || 0) / 1.852);
@@ -504,26 +782,40 @@ export default function App() {
 
             // EL MURO DE LA ROMPIENTE (Olas > 0.5m son muy incómodas/peligrosas para entrar al agua)
             if (effectiveWaveHeight > 0.5) {
-                hourScore -= 15; // Castigo directo por incomodidad en la orilla
-                if (hourScore > 50) hourScore = 50; // Muro estricto: nunca pasa de 50
-                
-                // Etiquetamos si no hay una regla previa importante
-                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo") {
-                    localRule = "Rompiente Dura";
-                    ruleColor = "text-orange-700 font-bold bg-orange-100 border border-orange-300 shadow-sm";
+                let rompientePenalty = 15;
+                if (isHighTideHour) {
+                    rompientePenalty = 25; // Penalización extra por rompiente en orilla inclinada durante Pleamar
+                    if (!localRule || localRule === "Rompiente Dura") {
+                        localRule = "Rompiente Dura (Pleamar) ⚠️";
+                        ruleColor = "text-orange-800 font-bold bg-orange-100 border border-orange-300 shadow-sm animate-pulse";
+                    }
+                } else {
+                    if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo") {
+                        localRule = "Rompiente Dura";
+                        ruleColor = "text-orange-700 font-bold bg-orange-100 border border-orange-300 shadow-sm";
+                    }
                 }
+                hourScore -= rompientePenalty;
+                if (hourScore > 50) hourScore = 50; // Muro estricto: nunca pasa de 50
             }
 
             // HACHAZO POR RESACA ALTA (Freno de Emergencia vital)
             if (ripRisk === "Alta") {
-                hourScore -= 30; // Castigo severo
-                if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
-                
-                // Etiquetamos visualmente la alerta si no hay otra regla más crítica (como Niebla/Tormenta)
-                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo" || localRule === "Rompiente Dura" || localRule === "Efecto Embudo: Alta resistencia") {
-                    localRule = "Resaca Fuerte";
-                    ruleColor = "text-red-600 font-bold bg-red-50 border border-red-200 shadow-sm";
+                let resacaPenalty = 30;
+                if (isHighTideHour) {
+                    resacaPenalty = 40; // Mayor peligro de succión por resaca a marea llena
+                    if (!localRule || localRule === "Resaca Fuerte") {
+                        localRule = "Resaca Fuerte (Pleamar) 🚨";
+                        ruleColor = "text-red-700 font-black bg-red-100 border border-red-300 shadow-sm";
+                    }
+                } else {
+                    if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo" || localRule === "Rompiente Dura" || localRule === "Efecto Embudo: Alta resistencia") {
+                        localRule = "Resaca Fuerte";
+                        ruleColor = "text-red-600 font-bold bg-red-50 border border-red-200 shadow-sm";
+                    }
                 }
+                hourScore -= resacaPenalty;
+                if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
             }
 
             // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos y Niebla)
@@ -579,7 +871,8 @@ export default function App() {
               ripColor: ripColor,
               drift: driftInfo,
               localRule: localRule,
-              ruleColor: ruleColor
+              ruleColor: ruleColor,
+              seaLevel: hourSeaLevel
             });
           }
 
@@ -626,7 +919,11 @@ export default function App() {
             worst: { time: worstHourTime, score: minScore },
             jellyfish: { risk: jRisk, color: jColor, bgColor: jBg },
             waterQuality: { status: wqStatus, color: wqColor, bgColor: wqBg, desc: wqDesc },
-            hasStormRisk: hasStormRiskToday
+            hasStormRisk: hasStormRiskToday,
+            tides: {
+              extremes: detectedTides,
+              currentState: tideState
+            }
           });
         }
 
@@ -882,6 +1179,9 @@ export default function App() {
       const json = JSON.parse(text);
       if (json.status === 'success' || json.status === 'empty') {
         setCalibrationHistory(json.data || []);
+        if (json.visitasTotales !== undefined) {
+          setTotalVisits(Number(json.visitasTotales));
+        }
       } else {
         console.error("Error reading sheets history:", json.message);
       }
@@ -895,6 +1195,27 @@ export default function App() {
   useEffect(() => {
     fetchCalibrationHistory();
   }, [dataRefreshKey]);
+
+  useEffect(() => {
+    const registerVisit = async () => {
+      try {
+        const lastVisit = localStorage.getItem('ow_last_visit');
+        const now = new Date().getTime();
+        if (!lastVisit || (now - Number(lastVisit)) > 86400000) {
+          localStorage.setItem('ow_last_visit', now.toString());
+          await fetch(WEBHOOK_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'registrar_visita', origen: 'Web Client' })
+          });
+        }
+      } catch (err) {
+        console.error("Error registering visit:", err);
+      }
+    };
+    registerVisit();
+  }, []);
 
   useEffect(() => {
     if (activeTab !== 'comparison') return;
@@ -1554,8 +1875,8 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 5: Calidad del Agua y Medusas (Grid dual) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
+                {/* Tarjeta 5: Calidad del Agua, Medusas y Mareas (Grid triple en Tablet, vertical en PC/Móvil) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-1 gap-4">
                   {/* Calidad del Agua */}
                   <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
                     <div className="flex justify-between items-center mb-4">
@@ -1594,6 +1915,51 @@ export default function App() {
                       <a href="https://oceanaria.es/" target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-500 hover:text-blue-700 underline underline-offset-2 text-right">
                         Oceanaria
                       </a>
+                    </div>
+                  </div>
+
+                  {/* Mareas */}
+                  <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+                        <Waves size={16} className={isClimateDown ? 'text-slate-400' : 'text-blue-500'}/> Mareas
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-medium">Satélite + REDMAR</span>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5">
+                      {/* Estado Actual (Solo hoy) */}
+                      {selectedDay === 1 && currentDayData?.tides?.currentState && (
+                        <div className="flex items-center justify-between p-2 rounded-xl border border-blue-100 bg-blue-50/50">
+                          <span className="text-[10px] font-bold text-slate-500">Estado actual:</span>
+                          <span className="text-[10px] font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                            {currentDayData.tides.currentState}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Extremos del día */}
+                      <div className="grid grid-cols-2 gap-2 text-center">
+                        {currentDayData?.tides?.extremes && currentDayData.tides.extremes.length > 0 ? (
+                          currentDayData.tides.extremes.map((t, idx) => (
+                            <div key={idx} className="bg-slate-50 border border-slate-100 p-2 rounded-xl flex flex-col justify-center">
+                              <span className={`text-[9px] font-black uppercase tracking-wide ${t.type === 'Pleamar' ? 'text-indigo-600' : 'text-slate-500'}`}>
+                                {t.type === 'Pleamar' ? '📈 Pleamar' : '📉 Bajamar'}
+                              </span>
+                              <span className="text-xs font-black text-slate-700 mt-0.5">
+                                {t.time}
+                              </span>
+                              <span className="text-[9px] font-bold text-slate-400">
+                                {t.height.toFixed(2)}m
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="col-span-2 text-[10px] text-slate-400 font-medium py-2">
+                            Mareas no disponibles
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1648,7 +2014,7 @@ export default function App() {
               {/* PANEL DERECHO: Tabla de previsiones */}
               <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-fit">
                 
-                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50/50 gap-4">
                   <div className="flex items-center gap-3">
                     <h3 className="font-bold text-slate-800 text-lg">
                       {selectedDay === 0 ? "Registro de ayer" : "Evolución del mar"}
@@ -1657,9 +2023,29 @@ export default function App() {
                       Predicción Matemática
                     </span>
                   </div>
-                  <span className={`text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-1 shadow-sm ${selectedDay === 0 ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                    <CalendarDays size={14}/> {currentDayData.dayLabel.split(' ')[0]}
-                  </span>
+                  <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                    {/* Botones Switcher de Vista */}
+                    <div className="bg-slate-100 p-0.5 rounded-lg border border-slate-200/50 flex gap-0.5 text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('table')}
+                        className={`px-2.5 py-1 rounded transition-all ${viewMode === 'table' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                      >
+                        Tabla 📋
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('chart')}
+                        className={`px-2.5 py-1 rounded transition-all ${viewMode === 'chart' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                      >
+                        Gráfico 📈
+                      </button>
+                    </div>
+
+                    <span className={`text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-1 shadow-sm shrink-0 ${selectedDay === 0 ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      <CalendarDays size={14}/> {currentDayData.dayLabel.split(' ')[0]}
+                    </span>
+                  </div>
                 </div>
 
                 {/* BANNER TRAMPA PARA "AYER" */}
@@ -1690,8 +2076,14 @@ export default function App() {
                   </div>
                 )}
                 
-                  {/* Cabecera del acordeón horario (visible en PC y móvil) */}
-                  <div className="flex px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 bg-slate-50/50 rounded-t-2xl mb-1.5">
+                  {viewMode === 'chart' ? (
+                    <div className="p-5 animate-in fade-in duration-300">
+                      <HourlySvgChart hourlyData={currentDayData.hourly} />
+                    </div>
+                  ) : (
+                    <>
+                      {/* Cabecera del acordeón horario (visible en PC y móvil) */}
+                      <div className="flex px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 bg-slate-50/50 rounded-t-2xl mb-1.5">
                     <span className="w-[50px] md:w-[80px]">Hora</span>
                     <span className="flex-grow pl-4 md:pl-8">Score</span>
                     <span className="w-[70px] md:w-[120px] text-right">Oleaje</span>
@@ -1857,8 +2249,9 @@ export default function App() {
                       );
                     })}
                   </div>
-
-              </div>
+                </>
+              )}
+            </div>
 
               </div>
             ) : (
@@ -1875,11 +2268,12 @@ export default function App() {
                       <p className="text-xs text-slate-500 mt-1">Selecciona una sesión real para auditar qué falló o acertó en los modelos satelitales.</p>
                     </div>
                     {(() => {
-                      const calibrationLogsOnly = calibrationHistory.filter(item => 
-                        item.realOlas && 
-                        item.realOlas !== "" && 
-                        !(item.origenDato === 'Web Admin' && item.notasCalibracion && item.notasCalibracion.includes('[ALERTA_OFICIAL]'))
-                      );
+                      const calibrationLogsOnly = calibrationHistory.filter(item => {
+                        const type = getRecordType(item);
+                        return item.realOlas && 
+                               item.realOlas !== "" && 
+                               type !== 'admin_alert';
+                      });
                       return (
                         <select
                           value={selectedHistoryLog ? calibrationLogsOnly.indexOf(selectedHistoryLog) : ''}
@@ -1902,7 +2296,8 @@ export default function App() {
 
                   {selectedHistoryLog ? (() => {
                     const parsedDetails = parseSwimmerSensaciones(selectedHistoryLog.sensaciones);
-                    const isSwimmer = selectedHistoryLog.origenDato === 'Nadador';
+                    const logType = getRecordType(selectedHistoryLog);
+                    const isSwimmer = logType === 'swimmer_report';
                     
                     const appOlas = parseFloat((selectedHistoryLog.appOlas || "0").toString().replace(",", "."));
                     const swimmerScaleToMeters = (v) => {
@@ -2005,7 +2400,10 @@ export default function App() {
                         <div className="bg-white border border-slate-200/60 rounded-xl p-4 mt-3.5 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between shadow-sm">
                           <div className="flex-grow text-left">
                             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-                              Sensaciones de: <strong className="text-indigo-500 font-bold">{isSwimmer && parsedDetails.nombre !== 'Anónimo' ? parsedDetails.nombre : 'Nadador'}</strong>
+                              Sensaciones de: <strong className="text-indigo-500 font-bold">
+                                {isSwimmer && parsedDetails.nombre !== 'Anónimo' ? parsedDetails.nombre : 
+                                 (logType.startsWith('admin') ? 'Administrador' : 'Nadador')}
+                              </strong>
                             </span>
                             <p className="text-xs text-slate-700 italic font-medium mt-1">
                               "{isSwimmer ? parsedDetails.comentario : (selectedHistoryLog.sensaciones || 'Sin comentarios registrados.')}"
@@ -3282,6 +3680,20 @@ export default function App() {
           </div>
         </div>
       )}
+      {/* Footer con Contador de Visitas */}
+      <footer className="w-full text-center py-6 mt-8 border-t border-slate-100 text-[10px] font-bold text-slate-400/70 tracking-wide uppercase flex flex-col sm:flex-row items-center justify-center gap-1.5 select-none">
+        <span>© {new Date().getFullYear()} OpenWater Tracker Málaga</span>
+        <span className="hidden sm:inline">•</span>
+        <span>Club de Nado Aliquindoi</span>
+        {totalVisits > 0 && (
+          <>
+            <span className="hidden sm:inline">•</span>
+            <span className="bg-slate-50 border border-slate-200/50 px-2 py-0.5 rounded text-[9px] text-slate-500 font-extrabold normal-case">
+              ⚡ {totalVisits.toLocaleString('es-ES')} visitas
+            </span>
+          </>
+        )}
+      </footer>
       <Analytics />
     </div>
   );
