@@ -2268,11 +2268,12 @@ export default function App() {
                       <p className="text-xs text-slate-500 mt-1">Selecciona una sesión real para auditar qué falló o acertó en los modelos satelitales.</p>
                     </div>
                     {(() => {
-                      const calibrationLogsOnly = calibrationHistory.filter(item => 
-                        item.realOlas && 
-                        item.realOlas !== "" && 
-                        !(item.origenDato === 'Web Admin' && item.notasCalibracion && item.notasCalibracion.includes('[ALERTA_OFICIAL]'))
-                      );
+                      const calibrationLogsOnly = calibrationHistory.filter(item => {
+                        const type = getRecordType(item);
+                        return item.realOlas && 
+                               item.realOlas !== "" && 
+                               type !== 'admin_alert';
+                      });
                       return (
                         <select
                           value={selectedHistoryLog ? calibrationLogsOnly.indexOf(selectedHistoryLog) : ''}
@@ -2295,7 +2296,8 @@ export default function App() {
 
                   {selectedHistoryLog ? (() => {
                     const parsedDetails = parseSwimmerSensaciones(selectedHistoryLog.sensaciones);
-                    const isSwimmer = selectedHistoryLog.origenDato === 'Nadador';
+                    const logType = getRecordType(selectedHistoryLog);
+                    const isSwimmer = logType === 'swimmer_report';
                     
                     const appOlas = parseFloat((selectedHistoryLog.appOlas || "0").toString().replace(",", "."));
                     const swimmerScaleToMeters = (v) => {
@@ -2398,7 +2400,10 @@ export default function App() {
                         <div className="bg-white border border-slate-200/60 rounded-xl p-4 mt-3.5 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between shadow-sm">
                           <div className="flex-grow text-left">
                             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-                              Sensaciones de: <strong className="text-indigo-500 font-bold">{isSwimmer && parsedDetails.nombre !== 'Anónimo' ? parsedDetails.nombre : 'Nadador'}</strong>
+                              Sensaciones de: <strong className="text-indigo-500 font-bold">
+                                {isSwimmer && parsedDetails.nombre !== 'Anónimo' ? parsedDetails.nombre : 
+                                 (logType.startsWith('admin') ? 'Administrador' : 'Nadador')}
+                              </strong>
                             </span>
                             <p className="text-xs text-slate-700 italic font-medium mt-1">
                               "{isSwimmer ? parsedDetails.comentario : (selectedHistoryLog.sensaciones || 'Sin comentarios registrados.')}"
