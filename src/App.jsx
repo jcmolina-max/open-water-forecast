@@ -319,6 +319,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('forecast'); // 'forecast' | 'comparison'
   const [expandedHourIdx, setExpandedHourIdx] = useState(null);
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'chart'
+  const [totalVisits, setTotalVisits] = useState(0);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [adminPin, setAdminPin] = useState('');
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
@@ -1105,6 +1106,9 @@ export default function App() {
       const json = JSON.parse(text);
       if (json.status === 'success' || json.status === 'empty') {
         setCalibrationHistory(json.data || []);
+        if (json.visitasTotales !== undefined) {
+          setTotalVisits(Number(json.visitasTotales));
+        }
       } else {
         console.error("Error reading sheets history:", json.message);
       }
@@ -1118,6 +1122,27 @@ export default function App() {
   useEffect(() => {
     fetchCalibrationHistory();
   }, [dataRefreshKey]);
+
+  useEffect(() => {
+    const registerVisit = async () => {
+      try {
+        const lastVisit = localStorage.getItem('ow_last_visit');
+        const now = new Date().getTime();
+        if (!lastVisit || (now - Number(lastVisit)) > 86400000) {
+          localStorage.setItem('ow_last_visit', now.toString());
+          await fetch(WEBHOOK_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'registrar_visita', origen: 'Web Client' })
+          });
+        }
+      } catch (err) {
+        console.error("Error registering visit:", err);
+      }
+    };
+    registerVisit();
+  }, []);
 
   useEffect(() => {
     if (activeTab !== 'comparison') return;
@@ -3532,6 +3557,20 @@ export default function App() {
           </div>
         </div>
       )}
+      {/* Footer con Contador de Visitas */}
+      <footer className="w-full text-center py-6 mt-8 border-t border-slate-100 text-[10px] font-bold text-slate-400/70 tracking-wide uppercase flex flex-col sm:flex-row items-center justify-center gap-1.5 select-none">
+        <span>© {new Date().getFullYear()} OpenWater Tracker Málaga</span>
+        <span className="hidden sm:inline">•</span>
+        <span>Club de Nadadores Misericordia</span>
+        {totalVisits > 0 && (
+          <>
+            <span className="hidden sm:inline">•</span>
+            <span className="bg-slate-50 border border-slate-200/50 px-2 py-0.5 rounded text-[9px] text-slate-500 font-extrabold normal-case">
+              ⚡ {totalVisits.toLocaleString('es-ES')} visitas
+            </span>
+          </>
+        )}
+      </footer>
       <Analytics />
     </div>
   );
