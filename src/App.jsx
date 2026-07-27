@@ -484,7 +484,7 @@ export default function App() {
 
       // 2. SATÉLITE MARINO
       try {
-        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature&timezone=Europe%2FMadrid&past_days=2`);
+        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,sea_level_height_msl&timezone=Europe%2FMadrid&past_days=2`);
       } catch (e) {
          setErrorDetails({ general: `El satélite marino no responde: ${e.message}` });
          setIsLoading(false);
@@ -539,6 +539,58 @@ export default function App() {
               wqDesc = `Posible arrastre. Lluvia acum: ${rainSum.toFixed(1)}mm.`;
           }
 
+          // ----- DETECCION DE MAREAS DEL DIA (24 HORAS DE ESTE OFFSET) -----
+          let dayTides = [];
+          for (let hourOffset = 0; hourOffset < 24; hourOffset++) {
+            const idx = baseIndex + hourOffset;
+            const val = marineJson?.hourly?.sea_level_height_msl?.[idx];
+            const valNum = val !== undefined && val !== null ? Number(val) : 0.0;
+            dayTides.push({ time: `${hourOffset.toString().padStart(2, '0')}:00`, height: valNum });
+          }
+
+          let detectedTides = [];
+          for (let j = 0; j < 24; j++) {
+            const curr = dayTides[j].height;
+            const prev = j > 0 ? dayTides[j - 1].height : (marineJson?.hourly?.sea_level_height_msl?.[baseIndex - 1] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex - 1]) : curr);
+            const next = j < 23 ? dayTides[j + 1].height : (marineJson?.hourly?.sea_level_height_msl?.[baseIndex + 24] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex + 24]) : curr);
+
+            if (j > 0 && j < 23) {
+              if (curr > prev && curr > next) {
+                detectedTides.push({ type: 'Pleamar', time: dayTides[j].time, height: curr });
+              } else if (curr < prev && curr < next) {
+                detectedTides.push({ type: 'Bajamar', time: dayTides[j].time, height: curr });
+              }
+            } else if (j === 0) {
+              if (curr > next && curr > prev) {
+                detectedTides.push({ type: 'Pleamar', time: dayTides[j].time, height: curr });
+              } else if (curr < next && curr < prev) {
+                detectedTides.push({ type: 'Bajamar', time: dayTides[j].time, height: curr });
+              }
+            } else if (j === 23) {
+              if (curr > prev && curr > next) {
+                detectedTides.push({ type: 'Pleamar', time: dayTides[j].time, height: curr });
+              } else if (curr < prev && curr < next) {
+                detectedTides.push({ type: 'Bajamar', time: dayTides[j].time, height: curr });
+              }
+            }
+          }
+
+          let tideState = "Marea Parada (Estacionaria) ⏸️";
+          if (offset === 0) {
+            const currentHourVal = marineJson?.hourly?.sea_level_height_msl?.[baseIndex + currentSystemHour] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex + currentSystemHour]) : 0;
+            const nextHourVal = marineJson?.hourly?.sea_level_height_msl?.[baseIndex + ((currentSystemHour + 1) % 24)] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex + ((currentSystemHour + 1) % 24)]) : currentHourVal;
+            const diff = nextHourVal - currentHourVal;
+            if (diff > 0.01) {
+              tideState = "Subiendo (Llenante) 📈";
+            } else if (diff < -0.01) {
+              tideState = "Bajando (Vaciante) 📉";
+            } else {
+              tideState = "Marea Parada (Estacionaria) ⏸️";
+            }
+          }
+          
+          const dailyMaxSeaLevel = Math.max(...dayTides.map(t => t.height));
+
           let translatedHourlyData = [];
           let totalScore = 0;
           let maxScore = -1;
@@ -560,6 +612,8 @@ export default function App() {
             const waveDir = marineJson.hourly?.wave_direction?.[i];
             
             const displayHour = i % 24;
+            const hourSeaLevel = marineJson?.hourly?.sea_level_height_msl?.[i] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[i]) : 0.0;
+            const isHighTideHour = hourSeaLevel >= (dailyMaxSeaLevel - 0.08);
             const windKmh = localClimateDown ? 0 : (weatherJson?.hourly?.wind_speed_10m?.[i] || 0);
             let windKnots = Math.round(windKmh / 1.852);
             let gustKnots = localClimateDown ? 0 : Math.round((weatherJson?.hourly?.wind_gusts_10m?.[i] || 0) / 1.852);
@@ -728,26 +782,40 @@ export default function App() {
 
             // EL MURO DE LA ROMPIENTE (Olas > 0.5m son muy incómodas/peligrosas para entrar al agua)
             if (effectiveWaveHeight > 0.5) {
-                hourScore -= 15; // Castigo directo por incomodidad en la orilla
-                if (hourScore > 50) hourScore = 50; // Muro estricto: nunca pasa de 50
-                
-                // Etiquetamos si no hay una regla previa importante
-                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo") {
-                    localRule = "Rompiente Dura";
-                    ruleColor = "text-orange-700 font-bold bg-orange-100 border border-orange-300 shadow-sm";
+                let rompientePenalty = 15;
+                if (isHighTideHour) {
+                    rompientePenalty = 25; // Penalización extra por rompiente en orilla inclinada durante Pleamar
+                    if (!localRule || localRule === "Rompiente Dura") {
+                        localRule = "Rompiente Dura (Pleamar) ⚠️";
+                        ruleColor = "text-orange-800 font-bold bg-orange-100 border border-orange-300 shadow-sm animate-pulse";
+                    }
+                } else {
+                    if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo") {
+                        localRule = "Rompiente Dura";
+                        ruleColor = "text-orange-700 font-bold bg-orange-100 border border-orange-300 shadow-sm";
+                    }
                 }
+                hourScore -= rompientePenalty;
+                if (hourScore > 50) hourScore = 50; // Muro estricto: nunca pasa de 50
             }
 
             // HACHAZO POR RESACA ALTA (Freno de Emergencia vital)
             if (ripRisk === "Alta") {
-                hourScore -= 30; // Castigo severo
-                if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
-                
-                // Etiquetamos visualmente la alerta si no hay otra regla más crítica (como Niebla/Tormenta)
-                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo" || localRule === "Rompiente Dura" || localRule === "Efecto Embudo: Alta resistencia") {
-                    localRule = "Resaca Fuerte";
-                    ruleColor = "text-red-600 font-bold bg-red-50 border border-red-200 shadow-sm";
+                let resacaPenalty = 30;
+                if (isHighTideHour) {
+                    resacaPenalty = 40; // Mayor peligro de succión por resaca a marea llena
+                    if (!localRule || localRule === "Resaca Fuerte") {
+                        localRule = "Resaca Fuerte (Pleamar) 🚨";
+                        ruleColor = "text-red-700 font-black bg-red-100 border border-red-300 shadow-sm";
+                    }
+                } else {
+                    if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo" || localRule === "Rompiente Dura" || localRule === "Efecto Embudo: Alta resistencia") {
+                        localRule = "Resaca Fuerte";
+                        ruleColor = "text-red-600 font-bold bg-red-50 border border-red-200 shadow-sm";
+                    }
                 }
+                hourScore -= resacaPenalty;
+                if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
             }
 
             // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos y Niebla)
@@ -803,7 +871,8 @@ export default function App() {
               ripColor: ripColor,
               drift: driftInfo,
               localRule: localRule,
-              ruleColor: ruleColor
+              ruleColor: ruleColor,
+              seaLevel: hourSeaLevel
             });
           }
 
@@ -850,7 +919,11 @@ export default function App() {
             worst: { time: worstHourTime, score: minScore },
             jellyfish: { risk: jRisk, color: jColor, bgColor: jBg },
             waterQuality: { status: wqStatus, color: wqColor, bgColor: wqBg, desc: wqDesc },
-            hasStormRisk: hasStormRiskToday
+            hasStormRisk: hasStormRiskToday,
+            tides: {
+              extremes: detectedTides,
+              currentState: tideState
+            }
           });
         }
 
@@ -1802,8 +1875,8 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 5: Calidad del Agua y Medusas (Grid dual) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
+                {/* Tarjeta 5: Calidad del Agua, Medusas y Mareas (Grid triple en Tablet, vertical en PC/Móvil) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-1 gap-4">
                   {/* Calidad del Agua */}
                   <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
                     <div className="flex justify-between items-center mb-4">
@@ -1842,6 +1915,51 @@ export default function App() {
                       <a href="https://oceanaria.es/" target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-500 hover:text-blue-700 underline underline-offset-2 text-right">
                         Oceanaria
                       </a>
+                    </div>
+                  </div>
+
+                  {/* Mareas */}
+                  <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+                        <Waves size={16} className={isClimateDown ? 'text-slate-400' : 'text-blue-500'}/> Mareas
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-medium">Satélite + REDMAR</span>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5">
+                      {/* Estado Actual (Solo hoy) */}
+                      {selectedDay === 1 && currentDayData?.tides?.currentState && (
+                        <div className="flex items-center justify-between p-2 rounded-xl border border-blue-100 bg-blue-50/50">
+                          <span className="text-[10px] font-bold text-slate-500">Estado actual:</span>
+                          <span className="text-[10px] font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                            {currentDayData.tides.currentState}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Extremos del día */}
+                      <div className="grid grid-cols-2 gap-2 text-center">
+                        {currentDayData?.tides?.extremes && currentDayData.tides.extremes.length > 0 ? (
+                          currentDayData.tides.extremes.map((t, idx) => (
+                            <div key={idx} className="bg-slate-50 border border-slate-100 p-2 rounded-xl flex flex-col justify-center">
+                              <span className={`text-[9px] font-black uppercase tracking-wide ${t.type === 'Pleamar' ? 'text-indigo-600' : 'text-slate-500'}`}>
+                                {t.type === 'Pleamar' ? '📈 Pleamar' : '📉 Bajamar'}
+                              </span>
+                              <span className="text-xs font-black text-slate-700 mt-0.5">
+                                {t.time}
+                              </span>
+                              <span className="text-[9px] font-bold text-slate-400">
+                                {t.height.toFixed(2)}m
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="col-span-2 text-[10px] text-slate-400 font-medium py-2">
+                            Mareas no disponibles
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
