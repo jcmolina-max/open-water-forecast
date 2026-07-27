@@ -3561,7 +3561,7 @@ export default function App() {
       <footer className="w-full text-center py-6 mt-8 border-t border-slate-100 text-[10px] font-bold text-slate-400/70 tracking-wide uppercase flex flex-col sm:flex-row items-center justify-center gap-1.5 select-none">
         <span>© {new Date().getFullYear()} OpenWater Tracker Málaga</span>
         <span className="hidden sm:inline">•</span>
-        <span>Club de Nadadores Misericordia</span>
+        <span>Club de Nado Aliquindoi</span>
         {totalVisits > 0 && (
           <>
             <span className="hidden sm:inline">•</span>
