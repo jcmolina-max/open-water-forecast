@@ -554,22 +554,17 @@ export default function App() {
             const prev = j > 0 ? dayTides[j - 1].height : (marineJson?.hourly?.sea_level_height_msl?.[baseIndex - 1] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex - 1]) : curr);
             const next = j < 23 ? dayTides[j + 1].height : (marineJson?.hourly?.sea_level_height_msl?.[baseIndex + 24] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex + 24]) : curr);
 
-            if (j > 0 && j < 23) {
-              if (curr > prev && curr > next) {
+            const isPeak = curr >= prev && curr >= next && (curr > prev || curr > next);
+            const isTrough = curr <= prev && curr <= next && (curr < prev || curr < next);
+
+            if (isPeak) {
+              const duplicate = detectedTides.find(t => t.type === 'Pleamar' && Math.abs(parseInt(t.time.split(':')[0]) - j) <= 2);
+              if (!duplicate) {
                 detectedTides.push({ type: 'Pleamar', time: dayTides[j].time, height: curr });
-              } else if (curr < prev && curr < next) {
-                detectedTides.push({ type: 'Bajamar', time: dayTides[j].time, height: curr });
               }
-            } else if (j === 0) {
-              if (curr > next && curr > prev) {
-                detectedTides.push({ type: 'Pleamar', time: dayTides[j].time, height: curr });
-              } else if (curr < next && curr < prev) {
-                detectedTides.push({ type: 'Bajamar', time: dayTides[j].time, height: curr });
-              }
-            } else if (j === 23) {
-              if (curr > prev && curr > next) {
-                detectedTides.push({ type: 'Pleamar', time: dayTides[j].time, height: curr });
-              } else if (curr < prev && curr < next) {
+            } else if (isTrough) {
+              const duplicate = detectedTides.find(t => t.type === 'Bajamar' && Math.abs(parseInt(t.time.split(':')[0]) - j) <= 2);
+              if (!duplicate) {
                 detectedTides.push({ type: 'Bajamar', time: dayTides[j].time, height: curr });
               }
             }
@@ -3550,11 +3545,11 @@ export default function App() {
                     </div>
                     {swimmerRealOlas && (
                       <div className="text-[9px] text-right font-bold text-blue-600 italic">
-                        {swimmerRealOlas === 1 && "1/5 = Mar plato"}
-                        {swimmerRealOlas === 2 && "2/5 = Olas muy pequeñas"}
-                        {swimmerRealOlas === 3 && "3/5 = Olas medianas / picado"}
-                        {swimmerRealOlas === 4 && "4/5 = Rompiente fuerte"}
-                        {swimmerRealOlas === 5 && "5/5 = Muy fuerte / Resaca"}
+                        {swimmerRealOlas === 1 && "1/5 = 0.05m (Mar plato)"}
+                        {swimmerRealOlas === 2 && "2/5 = 0.20m (Olas muy pequeñas)"}
+                        {swimmerRealOlas === 3 && "3/5 = 0.45m (Olas medianas / picado)"}
+                        {swimmerRealOlas === 4 && "4/5 = 0.80m (Rompiente fuerte)"}
+                        {swimmerRealOlas === 5 && "5/5 = 1.20m (Muy fuerte / Resaca)"}
                       </div>
                     )}
                   </div>
