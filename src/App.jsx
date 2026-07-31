@@ -48,7 +48,7 @@ const BEACHES = {
 };
 
 // Generador de etiquetas de fecha
-const getDateLabel = (offset, prefix) => {
+function getDateLabel(offset, prefix) {
   const d = new Date();
   d.setDate(d.getDate() + offset);
   const day = d.getDate();
@@ -62,7 +62,7 @@ const getDateLabel = (offset, prefix) => {
  * Energía ≈ altura² × periodo × coeficiente.
  * Bases: S+SSE 7.5 | SE 8.5 | SO 9.5 | resto 8.0. Periodo >5s +1.5 | <4s −0.5.
  */
-const getDynamicWaveEnergyCoefficient = (waveDirDeg, period) => {
+function getDynamicWaveEnergyCoefficient(waveDirDeg, period) {
   const p = Number(period);
   let base = 8.0;
 
@@ -85,7 +85,7 @@ const getDynamicWaveEnergyCoefficient = (waveDirDeg, period) => {
 
 const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec";
 
-const HourlySvgChart = ({ hourlyData }) => {
+function HourlySvgChart({ hourlyData }) {
   const [hoveredIdx, setHoveredIdx] = useState(null);
 
   if (!hourlyData || hourlyData.length === 0) {
@@ -109,15 +109,17 @@ const HourlySvgChart = ({ hourlyData }) => {
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  const getX = (index) => paddingLeft + (index * (chartWidth / 23));
-  const getYSwell = (val) => {
+  function getX(index) {
+    return paddingLeft + (index * (chartWidth / 23));
+  }
+  function getYSwell(val) {
     const v = parseFloat(val) || 0;
     return height - paddingBottom - (v / maxSwell * chartHeight);
-  };
-  const getYWind = (val) => {
+  }
+  function getYWind(val) {
     const v = parseFloat(val) || 0;
     return height - paddingBottom - (v / maxWind * chartHeight);
-  };
+  }
 
   let swellAreaPoints = `M ${getX(0)} ${height - paddingBottom}`;
   let swellLinePoints = "";
@@ -315,7 +317,7 @@ const HourlySvgChart = ({ hourlyData }) => {
   );
 };
 
-const formatBoyaTemp = (val) => {
+function formatBoyaTemp(val) {
   if (!val) return '—';
   const str = val.toString().trim();
   if (str.includes('-') && str.includes('T')) {
@@ -333,7 +335,7 @@ const formatBoyaTemp = (val) => {
   return str.replace(',', '.');
 };
 
-const getWindDirection = (degrees) => {
+function getWindDirection(degrees) {
   if (degrees === undefined || degrees === null || (typeof degrees === "number" && Number.isNaN(degrees))) return "—";
   if (degrees === "-") return "-";
   const d = Number(degrees);
@@ -349,7 +351,7 @@ const getWindDirection = (degrees) => {
   return '-';
 };
 
-const getWindDirectionFullName = (degrees) => {
+function getWindDirectionFullName(degrees) {
   const dirStr = getWindDirection(degrees);
   if (dirStr === "—" || dirStr === "-" || !dirStr) return dirStr;
   const cleanDir = dirStr.replace(/[^A-Z]/g, '').trim();
@@ -366,7 +368,7 @@ const getWindDirectionFullName = (degrees) => {
   return names[cleanDir] ? `${dirStr} (${names[cleanDir]})` : dirStr;
 };
 
-const parseSwimmerSensaciones = (text) => {
+function parseSwimmerSensaciones(text) {
   if (!text) return { nombre: 'Anónimo', medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
   
   const matchNew = text.match(/^\[Nombre:\s*([^|]+)\s*\|\s*Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
@@ -397,7 +399,7 @@ const parseSwimmerSensaciones = (text) => {
   };
 };
 
-const formatFriendlyDate = (dateString) => {
+function formatFriendlyDate(dateString) {
   try {
     const regDate = new Date(dateString);
     const today = new Date();
@@ -420,7 +422,7 @@ const formatFriendlyDate = (dateString) => {
   }
 };
 
-const formatSwimFriendly = (dateVal, swimHour) => {
+function formatSwimFriendly(dateVal, swimHour) {
   if (!dateVal) return swimHour || '—';
   try {
     const regDate = new Date(dateVal);
@@ -447,7 +449,7 @@ const formatSwimFriendly = (dateVal, swimHour) => {
   }
 };
 
-const getRecordType = (item) => {
+function getRecordType(item) {
   const orig = item.origenDato || "";
   const notes = item.notasCalibracion || "";
   const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
@@ -473,6 +475,16 @@ const getRecordType = (item) => {
   }
   
   return 'swimmer_report';
+}
+
+function swimmerScaleToMeters(v) {
+  const val = parseFloat((v || "0").toString().replace(",", "."));
+  if (val === 1) return 0.05;
+  if (val === 2) return 0.20;
+  if (val === 3) return 0.45;
+  if (val === 4) return 0.80;
+  if (val === 5) return 1.20;
+  return 0.3;
 };
 
 export default function App() {
@@ -2353,15 +2365,6 @@ export default function App() {
                     const isSwimmer = logType === 'swimmer_report';
                     
                     const appOlas = parseFloat((selectedHistoryLog.appOlas || "0").toString().replace(",", "."));
-                    const swimmerScaleToMeters = (v) => {
-                      const val = parseFloat((v || "0").toString().replace(",", "."));
-                      if (val === 1) return 0.05;
-                      if (val === 2) return 0.20;
-                      if (val === 3) return 0.45;
-                      if (val === 4) return 0.80;
-                      if (val === 5) return 1.20;
-                      return 0.3;
-                    };
                     const swimmerRealM = swimmerScaleToMeters(selectedHistoryLog.realOlas);
                     
                     let diffPercent = 0;
