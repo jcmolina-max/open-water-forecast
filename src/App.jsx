@@ -560,19 +560,17 @@ export default function App() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
-  // Dynamic Buoy Scale Factor (Fase 4)
-  const getBoyaScaleFactor = (beachKey, currentDirection) => {
+  // Dynamic Buoy Scale Factor (Fase 4) — función normal (hoisted) para evitar TDZ en producción
+  function getBoyaScaleFactor(beachKey, currentDirection) {
     if (calibrationHistory.length < 5) {
-      if (beachKey === 'misericordia') return 0.6; // default 40% reduction
-      if ((beachKey === 'malagueta' || beachKey === 'pedregalejo') && currentDirection >= 200 && currentDirection <= 300) return 0.7; // default 30% reduction (escudo)
+      if (beachKey === 'misericordia') return 0.6;
+      if ((beachKey === 'malagueta' || beachKey === 'pedregalejo') && currentDirection >= 200 && currentDirection <= 300) return 0.7;
       return 1.0;
     }
-    
     const relevantLogs = calibrationHistory.filter(log => {
       if (log.playa !== beachKey) return false;
       if (!log.boyaAltura || Number(log.boyaAltura) === 0) return false;
       if (!log.realOlas || log.realOlas === "") return false;
-      
       if (log.boyaDireccion && currentDirection) {
         let diff = Math.abs(Number(log.boyaDireccion) - currentDirection);
         if (diff > 180) diff = 360 - diff;
@@ -580,14 +578,12 @@ export default function App() {
       }
       return true;
     });
-    
     if (relevantLogs.length === 0) {
       if (beachKey === 'misericordia') return 0.6;
       if ((beachKey === 'malagueta' || beachKey === 'pedregalejo') && currentDirection >= 200 && currentDirection <= 300) return 0.7;
       return 1.0;
     }
-    
-    const scaleToMeters = (val) => {
+    function scaleToMeters(val) {
       const v = Number(val);
       if (v === 1) return 0.05;
       if (v === 2) return 0.20;
@@ -595,18 +591,16 @@ export default function App() {
       if (v === 4) return 0.80;
       if (v === 5) return 1.20;
       return 0.3;
-    };
-    
+    }
     let sumRatio = 0;
     relevantLogs.forEach(log => {
       const swimmerM = scaleToMeters(log.realOlas);
       const buoyM = Number(log.boyaAltura);
       sumRatio += swimmerM / buoyM;
     });
-    
     const calculatedFactor = sumRatio / relevantLogs.length;
     return Math.max(0.1, Math.min(1.5, calculatedFactor));
-  };
+  }
 
   useEffect(() => {
     if (!isModalOpen) return;
@@ -1164,13 +1158,13 @@ export default function App() {
     
   }, [selectedBeach, dataRefreshKey, latestBuoyTemp]);
 
-  const handleDayChange = (index) => {
+  function handleDayChange(index) {
     setSelectedDay(index);
     setHasRequestedAi(false);
     setExpertAdvice("");
   };
 
-  const handleAskExpert = async () => {
+  async function handleAskExpert() {
     setHasRequestedAi(true);
     setIsAiLoading(true);
     
@@ -1229,7 +1223,7 @@ export default function App() {
     }
   };
 
-  const fetchCalibrationHistory = async () => {
+  async function fetchCalibrationHistory() {
     setIsCalHistoryLoading(true);
     try {
       const response = await fetch(WEBHOOK_URL);
@@ -1317,7 +1311,7 @@ export default function App() {
     fetchComparisonData();
   }, [activeTab, selectedBeach]);
 
-  const handleVerifyPin = (e) => {
+  function handleVerifyPin(e) {
     e.preventDefault();
     if (adminPin === "1234") {
       setIsAdminAuthorized(true);
@@ -1327,7 +1321,7 @@ export default function App() {
     }
   };
 
-  const handleSendReport = async (e) => {
+  async function handleSendReport(e) {
     e.preventDefault();
     setIsSendingReport(true);
     setReportStatus(null);
@@ -1426,7 +1420,7 @@ export default function App() {
     }
   };
 
-  const handleSendSwimmerReport = async (e) => {
+  async function handleSendSwimmerReport(e) {
     e.preventDefault();
     setIsSendingSwimmerReport(true);
     setSwimmerReportStatus(null);
@@ -1521,7 +1515,7 @@ export default function App() {
     }
   };
 
-  const handleSyncBuoy = async () => {
+  async function handleSyncBuoy() {
     setIsSyncingBuoy(true);
     const now = new Date();
     const currentHourStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
