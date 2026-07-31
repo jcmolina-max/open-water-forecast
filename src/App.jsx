@@ -315,6 +315,24 @@ const HourlySvgChart = ({ hourlyData }) => {
   );
 };
 
+const formatBoyaTemp = (val) => {
+  if (!val) return '—';
+  const str = val.toString().trim();
+  if (str.includes('-') && str.includes('T')) {
+    try {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        const day = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric' });
+        const month = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', month: 'numeric' });
+        return `${day}.${month}`;
+      }
+    } catch (e) {
+      // Fallback
+    }
+  }
+  return str.replace(',', '.');
+};
+
 export default function App() {
   const [selectedBeach, setSelectedBeach] = useState('misericordia');
   // Por defecto seleccionamos "Hoy" (Índice 1, ya que Ayer es 0)
@@ -333,6 +351,15 @@ export default function App() {
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
   const [calibrationHistory, setCalibrationHistory] = useState([]);
   const [isCalHistoryLoading, setIsCalHistoryLoading] = useState(false);
+
+  // Buscar la medición de temperatura física más reciente registrada por la boya en el historial
+  const latestBuoyReport = calibrationHistory.find(item => {
+    if (!item.boyaTemp || item.boyaTemp === "") return false;
+    const formatted = formatBoyaTemp(item.boyaTemp);
+    return formatted !== '—' && !isNaN(parseFloat(formatted));
+  });
+  const latestBuoyTemp = latestBuoyReport ? formatBoyaTemp(latestBuoyReport.boyaTemp) : null;
+  const latestBuoyDate = latestBuoyReport ? new Date(latestBuoyReport.fechaRegistro) : null;
   
   // Formulario del Administrador
   const [adminPlaya, setAdminPlaya] = useState('misericordia');
@@ -1146,24 +1173,6 @@ export default function App() {
     }
   };
 
-  const formatBoyaTemp = (val) => {
-    if (!val) return '—';
-    const str = val.toString().trim();
-    if (str.includes('-') && str.includes('T')) {
-      try {
-        const d = new Date(str);
-        if (!isNaN(d.getTime())) {
-          const day = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric' });
-          const month = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', month: 'numeric' });
-          return `${day}.${month}`;
-        }
-      } catch (e) {
-        // Fallback
-      }
-    }
-    return str.replace(',', '.');
-  };
-
   const formatSwimFriendly = (dateVal, swimHour) => {
     if (!dateVal) return swimHour || '—';
     try {
@@ -1558,14 +1567,7 @@ export default function App() {
     }
   };
 
-  // Buscar la medición de temperatura física más reciente registrada por la boya en el historial
-  const latestBuoyReport = calibrationHistory.find(item => {
-    if (!item.boyaTemp || item.boyaTemp === "") return false;
-    const formatted = formatBoyaTemp(item.boyaTemp);
-    return formatted !== '—' && !isNaN(parseFloat(formatted));
-  });
-  const latestBuoyTemp = latestBuoyReport ? formatBoyaTemp(latestBuoyReport.boyaTemp) : null;
-  const latestBuoyDate = latestBuoyReport ? new Date(latestBuoyReport.fechaRegistro) : null;
+
 
   const currentDayData = beachData ? beachData[selectedDay] : null;
 
