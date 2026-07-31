@@ -623,6 +623,14 @@ export default function App() {
       
       const beach = BEACHES[selectedBeach];
       
+      // Temperatura real de la boya calculada localmente (sin depender de latestBuoyTemp del estado externo)
+      const buoyReport = calibrationHistory.find(item => {
+        if (!item.boyaTemp || item.boyaTemp === "") return false;
+        const v = parseFloat(item.boyaTemp.toString().replace(',', '.'));
+        return !isNaN(v);
+      });
+      const buoyTempForToday = buoyReport ? parseFloat(buoyReport.boyaTemp.toString().replace(',', '.')) : null;
+      
       let marineJson = null;
       let weatherJson = null;
       let localClimateDown = false;
@@ -991,8 +999,8 @@ export default function App() {
 
             // DETECCION DE TARÓ (Niebla de Advección local por choque térmico)
             let taroRisk = "Ninguno";
-            const currentWaterTemp = (offset === 0 && latestBuoyTemp !== null && !isNaN(parseFloat(latestBuoyTemp)))
-              ? parseFloat(latestBuoyTemp)
+            const currentWaterTemp = (offset === 0 && buoyTempForToday !== null && !isNaN(buoyTempForToday))
+              ? buoyTempForToday
               : waterTemp;
 
             if (!localClimateDown && dewPoint !== undefined && currentWaterTemp !== undefined) {
@@ -1116,8 +1124,8 @@ export default function App() {
               : 15;
 
           let waterTemp = predictedWaterTemp;
-          if (offset === 0 && latestBuoyTemp !== null && !isNaN(parseFloat(latestBuoyTemp))) {
-            waterTemp = Math.round(parseFloat(latestBuoyTemp) * 10) / 10;
+          if (offset === 0 && buoyTempForToday !== null && !isNaN(buoyTempForToday)) {
+            waterTemp = Math.round(buoyTempForToday * 10) / 10;
           }
 
           daysProcessed.push({
@@ -1156,7 +1164,7 @@ export default function App() {
 
     fetchRealData();
     
-  }, [selectedBeach, dataRefreshKey, latestBuoyTemp]);
+  }, [selectedBeach, dataRefreshKey, calibrationHistory]);
 
   function handleDayChange(index) {
     setSelectedDay(index);
@@ -1564,7 +1572,7 @@ export default function App() {
 
 
 
-  const currentDayData = beachData ? beachData[selectedDay] : null;
+  const currentDayData = beachData?.[selectedDay] ?? null;
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans flex flex-col">
