@@ -333,6 +333,148 @@ const formatBoyaTemp = (val) => {
   return str.replace(',', '.');
 };
 
+const getWindDirection = (degrees) => {
+  if (degrees === undefined || degrees === null || (typeof degrees === "number" && Number.isNaN(degrees))) return "—";
+  if (degrees === "-") return "-";
+  const d = Number(degrees);
+  if (Number.isNaN(d)) return "—";
+  if (d > 337.5 || d <= 22.5) return '⬇️ N';
+  if (d > 22.5 && d <= 67.5) return '↙️ NE';
+  if (d > 67.5 && d <= 112.5) return '⬅️ E';
+  if (d > 112.5 && d <= 157.5) return '↖️ SE';
+  if (d > 157.5 && d <= 202.5) return '⬆️ S';
+  if (d > 202.5 && d <= 247.5) return '↗️ SO';
+  if (d > 247.5 && d <= 292.5) return '➡️ O';
+  if (d > 292.5 && d <= 337.5) return '↘️ NO';
+  return '-';
+};
+
+const getWindDirectionFullName = (degrees) => {
+  const dirStr = getWindDirection(degrees);
+  if (dirStr === "—" || dirStr === "-" || !dirStr) return dirStr;
+  const cleanDir = dirStr.replace(/[^A-Z]/g, '').trim();
+  const names = {
+    'N': 'Norte',
+    'NE': 'Nordeste',
+    'E': 'Levante',
+    'SE': 'Sureste',
+    'S': 'Sur',
+    'SO': 'Suroeste',
+    'O': 'Poniente',
+    'NO': 'Noroeste'
+  };
+  return names[cleanDir] ? `${dirStr} (${names[cleanDir]})` : dirStr;
+};
+
+const parseSwimmerSensaciones = (text) => {
+  if (!text) return { nombre: 'Anónimo', medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
+  
+  const matchNew = text.match(/^\[Nombre:\s*([^|]+)\s*\|\s*Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
+  if (matchNew) {
+    return {
+      nombre: matchNew[1].trim(),
+      medusas: matchNew[2].trim(),
+      agua: matchNew[3].trim(),
+      comentario: matchNew[4].trim()
+    };
+  }
+  
+  const matchOld = text.match(/^\[Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
+  if (matchOld) {
+    return {
+      nombre: 'Anónimo',
+      medusas: matchOld[1].trim(),
+      agua: matchOld[2].trim(),
+      comentario: matchOld[3].trim()
+    };
+  }
+  
+  return {
+    nombre: 'Anónimo',
+    medusas: 'Ninguna',
+    agua: 'Limpia',
+    comentario: text
+  };
+};
+
+const formatFriendlyDate = (dateString) => {
+  try {
+    const regDate = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    
+    const timeStr = regDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    
+    if (regDate.toDateString() === today.toDateString()) {
+      return `Hoy, ${timeStr}`;
+    } else if (regDate.toDateString() === yesterday.toDateString()) {
+      return `Ayer, ${timeStr}`;
+    } else {
+      const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
+      const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+      return `${capitalizedDay}, ${regDate.getDate()} ${regDate.toLocaleString('es-ES', { month: 'short' })}`;
+    }
+  } catch (e) {
+    return 'Hace poco';
+  }
+};
+
+const formatSwimFriendly = (dateVal, swimHour) => {
+  if (!dateVal) return swimHour || '—';
+  try {
+    const regDate = new Date(dateVal);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    
+    const hourSuffix = swimHour ? `, ${swimHour}` : '';
+    
+    if (regDate.toDateString() === today.toDateString()) {
+      return `Hoy${hourSuffix}`;
+    } else if (regDate.toDateString() === yesterday.toDateString()) {
+      return `Ayer${hourSuffix}`;
+    } else {
+      const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
+      const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+      const dayNum = regDate.getDate();
+      const monthStr = regDate.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
+      const timeBrackets = swimHour ? ` (${swimHour})` : '';
+      return `${capitalizedDay}, ${dayNum} ${monthStr}${timeBrackets}`;
+    }
+  } catch (e) {
+    return swimHour || '—';
+  }
+};
+
+const getRecordType = (item) => {
+  const orig = item.origenDato || "";
+  const notes = item.notasCalibracion || "";
+  const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
+  
+  if (notes.includes('[ALERTA_OFICIAL]') || orig === 'Admin: Alerta') {
+    return 'admin_alert';
+  }
+  
+  if (orig === 'Sincronización Boya' || orig === 'Boya: Sincronización') {
+    return 'buoy_sync';
+  }
+  
+  if (orig === 'Nadador: Mensaje' || (orig === 'Nadador' && !hasOlas)) {
+    return 'swimmer_msg';
+  }
+  
+  if (orig === 'Admin: Calibración' || (orig === 'Web Admin' && hasOlas)) {
+    return 'admin_report';
+  }
+  
+  if (orig === 'Nadador: Reporte' || (orig === 'Nadador' && hasOlas)) {
+    return 'swimmer_report';
+  }
+  
+  return 'swimmer_report';
+};
+
 export default function App() {
   const [selectedBeach, setSelectedBeach] = useState('misericordia');
   // Por defecto seleccionamos "Hoy" (Índice 1, ya que Ayer es 0)
@@ -1081,151 +1223,6 @@ export default function App() {
     } finally {
       setIsAiLoading(false);
     }
-  };
-
-  const getWindDirection = (degrees) => {
-    if (degrees === undefined || degrees === null || (typeof degrees === "number" && Number.isNaN(degrees))) return "—";
-    if (degrees === "-") return "-";
-    const d = Number(degrees);
-    if (Number.isNaN(d)) return "—";
-    if (d > 337.5 || d <= 22.5) return '⬇️ N';
-    if (d > 22.5 && d <= 67.5) return '↙️ NE';
-    if (d > 67.5 && d <= 112.5) return '⬅️ E';
-    if (d > 112.5 && d <= 157.5) return '↖️ SE';
-    if (d > 157.5 && d <= 202.5) return '⬆️ S';
-    if (d > 202.5 && d <= 247.5) return '↗️ SO';
-    if (d > 247.5 && d <= 292.5) return '➡️ O';
-    if (d > 292.5 && d <= 337.5) return '↘️ NO';
-    return '-';
-  };
-
-  const getWindDirectionFullName = (degrees) => {
-    const dirStr = getWindDirection(degrees);
-    if (dirStr === "—" || dirStr === "-" || !dirStr) return dirStr;
-    const cleanDir = dirStr.replace(/[^A-Z]/g, '').trim();
-    const names = {
-      'N': 'Norte',
-      'NE': 'Nordeste',
-      'E': 'Levante',
-      'SE': 'Sureste',
-      'S': 'Sur',
-      'SO': 'Suroeste',
-      'O': 'Poniente',
-      'NO': 'Noroeste'
-    };
-    return names[cleanDir] ? `${dirStr} (${names[cleanDir]})` : dirStr;
-  };
-
-  const parseSwimmerSensaciones = (text) => {
-    if (!text) return { nombre: 'Anónimo', medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
-    
-    // 1. Intentar hacer coincidir el formato nuevo con Nombre, Medusas y Agua
-    const matchNew = text.match(/^\[Nombre:\s*([^|]+)\s*\|\s*Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
-    if (matchNew) {
-      return {
-        nombre: matchNew[1].trim(),
-        medusas: matchNew[2].trim(),
-        agua: matchNew[3].trim(),
-        comentario: matchNew[4].trim()
-      };
-    }
-    
-    // 2. Intentar hacer coincidir el formato antiguo con solo Medusas y Agua
-    const matchOld = text.match(/^\[Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
-    if (matchOld) {
-      return {
-        nombre: 'Anónimo',
-        medusas: matchOld[1].trim(),
-        agua: matchOld[2].trim(),
-        comentario: matchOld[3].trim()
-      };
-    }
-    
-    // 3. Caso por defecto si no tiene corchetes
-    return {
-      nombre: 'Anónimo',
-      medusas: 'Ninguna',
-      agua: 'Limpia',
-      comentario: text
-    };
-  };
-
-  const formatFriendlyDate = (dateString) => {
-    try {
-      const regDate = new Date(dateString);
-      const today = new Date();
-      const yesterday = new Date();
-      yesterday.setDate(today.getDate() - 1);
-      
-      const timeStr = regDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-      
-      if (regDate.toDateString() === today.toDateString()) {
-        return `Hoy, ${timeStr}`;
-      } else if (regDate.toDateString() === yesterday.toDateString()) {
-        return `Ayer, ${timeStr}`;
-      } else {
-        const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
-        const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-        return `${capitalizedDay}, ${regDate.getDate()} ${regDate.toLocaleString('es-ES', { month: 'short' })}`;
-      }
-    } catch (e) {
-      return 'Hace poco';
-    }
-  };
-
-  const formatSwimFriendly = (dateVal, swimHour) => {
-    if (!dateVal) return swimHour || '—';
-    try {
-      const regDate = new Date(dateVal);
-      const today = new Date();
-      const yesterday = new Date();
-      yesterday.setDate(today.getDate() - 1);
-      
-      const hourSuffix = swimHour ? `, ${swimHour}` : '';
-      
-      if (regDate.toDateString() === today.toDateString()) {
-        return `Hoy${hourSuffix}`;
-      } else if (regDate.toDateString() === yesterday.toDateString()) {
-        return `Ayer${hourSuffix}`;
-      } else {
-        const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
-        const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-        const dayNum = regDate.getDate();
-        const monthStr = regDate.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
-        const timeBrackets = swimHour ? ` (${swimHour})` : '';
-        return `${capitalizedDay}, ${dayNum} ${monthStr}${timeBrackets}`;
-      }
-    } catch (e) {
-      return swimHour || '—';
-    }
-  };
-
-  const getRecordType = (item) => {
-    const orig = item.origenDato || "";
-    const notes = item.notasCalibracion || "";
-    const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
-    
-    if (notes.includes('[ALERTA_OFICIAL]') || orig === 'Admin: Alerta') {
-      return 'admin_alert';
-    }
-    
-    if (orig === 'Sincronización Boya' || orig === 'Boya: Sincronización') {
-      return 'buoy_sync';
-    }
-    
-    if (orig === 'Nadador: Mensaje' || (orig === 'Nadador' && !hasOlas)) {
-      return 'swimmer_msg';
-    }
-    
-    if (orig === 'Admin: Calibración' || (orig === 'Web Admin' && hasOlas)) {
-      return 'admin_report';
-    }
-    
-    if (orig === 'Nadador: Reporte' || (orig === 'Nadador' && hasOlas)) {
-      return 'swimmer_report';
-    }
-    
-    return 'swimmer_report';
   };
 
   const fetchCalibrationHistory = async () => {
