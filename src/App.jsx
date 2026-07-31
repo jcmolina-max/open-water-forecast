@@ -301,6 +301,14 @@ const HourlySvgChart = ({ hourlyData }) => {
             <span className="block text-[8px] font-bold text-emerald-400 uppercase">🎯 Score</span>
             <span className="text-xs font-black">{hoveredData.hourScore}</span>
           </div>
+          {hoveredData.taroRisk && hoveredData.taroRisk !== 'Ninguno' && (
+            <div className="border-l border-slate-700 pl-2">
+              <span className="block text-[8px] font-bold text-slate-400 uppercase">🌫️ Taró</span>
+              <span className={`text-[10px] font-black uppercase ${hoveredData.taroRisk === 'Alto' ? 'text-red-400' : 'text-slate-300'}`}>
+                {hoveredData.taroRisk}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -473,9 +481,9 @@ export default function App() {
         }
       };
 
-      // 1. SATÉLITE CLIMA (Añadimos visibility para la niebla)
+      // 1. SATÉLITE CLIMA (Añadimos visibility y dew_point_2m)
       try {
-        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,precipitation,weather_code,uv_index,cloud_cover,visibility&timezone=Europe%2FMadrid&past_days=2`);
+        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,dew_point_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,precipitation,weather_code,uv_index,cloud_cover,visibility&timezone=Europe%2FMadrid&past_days=2`);
       } catch (e) {
         console.warn("Satélite de clima caído. Activando auto-rescate.", e);
         localClimateDown = true;
@@ -618,6 +626,7 @@ export default function App() {
             const visibility = localClimateDown ? 10000 : (weatherJson?.hourly?.visibility?.[i] || 10000);
             const rainMm = localClimateDown ? 0 : (weatherJson?.hourly?.precipitation?.[i] || 0);
             const rainProb = localClimateDown ? "-" : (weatherJson?.hourly?.precipitation_probability?.[i] || 0);
+            const dewPoint = localClimateDown ? 0 : (weatherJson?.hourly?.dew_point_2m?.[i] || 0);
             
             // Regla: Multiplicador Térmico de Mediodía en Misericordia (v9.5)
             const isMisericordia = selectedBeach === 'misericordia';
@@ -813,6 +822,43 @@ export default function App() {
                 if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
             }
 
+            // DETECCION DE TARÓ (Niebla de Advección local por choque térmico)
+            let taroRisk = "Ninguno";
+            const currentWaterTemp = (offset === 0 && latestBuoyTemp !== null && !isNaN(parseFloat(latestBuoyTemp)))
+              ? parseFloat(latestBuoyTemp)
+              : waterTemp;
+
+            if (!localClimateDown && dewPoint !== undefined && currentWaterTemp !== undefined) {
+              const deltaT = dewPoint - currentWaterTemp;
+              const isSeaBreezeWind = windDir >= 80 && windDir <= 220; // Vientos de componente marítima (Levante, Sur, Sudeste)
+              const isGentleWind = windKnots >= 3 && windKnots <= 12; // Viento suave que empuja pero no dispersa la niebla
+              
+              if (deltaT >= 2.0 && isSeaBreezeWind && isGentleWind) {
+                taroRisk = "Alto";
+              } else if (deltaT >= 0.0 && isSeaBreezeWind && isGentleWind) {
+                taroRisk = "Moderado";
+              }
+            }
+
+            // Aplicar penalizaciones de Taró al Score de Seguridad y Regla Local
+            if (taroRisk === "Alto") {
+                hourScore -= 40; // Penalización severa por falta de visibilidad
+                if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
+                
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo" || localRule === "Rompiente Dura" || localRule === "Resaca Fuerte" || localRule === "Rompiente Dura (Pleamar) ⚠️" || localRule === "Resaca Fuerte (Pleamar) 🚨") {
+                    localRule = "Riesgo de Taró 🌫️🚨";
+                    ruleColor = "text-slate-800 font-black bg-slate-100 border border-slate-300 shadow-sm animate-pulse";
+                }
+            } else if (taroRisk === "Moderado") {
+                hourScore -= 20; // Penalización moderada
+                if (hourScore > 70) hourScore = 70; // Cap a 70
+                
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo") {
+                    localRule = "Bruma / Taró Leve 🌫️⚠️";
+                    ruleColor = "text-slate-600 font-bold bg-slate-50 border border-slate-200 shadow-sm";
+                }
+            }
+
             // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos y Niebla)
             if (isThunderstorm) {
                 hourScore = 0;
@@ -867,7 +913,9 @@ export default function App() {
               drift: driftInfo,
               localRule: localRule,
               ruleColor: ruleColor,
-              seaLevel: hourSeaLevel
+              seaLevel: hourSeaLevel,
+              dewPoint: dewPoint,
+              taroRisk: taroRisk
             });
           }
 
@@ -895,10 +943,15 @@ export default function App() {
           
           const noonIndex = baseIndex + 12;
           const sstNoon = marineJson?.hourly?.sea_surface_temperature?.[noonIndex];
-          const waterTemp =
+          const predictedWaterTemp =
             sstNoon !== undefined && sstNoon !== null && !Number.isNaN(Number(sstNoon))
               ? Math.round(Number(sstNoon) * 10) / 10
               : 15;
+
+          let waterTemp = predictedWaterTemp;
+          if (offset === 0 && latestBuoyTemp !== null && !isNaN(parseFloat(latestBuoyTemp))) {
+            waterTemp = Math.round(parseFloat(latestBuoyTemp) * 10) / 10;
+          }
 
           daysProcessed.push({
             dayIndex: d,
@@ -936,7 +989,7 @@ export default function App() {
 
     fetchRealData();
     
-  }, [selectedBeach, dataRefreshKey]);
+  }, [selectedBeach, dataRefreshKey, latestBuoyTemp]);
 
   const handleDayChange = (index) => {
     setSelectedDay(index);
