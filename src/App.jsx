@@ -494,14 +494,18 @@ export default function App() {
   const [calibrationHistory, setCalibrationHistory] = useState([]);
   const [isCalHistoryLoading, setIsCalHistoryLoading] = useState(false);
 
-  // Buscar la medición de temperatura física más reciente registrada por la boya en el historial
-  const latestBuoyReport = calibrationHistory.find(item => {
-    if (!item.boyaTemp || item.boyaTemp === "") return false;
-    const formatted = formatBoyaTemp(item.boyaTemp);
-    return formatted !== '—' && !isNaN(parseFloat(formatted));
-  });
-  const latestBuoyTemp = latestBuoyReport ? formatBoyaTemp(latestBuoyReport.boyaTemp) : null;
-  const latestBuoyDate = latestBuoyReport ? new Date(latestBuoyReport.fechaRegistro) : null;
+  const [latestBuoyTemp, setLatestBuoyTemp] = useState(null);
+  const [latestBuoyDate, setLatestBuoyDate] = useState(null);
+
+  useEffect(() => {
+    const latestBuoyReport = calibrationHistory.find(item => {
+      if (!item.boyaTemp || item.boyaTemp === "") return false;
+      const formatted = formatBoyaTemp(item.boyaTemp);
+      return formatted !== '—' && !isNaN(parseFloat(formatted));
+    });
+    setLatestBuoyTemp(latestBuoyReport ? formatBoyaTemp(latestBuoyReport.boyaTemp) : null);
+    setLatestBuoyDate(latestBuoyReport ? new Date(latestBuoyReport.fechaRegistro) : null);
+  }, [calibrationHistory]);
   
   // Formulario del Administrador
   const [adminPlaya, setAdminPlaya] = useState('misericordia');
