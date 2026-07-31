@@ -702,6 +702,19 @@ export default function App() {
           const startIndex = baseIndex + 6;
           const endIndex = baseIndex + 21;
 
+          // ----- CÁLCULO DE TEMPERATURA DEL AGUA (Predicción + Boya Real) -----
+          const noonIndex = baseIndex + 12;
+          const sstNoon = marineJson?.hourly?.sea_surface_temperature?.[noonIndex];
+          const predictedWaterTemp =
+            sstNoon !== undefined && sstNoon !== null && !Number.isNaN(Number(sstNoon))
+              ? Math.round(Number(sstNoon) * 10) / 10
+              : 15;
+
+          let waterTemp = predictedWaterTemp;
+          if (offset === 0 && buoyTempForToday !== null && !isNaN(buoyTempForToday)) {
+            waterTemp = Math.round(buoyTempForToday * 10) / 10;
+          }
+
           // ----- CÁLCULO DE CALIDAD DEL AGUA (Aguas Sucias) -----
           let rainSum = 0;
           if (!localClimateDown && weatherJson?.hourly?.precipitation) {
@@ -1127,18 +1140,7 @@ export default function App() {
           }
 
           const avgScore = validHoursCount > 0 ? Math.round(totalScore / validHoursCount) : 0;
-          
-          const noonIndex = baseIndex + 12;
-          const sstNoon = marineJson?.hourly?.sea_surface_temperature?.[noonIndex];
-          const predictedWaterTemp =
-            sstNoon !== undefined && sstNoon !== null && !Number.isNaN(Number(sstNoon))
-              ? Math.round(Number(sstNoon) * 10) / 10
-              : 15;
 
-          let waterTemp = predictedWaterTemp;
-          if (offset === 0 && buoyTempForToday !== null && !isNaN(buoyTempForToday)) {
-            waterTemp = Math.round(buoyTempForToday * 10) / 10;
-          }
 
           daysProcessed.push({
             dayIndex: d,
