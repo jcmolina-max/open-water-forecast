@@ -695,6 +695,29 @@ export default function App() {
         let tempCurrentNow = null;
         const currentSystemHour = new Date().getHours();
 
+        // 3.1 CÁLCULO DE INERCIA DE PONIENTE (Afloramiento de Bolsas de Agua Fría a 200m)
+        let recentPonienteHours = 0;
+        if (!localClimateDown && weatherJson?.hourly?.wind_direction_10m) {
+          // Analizar las 48 horas de histórico previo en la consulta (índices 0 a 47)
+          for (let k = 0; k < 48; k++) {
+            const wDir = weatherJson.hourly.wind_direction_10m[k];
+            const wSpd = weatherJson.hourly.wind_speed_10m[k] || 0;
+            if (wDir !== undefined && wDir >= 200 && wDir <= 340 && wSpd >= 8) {
+              recentPonienteHours++;
+            }
+          }
+        }
+        const hasUpwellingMemory = recentPonienteHours >= 6; // 6+ horas de poniente reciente
+        const upwellingOffset = hasUpwellingMemory ? 3.5 : 1.5; // Descuento de 3.5°C por bolsas frías de afloramiento, o 1.5°C por gradiente térmico natural de orilla
+
+        // Comprobar si algún nadador o admin reportó agua fría recientemente en la comunidad
+        const recentColdWaterReport = calibrationHistory.find(log => {
+          if (!log.sensaciones && !log.notasCalibracion) return false;
+          const textSens = (log.sensaciones || "").toLowerCase();
+          const textNotes = (log.notasCalibracion || "").toLowerCase();
+          return textSens.includes('fría') || textSens.includes('fria') || textNotes.includes('fría') || textNotes.includes('fria');
+        });
+
         for (let d = 0; d < dayOffsets.length; d++) {
           const offset = dayOffsets[d];
           
@@ -1022,14 +1045,24 @@ export default function App() {
                 if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
             }
 
-            // DETECCION DE TARÓ (Niebla de Advección local por choque térmico)
+            // DETECCION DE TARÓ (Niebla de Advección local por choque térmico en bolsas de agua fría)
             let taroRisk = "Ninguno";
-            const currentWaterTemp = (offset === 0 && buoyTempForToday !== null && !isNaN(buoyTempForToday))
-              ? buoyTempForToday
-              : waterTemp;
+            
+            // Calculamos la temperatura efectiva del agua en la franja marina (200m) aplicando el descuento por inercia de poniente
+            let taroEffectiveWaterTemp = waterTemp - upwellingOffset;
+            
+            if (offset === 0) {
+              if (recentColdWaterReport) {
+                // Si la comunidad o el admin reportó agua fría, forzamos la masa fría en orilla (~18.5°C)
+                taroEffectiveWaterTemp = Math.min(taroEffectiveWaterTemp, 18.5);
+              } else if (buoyTempForToday !== null && !isNaN(buoyTempForToday)) {
+                // Con boya activa, descontamos el gradiente térmico de la franja costera
+                taroEffectiveWaterTemp = buoyTempForToday - upwellingOffset;
+              }
+            }
 
-            if (!localClimateDown && dewPoint !== undefined && currentWaterTemp !== undefined) {
-              const deltaT = dewPoint - currentWaterTemp;
+            if (!localClimateDown && dewPoint !== undefined && taroEffectiveWaterTemp !== undefined) {
+              const deltaT = dewPoint - taroEffectiveWaterTemp;
               const isSeaBreezeWind = windDir >= 80 && windDir <= 220; // Vientos de componente marítima (Levante, Sur, Sudeste)
               const isGentleWind = windKnots >= 3 && windKnots <= 12; // Viento suave que empuja pero no dispersa la niebla
               
@@ -1046,7 +1079,7 @@ export default function App() {
                 if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
                 
                 if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo" || localRule === "Rompiente Dura" || localRule === "Resaca Fuerte" || localRule === "Rompiente Dura (Pleamar) ⚠️" || localRule === "Resaca Fuerte (Pleamar) 🚨") {
-                    localRule = "Riesgo de Taró 🌫️🚨";
+                    localRule = hasUpwellingMemory ? "Riesgo de Taró (Bolsas 200m) 🌫️🚨" : "Riesgo de Taró 🌫️🚨";
                     ruleColor = "text-slate-800 font-black bg-slate-100 border border-slate-300 shadow-sm animate-pulse";
                 }
             } else if (taroRisk === "Moderado") {
@@ -1054,7 +1087,7 @@ export default function App() {
                 if (hourScore > 70) hourScore = 70; // Cap a 70
                 
                 if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo") {
-                    localRule = "Bruma / Taró Leve 🌫️⚠️";
+                    localRule = hasUpwellingMemory ? "Bruma / Taró (Bolsas 200m) 🌫️⚠️" : "Bruma / Taró Leve 🌫️⚠️";
                     ruleColor = "text-slate-600 font-bold bg-slate-50 border border-slate-200 shadow-sm";
                 }
             }
