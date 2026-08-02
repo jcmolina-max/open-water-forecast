@@ -31,7 +31,8 @@ import {
   Copy,
   Search,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Users
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
@@ -48,7 +49,7 @@ const BEACHES = {
 };
 
 // Generador de etiquetas de fecha
-const getDateLabel = (offset, prefix) => {
+function getDateLabel(offset, prefix) {
   const d = new Date();
   d.setDate(d.getDate() + offset);
   const day = d.getDate();
@@ -62,7 +63,7 @@ const getDateLabel = (offset, prefix) => {
  * Energía ≈ altura² × periodo × coeficiente.
  * Bases: S+SSE 7.5 | SE 8.5 | SO 9.5 | resto 8.0. Periodo >5s +1.5 | <4s −0.5.
  */
-const getDynamicWaveEnergyCoefficient = (waveDirDeg, period) => {
+function getDynamicWaveEnergyCoefficient(waveDirDeg, period) {
   const p = Number(period);
   let base = 8.0;
 
@@ -85,7 +86,7 @@ const getDynamicWaveEnergyCoefficient = (waveDirDeg, period) => {
 
 const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec";
 
-const HourlySvgChart = ({ hourlyData }) => {
+function HourlySvgChart({ hourlyData }) {
   const [hoveredIdx, setHoveredIdx] = useState(null);
 
   if (!hourlyData || hourlyData.length === 0) {
@@ -109,15 +110,17 @@ const HourlySvgChart = ({ hourlyData }) => {
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  const getX = (index) => paddingLeft + (index * (chartWidth / 23));
-  const getYSwell = (val) => {
+  function getX(index) {
+    return paddingLeft + (index * (chartWidth / 23));
+  }
+  function getYSwell(val) {
     const v = parseFloat(val) || 0;
     return height - paddingBottom - (v / maxSwell * chartHeight);
-  };
-  const getYWind = (val) => {
+  }
+  function getYWind(val) {
     const v = parseFloat(val) || 0;
     return height - paddingBottom - (v / maxWind * chartHeight);
-  };
+  }
 
   let swellAreaPoints = `M ${getX(0)} ${height - paddingBottom}`;
   let swellLinePoints = "";
@@ -301,10 +304,188 @@ const HourlySvgChart = ({ hourlyData }) => {
             <span className="block text-[8px] font-bold text-emerald-400 uppercase">🎯 Score</span>
             <span className="text-xs font-black">{hoveredData.hourScore}</span>
           </div>
+          {hoveredData.taroRisk && hoveredData.taroRisk !== 'Ninguno' && (
+            <div className="border-l border-slate-700 pl-2">
+              <span className="block text-[8px] font-bold text-slate-400 uppercase">🌫️ Taró</span>
+              <span className={`text-[10px] font-black uppercase ${hoveredData.taroRisk === 'Alto' ? 'text-red-400' : 'text-slate-300'}`}>
+                {hoveredData.taroRisk}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
+};
+
+function formatBoyaTemp(val) {
+  if (!val) return '—';
+  const str = val.toString().trim();
+  if (str.includes('-') && str.includes('T')) {
+    try {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        const day = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric' });
+        const month = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', month: 'numeric' });
+        return `${day}.${month}`;
+      }
+    } catch (e) {
+      // Fallback
+    }
+  }
+  return str.replace(',', '.');
+};
+
+function getWindDirection(degrees) {
+  if (degrees === undefined || degrees === null || (typeof degrees === "number" && Number.isNaN(degrees))) return "—";
+  if (degrees === "-") return "-";
+  const d = Number(degrees);
+  if (Number.isNaN(d)) return "—";
+  if (d > 337.5 || d <= 22.5) return '⬇️ N';
+  if (d > 22.5 && d <= 67.5) return '↙️ NE';
+  if (d > 67.5 && d <= 112.5) return '⬅️ E';
+  if (d > 112.5 && d <= 157.5) return '↖️ SE';
+  if (d > 157.5 && d <= 202.5) return '⬆️ S';
+  if (d > 202.5 && d <= 247.5) return '↗️ SO';
+  if (d > 247.5 && d <= 292.5) return '➡️ O';
+  if (d > 292.5 && d <= 337.5) return '↘️ NO';
+  return '-';
+};
+
+function getWindDirectionFullName(degrees) {
+  const dirStr = getWindDirection(degrees);
+  if (dirStr === "—" || dirStr === "-" || !dirStr) return dirStr;
+  const cleanDir = dirStr.replace(/[^A-Z]/g, '').trim();
+  const names = {
+    'N': 'Norte',
+    'NE': 'Nordeste',
+    'E': 'Levante',
+    'SE': 'Sureste',
+    'S': 'Sur',
+    'SO': 'Suroeste',
+    'O': 'Poniente',
+    'NO': 'Noroeste'
+  };
+  return names[cleanDir] ? `${dirStr} (${names[cleanDir]})` : dirStr;
+};
+
+function parseSwimmerSensaciones(text) {
+  if (!text) return { nombre: 'Anónimo', medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
+  
+  const matchNew = text.match(/^\[Nombre:\s*([^|]+)\s*\|\s*Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
+  if (matchNew) {
+    return {
+      nombre: matchNew[1].trim(),
+      medusas: matchNew[2].trim(),
+      agua: matchNew[3].trim(),
+      comentario: matchNew[4].trim()
+    };
+  }
+  
+  const matchOld = text.match(/^\[Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
+  if (matchOld) {
+    return {
+      nombre: 'Anónimo',
+      medusas: matchOld[1].trim(),
+      agua: matchOld[2].trim(),
+      comentario: matchOld[3].trim()
+    };
+  }
+  
+  return {
+    nombre: 'Anónimo',
+    medusas: 'Ninguna',
+    agua: 'Limpia',
+    comentario: text
+  };
+};
+
+function formatFriendlyDate(dateString) {
+  try {
+    const regDate = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    
+    const timeStr = regDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    
+    if (regDate.toDateString() === today.toDateString()) {
+      return `Hoy, ${timeStr}`;
+    } else if (regDate.toDateString() === yesterday.toDateString()) {
+      return `Ayer, ${timeStr}`;
+    } else {
+      const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
+      const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+      return `${capitalizedDay}, ${regDate.getDate()} ${regDate.toLocaleString('es-ES', { month: 'short' })}`;
+    }
+  } catch (e) {
+    return 'Hace poco';
+  }
+};
+
+function formatSwimFriendly(dateVal, swimHour) {
+  if (!dateVal) return swimHour || '—';
+  try {
+    const regDate = new Date(dateVal);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    
+    const hourSuffix = swimHour ? `, ${swimHour}` : '';
+    
+    if (regDate.toDateString() === today.toDateString()) {
+      return `Hoy${hourSuffix}`;
+    } else if (regDate.toDateString() === yesterday.toDateString()) {
+      return `Ayer${hourSuffix}`;
+    } else {
+      const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
+      const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+      const dayNum = regDate.getDate();
+      const monthStr = regDate.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
+      const timeBrackets = swimHour ? ` (${swimHour})` : '';
+      return `${capitalizedDay}, ${dayNum} ${monthStr}${timeBrackets}`;
+    }
+  } catch (e) {
+    return swimHour || '—';
+  }
+};
+
+function getRecordType(item) {
+  const orig = item.origenDato || "";
+  const notes = item.notasCalibracion || "";
+  const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
+  
+  if (notes.includes('[ALERTA_OFICIAL]') || orig === 'Admin: Alerta') {
+    return 'admin_alert';
+  }
+  
+  if (orig === 'Sincronización Boya' || orig === 'Boya: Sincronización') {
+    return 'buoy_sync';
+  }
+  
+  if (orig === 'Nadador: Mensaje' || (orig === 'Nadador' && !hasOlas)) {
+    return 'swimmer_msg';
+  }
+  
+  if (orig === 'Admin: Calibración' || (orig === 'Web Admin' && hasOlas)) {
+    return 'admin_report';
+  }
+  
+  if (orig === 'Nadador: Reporte' || (orig === 'Nadador' && hasOlas)) {
+    return 'swimmer_report';
+  }
+  
+  return 'swimmer_report';
+}
+
+function swimmerScaleToMeters(v) {
+  const val = parseFloat((v || "0").toString().replace(",", "."));
+  if (val === 1) return 0.05;
+  if (val === 2) return 0.20;
+  if (val === 3) return 0.45;
+  if (val === 4) return 0.80;
+  if (val === 5) return 1.20;
+  return 0.3;
 };
 
 export default function App() {
@@ -325,6 +506,19 @@ export default function App() {
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
   const [calibrationHistory, setCalibrationHistory] = useState([]);
   const [isCalHistoryLoading, setIsCalHistoryLoading] = useState(false);
+
+  const [latestBuoyTemp, setLatestBuoyTemp] = useState(null);
+  const [latestBuoyDate, setLatestBuoyDate] = useState(null);
+
+  useEffect(() => {
+    const latestBuoyReport = calibrationHistory.find(item => {
+      if (!item.boyaTemp || item.boyaTemp === "") return false;
+      const formatted = formatBoyaTemp(item.boyaTemp);
+      return formatted !== '—' && !isNaN(parseFloat(formatted));
+    });
+    setLatestBuoyTemp(latestBuoyReport ? formatBoyaTemp(latestBuoyReport.boyaTemp) : null);
+    setLatestBuoyDate(latestBuoyReport ? new Date(latestBuoyReport.fechaRegistro) : null);
+  }, [calibrationHistory]);
   
   // Formulario del Administrador
   const [adminPlaya, setAdminPlaya] = useState('misericordia');
@@ -379,34 +573,107 @@ export default function App() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
-  // Dynamic Buoy Scale Factor (Fase 4)
-  const getBoyaScaleFactor = (beachKey, currentDirection) => {
-    if (calibrationHistory.length < 5) {
-      if (beachKey === 'misericordia') return 0.6; // default 40% reduction
-      if ((beachKey === 'malagueta' || beachKey === 'pedregalejo') && currentDirection >= 200 && currentDirection <= 300) return 0.7; // default 30% reduction (escudo)
-      return 1.0;
+  // Estado para las pestañas del Modal Admin ('factors' o 'report')
+  const [adminTab, setAdminTab] = useState('factors');
+  const [factorFeedbackMsg, setFactorFeedbackMsg] = useState(null);
+
+  // Estado para los Factores de Escala Ajustados/Aprobados manualmente por el Administrador (PIN 6611)
+  const [adminManualScaleFactors, setAdminManualScaleFactors] = useState(() => {
+    try {
+      const saved = localStorage.getItem('openwater_admin_scale_factors');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
     }
-    
+  });
+
+  // Estado para las marcas de tiempo de aprobación/ajuste de factores
+  const [adminFactorApprovalTimes, setAdminFactorApprovalTimes] = useState(() => {
+    try {
+      const saved = localStorage.getItem('openwater_admin_approval_times');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  // Helper para interpretar marcas de tiempo de logs en diversos formatos (ISO, DD/MM/YYYY, etc.)
+  function parseLogTimestamp(log) {
+    if (!log) return 0;
+    const raw = log.fechaRegistro || log.fecha || log.timestamp || "";
+    if (!raw) return 0;
+    if (!isNaN(Number(raw)) && Number(raw) > 1000000000) return Number(raw);
+
+    const direct = Date.parse(raw);
+    if (!isNaN(direct)) return direct;
+
+    const p = String(raw).split(/[/, :]+/);
+    if (p.length >= 3) {
+      const day = parseInt(p[0], 10);
+      const month = parseInt(p[1], 10) - 1;
+      const year = parseInt(p[2], 10);
+      const hour = p[3] ? parseInt(p[3], 10) : 0;
+      const min = p[4] ? parseInt(p[4], 10) : 0;
+      const sec = p[5] ? parseInt(p[5], 10) : 0;
+      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+        return new Date(year, month, day, hour, min, sec).getTime();
+      }
+    }
+    return 0;
+  }
+
+  // Helper para filtrar lecturas anómalas (outliers) utilizando filtro de banda ±1.5σ
+  function filterOutliers(ratios) {
+    if (!ratios || ratios.length < 3) return ratios;
+    const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+    const variance = ratios.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / ratios.length;
+    const stdDev = Math.sqrt(variance);
+    if (stdDev === 0) return ratios;
+    const filtered = ratios.filter(r => Math.abs(r - mean) <= 1.5 * stdDev);
+    return filtered.length > 0 ? filtered : ratios;
+  }
+
+  // Dynamic Buoy Scale Factor por Sector (Levante 🌅 vs Poniente 🌇)
+  function getBoyaScaleFactor(beachKey, currentDirection) {
+    const dir = currentDirection || 110; // Default Levante si no se proporciona dirección
+    const isLevante = dir >= 45 && dir <= 165;
+    const sectorKey = isLevante ? 'levante' : 'poniente';
+    const storageKey = `${beachKey}_${sectorKey}`;
+
+    // 1. Si el Administrador fijó un factor manual o aprobó uno específico para este sector
+    if (adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null) {
+      return parseFloat(adminManualScaleFactors[storageKey]);
+    }
+    // Compatibilidad por si hay fijado un factor general sin sector
+    if (adminManualScaleFactors && adminManualScaleFactors[beachKey] !== undefined && adminManualScaleFactors[beachKey] !== null) {
+      return parseFloat(adminManualScaleFactors[beachKey]);
+    }
+
+    // Factor por defecto de fábrica según playa y sector de viento
+    let defaultFactor = 1.0;
+    if (beachKey === 'misericordia') {
+      defaultFactor = isLevante ? 0.60 : 0.50;
+    } else if (beachKey === 'malagueta' || beachKey === 'pedregalejo') {
+      defaultFactor = isLevante ? 1.00 : 0.70;
+    }
+
     const relevantLogs = calibrationHistory.filter(log => {
       if (log.playa !== beachKey) return false;
       if (!log.boyaAltura || Number(log.boyaAltura) === 0) return false;
       if (!log.realOlas || log.realOlas === "") return false;
       
-      if (log.boyaDireccion && currentDirection) {
-        let diff = Math.abs(Number(log.boyaDireccion) - currentDirection);
-        if (diff > 180) diff = 360 - diff;
-        if (diff > 35) return false;
-      }
-      return true;
+      const logDir = Number(log.boyaDireccion || 110);
+      const logIsLevante = logDir >= 45 && logDir <= 165;
+      return logIsLevante === isLevante; // Solo reportes del mismo sector de viento
     });
-    
-    if (relevantLogs.length === 0) {
-      if (beachKey === 'misericordia') return 0.6;
-      if ((beachKey === 'malagueta' || beachKey === 'pedregalejo') && currentDirection >= 200 && currentDirection <= 300) return 0.7;
-      return 1.0;
+
+    // 2. REGLA ESTRICTA DE 5 REPORTES POR SECTOR (VENTANA MÓVIL DE LOS ÚLTIMOS 5 NADOS CON FILTRO ANTI-OUTLIERS)
+    const recentLogs = relevantLogs.slice(-5);
+    if (recentLogs.length < 5) {
+      return defaultFactor;
     }
-    
-    const scaleToMeters = (val) => {
+
+    function scaleToMeters(val) {
       const v = Number(val);
       if (v === 1) return 0.05;
       if (v === 2) return 0.20;
@@ -414,18 +681,15 @@ export default function App() {
       if (v === 4) return 0.80;
       if (v === 5) return 1.20;
       return 0.3;
-    };
-    
-    let sumRatio = 0;
-    relevantLogs.forEach(log => {
-      const swimmerM = scaleToMeters(log.realOlas);
-      const buoyM = Number(log.boyaAltura);
-      sumRatio += swimmerM / buoyM;
-    });
-    
-    const calculatedFactor = sumRatio / relevantLogs.length;
+    }
+
+    const ratios = recentLogs.map(log => scaleToMeters(log.realOlas) / Number(log.boyaAltura));
+    const cleanRatios = filterOutliers(ratios);
+    const sumRatio = cleanRatios.reduce((a, b) => a + b, 0);
+
+    const calculatedFactor = sumRatio / cleanRatios.length;
     return Math.max(0.1, Math.min(1.5, calculatedFactor));
-  };
+  }
 
   useEffect(() => {
     if (!isModalOpen) return;
@@ -447,6 +711,14 @@ export default function App() {
       setCurrentNowData(null);
       
       const beach = BEACHES[selectedBeach];
+      
+      // Temperatura real de la boya calculada localmente (sin depender de latestBuoyTemp del estado externo)
+      const buoyReport = calibrationHistory.find(item => {
+        if (!item.boyaTemp || item.boyaTemp === "") return false;
+        const v = parseFloat(item.boyaTemp.toString().replace(',', '.'));
+        return !isNaN(v);
+      });
+      const buoyTempForToday = buoyReport ? parseFloat(buoyReport.boyaTemp.toString().replace(',', '.')) : null;
       
       let marineJson = null;
       let weatherJson = null;
@@ -473,9 +745,9 @@ export default function App() {
         }
       };
 
-      // 1. SATÉLITE CLIMA (Añadimos visibility para la niebla)
+      // 1. SATÉLITE CLIMA (Añadimos visibility y dew_point_2m)
       try {
-        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,precipitation,weather_code,uv_index,cloud_cover,visibility&timezone=Europe%2FMadrid&past_days=2`);
+        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,dew_point_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,precipitation,weather_code,uv_index,cloud_cover,visibility&timezone=Europe%2FMadrid&past_days=2`);
       } catch (e) {
         console.warn("Satélite de clima caído. Activando auto-rescate.", e);
         localClimateDown = true;
@@ -500,12 +772,48 @@ export default function App() {
         let tempCurrentNow = null;
         const currentSystemHour = new Date().getHours();
 
+        // 3.1 CÁLCULO DE INERCIA DE PONIENTE (Afloramiento de Bolsas de Agua Fría a 200m)
+        let recentPonienteHours = 0;
+        if (!localClimateDown && weatherJson?.hourly?.wind_direction_10m) {
+          // Analizar las 48 horas de histórico previo en la consulta (índices 0 a 47)
+          for (let k = 0; k < 48; k++) {
+            const wDir = weatherJson.hourly.wind_direction_10m[k];
+            const wSpd = weatherJson.hourly.wind_speed_10m[k] || 0;
+            if (wDir !== undefined && wDir >= 200 && wDir <= 340 && wSpd >= 8) {
+              recentPonienteHours++;
+            }
+          }
+        }
+        const hasUpwellingMemory = recentPonienteHours >= 6; // 6+ horas de poniente reciente
+        const upwellingOffset = hasUpwellingMemory ? 3.5 : 0; // Descuento de 3.5°C por bolsas frías de afloramiento, o 0°C en días de mar calmo/templado sin poniente
+
+        // Comprobar si algún nadador o admin reportó agua fría recientemente en la comunidad
+        const recentColdWaterReport = calibrationHistory.find(log => {
+          if (!log.sensaciones && !log.notasCalibracion) return false;
+          const textSens = (log.sensaciones || "").toLowerCase();
+          const textNotes = (log.notasCalibracion || "").toLowerCase();
+          return textSens.includes('fría') || textSens.includes('fria') || textNotes.includes('fría') || textNotes.includes('fria');
+        });
+
         for (let d = 0; d < dayOffsets.length; d++) {
           const offset = dayOffsets[d];
           
           const baseIndex = (offset + 2) * 24; 
           const startIndex = baseIndex + 6;
           const endIndex = baseIndex + 21;
+
+          // ----- CÁLCULO DE TEMPERATURA DEL AGUA (Predicción + Boya Real) -----
+          const noonIndex = baseIndex + 12;
+          const sstNoon = marineJson?.hourly?.sea_surface_temperature?.[noonIndex];
+          const predictedWaterTemp =
+            sstNoon !== undefined && sstNoon !== null && !Number.isNaN(Number(sstNoon))
+              ? Math.round(Number(sstNoon) * 10) / 10
+              : 15;
+
+          let waterTemp = predictedWaterTemp;
+          if (offset === 0 && buoyTempForToday !== null && !isNaN(buoyTempForToday)) {
+            waterTemp = Math.round(buoyTempForToday * 10) / 10;
+          }
 
           // ----- CÁLCULO DE CALIDAD DEL AGUA (Aguas Sucias) -----
           let rainSum = 0;
@@ -618,6 +926,7 @@ export default function App() {
             const visibility = localClimateDown ? 10000 : (weatherJson?.hourly?.visibility?.[i] || 10000);
             const rainMm = localClimateDown ? 0 : (weatherJson?.hourly?.precipitation?.[i] || 0);
             const rainProb = localClimateDown ? "-" : (weatherJson?.hourly?.precipitation_probability?.[i] || 0);
+            const dewPoint = localClimateDown ? 0 : (weatherJson?.hourly?.dew_point_2m?.[i] || 0);
             
             // Regla: Multiplicador Térmico de Mediodía en Misericordia (v9.5)
             const isMisericordia = selectedBeach === 'misericordia';
@@ -813,6 +1122,64 @@ export default function App() {
                 if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
             }
 
+            // DETECCION DE TARÓ (Niebla de Advección local por choque térmico en bolsas de agua fría)
+            let taroRisk = "Ninguno";
+            
+            // Calculamos la temperatura efectiva del agua en la franja marina (200m) aplicando el descuento por inercia de poniente
+            let taroEffectiveWaterTemp = waterTemp - upwellingOffset;
+            
+            if (offset === 0) {
+              if (recentColdWaterReport) {
+                // Si la comunidad o el admin reportó agua fría, forzamos la masa fría en orilla (~18.5°C)
+                taroEffectiveWaterTemp = Math.min(taroEffectiveWaterTemp, 18.5);
+              } else if (buoyTempForToday !== null && !isNaN(buoyTempForToday)) {
+                // Con boya activa, descontamos el gradiente térmico de la franja costera
+                taroEffectiveWaterTemp = buoyTempForToday - upwellingOffset;
+              }
+            }
+
+            if (!localClimateDown && dewPoint !== undefined && taroEffectiveWaterTemp !== undefined) {
+              const deltaT = dewPoint - taroEffectiveWaterTemp;
+              const isSeaBreezeWind = windDir >= 80 && windDir <= 220; // Vientos de componente marítima (Levante, Sur, Sudeste)
+              const isGentleWind = windKnots >= 3 && windKnots <= 12; // Viento suave que empuja pero no dispersa la niebla
+              const humidity = weatherJson?.hourly?.relative_humidity_2m?.[i];
+              
+              if (deltaT >= 2.0 && isSeaBreezeWind && isGentleWind) {
+                taroRisk = "Alto";
+              } else if (deltaT >= 0.0 && isSeaBreezeWind && isGentleWind) {
+                taroRisk = "Moderado";
+              } else if ((deltaT >= -1.0 || (humidity !== undefined && humidity >= 80)) && isSeaBreezeWind && isGentleWind) {
+                taroRisk = "Bruma";
+              }
+            }
+
+            // Aplicar penalizaciones de Taró al Score de Seguridad y Regla Local
+            if (taroRisk === "Alto") {
+                hourScore -= 40; // Penalización severa por falta de visibilidad
+                if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
+                
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo" || localRule === "Rompiente Dura" || localRule === "Resaca Fuerte" || localRule === "Rompiente Dura (Pleamar) ⚠️" || localRule === "Resaca Fuerte (Pleamar) 🚨") {
+                    localRule = hasUpwellingMemory ? "Riesgo de Taró (Bolsas 200m) 🌫️🚨" : "Riesgo de Taró 🌫️🚨";
+                    ruleColor = "text-slate-800 font-black bg-slate-100 border border-slate-300 shadow-sm animate-pulse";
+                }
+            } else if (taroRisk === "Moderado") {
+                hourScore -= 20; // Penalización moderada
+                if (hourScore > 70) hourScore = 70; // Cap a 70
+                
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo") {
+                    localRule = hasUpwellingMemory ? "Bruma / Taró (Bolsas 200m) 🌫️⚠️" : "Bruma / Taró Leve 🌫️⚠️";
+                    ruleColor = "text-slate-600 font-bold bg-slate-50 border border-slate-200 shadow-sm";
+                }
+            } else if (taroRisk === "Bruma") {
+                hourScore -= 10; // Penalización ligera por bruma anclada en horizonte
+                if (hourScore > 80) hourScore = 80;
+                
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo") {
+                    localRule = "Bruma Mar Adentro 🌫️";
+                    ruleColor = "text-slate-600 font-medium bg-slate-50 border border-slate-200 shadow-sm";
+                }
+            }
+
             // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos y Niebla)
             if (isThunderstorm) {
                 hourScore = 0;
@@ -843,6 +1210,26 @@ export default function App() {
             if (hourScore > maxScore) { maxScore = hourScore; bestHourTime = formattedTime; }
             if (hourScore < minScore) { minScore = hourScore; worstHourTime = formattedTime; }
 
+            // CÁLCULO DE VISIBILIDAD EFECTIVA (Adecuación por Taró y Niebla)
+            let visText = "Excelente";
+            let visColor = "text-slate-800 font-bold";
+            if (localClimateDown) {
+                visText = "Dato no disp.";
+                visColor = "text-slate-400 font-medium";
+            } else if (taroRisk === "Alto" || (!localClimateDown && visibility < 1000)) {
+                visText = "Mala (< 1 km)";
+                visColor = "text-red-600 font-black animate-pulse";
+            } else if (taroRisk === "Moderado" || (!localClimateDown && visibility < 3000)) {
+                visText = "Reducida (1-3 km)";
+                visColor = "text-amber-600 font-bold";
+            } else if (taroRisk === "Bruma" || (!localClimateDown && visibility < 6000)) {
+                visText = "Moderada (3-6 km)";
+                visColor = "text-slate-600 font-semibold";
+            } else if (visibility !== undefined && visibility < 10000) {
+                visText = `${(visibility / 1000).toFixed(1)} km`;
+                visColor = "text-slate-700 font-semibold";
+            }
+
             const uvVal = localClimateDown ? "-" : (weatherJson?.hourly?.uv_index?.[i]);
 
             translatedHourlyData.push({
@@ -867,7 +1254,11 @@ export default function App() {
               drift: driftInfo,
               localRule: localRule,
               ruleColor: ruleColor,
-              seaLevel: hourSeaLevel
+              seaLevel: hourSeaLevel,
+              dewPoint: dewPoint,
+              taroRisk: taroRisk,
+              visText: visText,
+              visColor: visColor
             });
           }
 
@@ -892,13 +1283,7 @@ export default function App() {
           }
 
           const avgScore = validHoursCount > 0 ? Math.round(totalScore / validHoursCount) : 0;
-          
-          const noonIndex = baseIndex + 12;
-          const sstNoon = marineJson?.hourly?.sea_surface_temperature?.[noonIndex];
-          const waterTemp =
-            sstNoon !== undefined && sstNoon !== null && !Number.isNaN(Number(sstNoon))
-              ? Math.round(Number(sstNoon) * 10) / 10
-              : 15;
+
 
           daysProcessed.push({
             dayIndex: d,
@@ -936,15 +1321,15 @@ export default function App() {
 
     fetchRealData();
     
-  }, [selectedBeach, dataRefreshKey]);
+  }, [selectedBeach, dataRefreshKey, calibrationHistory]);
 
-  const handleDayChange = (index) => {
+  function handleDayChange(index) {
     setSelectedDay(index);
     setHasRequestedAi(false);
     setExpertAdvice("");
   };
 
-  const handleAskExpert = async () => {
+  async function handleAskExpert() {
     setHasRequestedAi(true);
     setIsAiLoading(true);
     
@@ -1003,170 +1388,7 @@ export default function App() {
     }
   };
 
-  const getWindDirection = (degrees) => {
-    if (degrees === undefined || degrees === null || (typeof degrees === "number" && Number.isNaN(degrees))) return "—";
-    if (degrees === "-") return "-";
-    const d = Number(degrees);
-    if (Number.isNaN(d)) return "—";
-    if (d > 337.5 || d <= 22.5) return '⬇️ N';
-    if (d > 22.5 && d <= 67.5) return '↙️ NE';
-    if (d > 67.5 && d <= 112.5) return '⬅️ E';
-    if (d > 112.5 && d <= 157.5) return '↖️ SE';
-    if (d > 157.5 && d <= 202.5) return '⬆️ S';
-    if (d > 202.5 && d <= 247.5) return '↗️ SO';
-    if (d > 247.5 && d <= 292.5) return '➡️ O';
-    if (d > 292.5 && d <= 337.5) return '↘️ NO';
-    return '-';
-  };
-
-  const getWindDirectionFullName = (degrees) => {
-    const dirStr = getWindDirection(degrees);
-    if (dirStr === "—" || dirStr === "-" || !dirStr) return dirStr;
-    const cleanDir = dirStr.replace(/[^A-Z]/g, '').trim();
-    const names = {
-      'N': 'Norte',
-      'NE': 'Nordeste',
-      'E': 'Levante',
-      'SE': 'Sureste',
-      'S': 'Sur',
-      'SO': 'Suroeste',
-      'O': 'Poniente',
-      'NO': 'Noroeste'
-    };
-    return names[cleanDir] ? `${dirStr} (${names[cleanDir]})` : dirStr;
-  };
-
-  const parseSwimmerSensaciones = (text) => {
-    if (!text) return { nombre: 'Anónimo', medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
-    
-    // 1. Intentar hacer coincidir el formato nuevo con Nombre, Medusas y Agua
-    const matchNew = text.match(/^\[Nombre:\s*([^|]+)\s*\|\s*Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
-    if (matchNew) {
-      return {
-        nombre: matchNew[1].trim(),
-        medusas: matchNew[2].trim(),
-        agua: matchNew[3].trim(),
-        comentario: matchNew[4].trim()
-      };
-    }
-    
-    // 2. Intentar hacer coincidir el formato antiguo con solo Medusas y Agua
-    const matchOld = text.match(/^\[Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
-    if (matchOld) {
-      return {
-        nombre: 'Anónimo',
-        medusas: matchOld[1].trim(),
-        agua: matchOld[2].trim(),
-        comentario: matchOld[3].trim()
-      };
-    }
-    
-    // 3. Caso por defecto si no tiene corchetes
-    return {
-      nombre: 'Anónimo',
-      medusas: 'Ninguna',
-      agua: 'Limpia',
-      comentario: text
-    };
-  };
-
-  const formatFriendlyDate = (dateString) => {
-    try {
-      const regDate = new Date(dateString);
-      const today = new Date();
-      const yesterday = new Date();
-      yesterday.setDate(today.getDate() - 1);
-      
-      const timeStr = regDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-      
-      if (regDate.toDateString() === today.toDateString()) {
-        return `Hoy, ${timeStr}`;
-      } else if (regDate.toDateString() === yesterday.toDateString()) {
-        return `Ayer, ${timeStr}`;
-      } else {
-        const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
-        const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-        return `${capitalizedDay}, ${regDate.getDate()} ${regDate.toLocaleString('es-ES', { month: 'short' })}`;
-      }
-    } catch (e) {
-      return 'Hace poco';
-    }
-  };
-
-  const formatBoyaTemp = (val) => {
-    if (!val) return '—';
-    const str = val.toString().trim();
-    if (str.includes('-') && str.includes('T')) {
-      try {
-        const d = new Date(str);
-        if (!isNaN(d.getTime())) {
-          const day = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric' });
-          const month = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', month: 'numeric' });
-          return `${day}.${month}`;
-        }
-      } catch (e) {
-        // Fallback
-      }
-    }
-    return str.replace(',', '.');
-  };
-
-  const formatSwimFriendly = (dateVal, swimHour) => {
-    if (!dateVal) return swimHour || '—';
-    try {
-      const regDate = new Date(dateVal);
-      const today = new Date();
-      const yesterday = new Date();
-      yesterday.setDate(today.getDate() - 1);
-      
-      const hourSuffix = swimHour ? `, ${swimHour}` : '';
-      
-      if (regDate.toDateString() === today.toDateString()) {
-        return `Hoy${hourSuffix}`;
-      } else if (regDate.toDateString() === yesterday.toDateString()) {
-        return `Ayer${hourSuffix}`;
-      } else {
-        const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
-        const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-        const dayNum = regDate.getDate();
-        const monthStr = regDate.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
-        const timeBrackets = swimHour ? ` (${swimHour})` : '';
-        return `${capitalizedDay}, ${dayNum} ${monthStr}${timeBrackets}`;
-      }
-    } catch (e) {
-      return swimHour || '—';
-    }
-  };
-
-  const getRecordType = (item) => {
-    const orig = item.origenDato || "";
-    const notes = item.notasCalibracion || "";
-    const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
-    
-    if (notes.includes('[ALERTA_OFICIAL]') || orig === 'Admin: Alerta') {
-      return 'admin_alert';
-    }
-    
-    if (orig === 'Sincronización Boya' || orig === 'Boya: Sincronización') {
-      return 'buoy_sync';
-    }
-    
-    if (orig === 'Nadador: Mensaje' || (orig === 'Nadador' && !hasOlas)) {
-      return 'swimmer_msg';
-    }
-    
-    if (orig === 'Admin: Calibración' || (orig === 'Web Admin' && hasOlas)) {
-      return 'admin_report';
-    }
-    
-    if (orig === 'Nadador: Reporte' || (orig === 'Nadador' && hasOlas)) {
-      return 'swimmer_report';
-    }
-    
-    return 'swimmer_report';
-  };
-
-  const fetchCalibrationHistory = async () => {
+  async function fetchCalibrationHistory() {
     setIsCalHistoryLoading(true);
     try {
       const response = await fetch(WEBHOOK_URL);
@@ -1254,9 +1476,9 @@ export default function App() {
     fetchComparisonData();
   }, [activeTab, selectedBeach]);
 
-  const handleVerifyPin = (e) => {
+  function handleVerifyPin(e) {
     e.preventDefault();
-    if (adminPin === "1234") {
+    if (btoa(adminPin.trim()) === "NjYxMQ==") {
       setIsAdminAuthorized(true);
       setReportStatus(null);
     } else {
@@ -1264,7 +1486,7 @@ export default function App() {
     }
   };
 
-  const handleSendReport = async (e) => {
+  async function handleSendReport(e) {
     e.preventDefault();
     setIsSendingReport(true);
     setReportStatus(null);
@@ -1363,7 +1585,7 @@ export default function App() {
     }
   };
 
-  const handleSendSwimmerReport = async (e) => {
+  async function handleSendSwimmerReport(e) {
     e.preventDefault();
     setIsSendingSwimmerReport(true);
     setSwimmerReportStatus(null);
@@ -1458,7 +1680,7 @@ export default function App() {
     }
   };
 
-  const handleSyncBuoy = async () => {
+  async function handleSyncBuoy() {
     setIsSyncingBuoy(true);
     const now = new Date();
     const currentHourStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
@@ -1505,16 +1727,9 @@ export default function App() {
     }
   };
 
-  // Buscar la medición de temperatura física más reciente registrada por la boya en el historial
-  const latestBuoyReport = calibrationHistory.find(item => {
-    if (!item.boyaTemp || item.boyaTemp === "") return false;
-    const formatted = formatBoyaTemp(item.boyaTemp);
-    return formatted !== '—' && !isNaN(parseFloat(formatted));
-  });
-  const latestBuoyTemp = latestBuoyReport ? formatBoyaTemp(latestBuoyReport.boyaTemp) : null;
-  const latestBuoyDate = latestBuoyReport ? new Date(latestBuoyReport.fechaRegistro) : null;
 
-  const currentDayData = beachData ? beachData[selectedDay] : null;
+
+  const currentDayData = beachData?.[selectedDay] ?? null;
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans flex flex-col">
@@ -2056,14 +2271,12 @@ export default function App() {
                              <p className="text-xs text-indigo-700 font-medium mt-0.5">Comprueba esta tabla y ayúdanos a calibrar el algoritmo.</p>
                            </div>
                          </div>
-                         <a
-                           href="https://docs.google.com/forms/d/e/1FAIpQLSdTjdiGOAEtBYo6wjNRtMK1KpdAijJajxhp-_uUBpMhG0Y8YQ/viewform?usp=sharing&ouid=114554177440629903097"
-                           target="_blank"
-                           rel="noreferrer"
-                           className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs w-full sm:w-auto"
-                         >
-                           📝 Rellenar Diario
-                         </a>
+                          <button
+                            onClick={() => setIsSwimmerModalOpen(true)}
+                            className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs w-full sm:w-auto"
+                          >
+                            📝 ¿Nadaste ayer? Reportar estado
+                          </button>
                      </div>
                      <p className="text-[11px] font-bold text-indigo-500 mt-3 text-center sm:text-left w-full">
                        O si lo prefieres, cuéntanoslo directamente por el grupo de WhatsApp del club.
@@ -2232,8 +2445,8 @@ export default function App() {
                                   </div>
                                   <div className="text-right">
                                     <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide block">Visibilidad</span>
-                                    <span className="font-bold text-slate-700 text-xs">
-                                      {hour.visibility ? `${(hour.visibility / 1000).toFixed(1)} km` : 'Excelente'}
+                                    <span className={`text-xs ${hour.visColor || 'font-bold text-slate-700'}`}>
+                                      {hour.visText || 'Excelente'}
                                     </span>
                                   </div>
                                 </div>
@@ -2295,15 +2508,6 @@ export default function App() {
                     const isSwimmer = logType === 'swimmer_report';
                     
                     const appOlas = parseFloat((selectedHistoryLog.appOlas || "0").toString().replace(",", "."));
-                    const swimmerScaleToMeters = (v) => {
-                      const val = parseFloat((v || "0").toString().replace(",", "."));
-                      if (val === 1) return 0.05;
-                      if (val === 2) return 0.20;
-                      if (val === 3) return 0.45;
-                      if (val === 4) return 0.80;
-                      if (val === 5) return 1.20;
-                      return 0.3;
-                    };
                     const swimmerRealM = swimmerScaleToMeters(selectedHistoryLog.realOlas);
                     
                     let diffPercent = 0;
@@ -3014,119 +3218,211 @@ export default function App() {
               
               <section>
                 <p className="text-slate-600 leading-relaxed text-sm md:text-base">
-                  Hemos cogido los datos en bruto de los satélites y les hemos metido <strong>"nuestra experiencia local"</strong> para crear el primer predictor de aguas abiertas pensado exclusivamente para la costa de Málaga.
+                  Hemos cogido los datos en bruto de los satélites y los sensores marinos y los hemos pasado por el <strong>"filtro de la experiencia local"</strong> para crear el primer predictor de aguas abiertas pensado por y para la costa de Málaga.
                 </p>
               </section>
 
+              {/* 1. EL TARÓ Y LA NIEBLA MARINA */}
               <section>
-                <h4 className="font-bold text-slate-800 text-lg mb-4 border-b pb-2">🛠️ 1. Alertas de Salud y Riesgo</h4>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <CloudFog size={20} className="text-slate-600"/> 1. El Taró y la Niebla Marina
+                </h4>
+                <p className="text-sm text-slate-600 mb-4">
+                  En verano es muy común el <strong>Taró</strong> (niebla de advección): esa masa de niebla espesa que entra de golpe a mediodía atrapando la costa. Se forma cuando el aire cálido y húmedo del Levante pasa por encima de bolsas de agua fría residuales de Poniente.
+                </p>
+                <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm">
+                  <div className="flex gap-3 items-start">
+                    <span className="text-base shrink-0">🚨</span>
+                    <div>
+                      <strong className="text-slate-800">Riesgo de Taró (o Bolsas 200m):</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Niebla densa en orilla o a 200m pasadas las boyas amarillas. Visibilidad muy reducida (&lt; 1 km) y castigo en el Score. Mucha precaución con perder la costa de vista.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <span className="text-base shrink-0">⚠️</span>
+                    <div>
+                      <strong className="text-slate-800">Bruma / Taró Leve:</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Niebla suave que reduce la visión de los edificios y los espigones (1 a 3 km).</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <span className="text-base shrink-0">🌫️</span>
+                    <div>
+                      <strong className="text-slate-800">Bruma Mar Adentro:</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Calima húmeda o bruma anclada en el horizonte marino (la orilla está clara, pero mar adentro se ve turbio).</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* 2. EL AGUA: BOYA REAL VS SATELITE VS BOLSAS */}
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Thermometer size={20} className="text-blue-500"/> 2. El Agua: Boya Real vs. Orilla
+                </h4>
+                <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm">
+                  <div className="flex gap-3 items-start">
+                    <Anchor className="text-blue-600 shrink-0 mt-1" size={18} />
+                    <div>
+                      <strong className="text-slate-800">Boya de Málaga (Mar abierto):</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Mide la temperatura real de la gran masa de agua mar adentro (a varias millas de la costa).</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <ThermometerSun className="text-amber-500 shrink-0 mt-1" size={18} />
+                    <div>
+                      <strong className="text-slate-800">Satélite (Modelo teórico):</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Te da una estimación general, aunque suele marcar 2ºC o 3ºC por encima de lo que sientes al meter el pie en la playa.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <Waves className="text-cyan-600 shrink-0 mt-1" size={18} />
+                    <div>
+                      <strong className="text-slate-800">Bolsas de Agua Fría (Inercia de Poniente):</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Tras días de Poniente, el mar "escupe" agua helada profunda hacia la costa. A veces la orilla está agradable pero a 150m pasas una bolsa helada a 18ºC. La app detecta el viento de los días previos para avisarte de estas bolsas.</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* 3. LAS CORRIENTES Y DERIVA */}
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Compass size={20} className="text-indigo-500"/> 3. Las Corrientes: Hacia dónde te lleva el agua
+                </h4>
+                <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="flex gap-3 items-start">
+                     <AlertTriangle className="text-red-500 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">La Resaca (Hacia adentro):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Si entra agua con fuerza a la playa, tiene que buscar salida hacia mar abierto creando embudos de succión. Se marca como Baja, Media o Alta.</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                     <Compass className="text-indigo-500 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">La Deriva Lateral (Flechitas Nerja / Fuengirola):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Cruzando el ángulo de la playa con el de la ola, sabemos si el agua "resbala" empujándote hacia el Este (⬅️ etiqueta <strong>Nerja</strong>) o hacia el Oeste (➡️ etiqueta <strong>Fuengirola</strong>) a lo largo de la costa.</p>
+                     </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* 4. ENERGÍA EN KJ */}
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Activity size={20} className="text-orange-500"/> 4. La Fuerza de las Olas (Energía en Kj)
+                </h4>
+                <p className="text-sm text-slate-600 mb-4">
+                  Lo que de verdad te empuja en el pecho no son los metros de ola, sino su <strong>Energía en Kilojulios (Kj)</strong>.
+                </p>
+                <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 text-sm text-orange-800 font-medium flex items-start gap-3">
+                  <Info className="shrink-0 text-orange-600 mt-0.5" size={20} />
+                  <p>
+                    <strong>La regla al cuadrado:</strong> Una ola de 0.8m no tiene el doble de fuerza que una de 0.4m... <strong>¡Tiene 4 veces más energía!</strong> Por eso, a partir de 0.6m notarás que el mar golpea con mucha dureza. Fíjate en la columna de <strong>Energía (Kj)</strong> para conocer el impacto real.
+                  </p>
+                </div>
+              </section>
+
+              {/* 5. ALERTAS DE SALUD, MEDUSAS Y AGUAS SUCIAS */}
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Zap size={20} className="text-yellow-600"/> 5. Alertas de Salud, Medusas y Aguas Sucias
+                </h4>
                 <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                   <div className="flex gap-3 items-start">
                      <Zap className="text-yellow-600 shrink-0 mt-1" size={20} />
                      <div>
                        <strong className="text-slate-800">Corte por Tormenta (Rayos):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Si el satélite detecta riesgo eléctrico, la nota caerá a 0 puntos y aparecerá en amarillo. En el agua eres el punto más alto, un pararrayos natural. Sal inmediatamente.</p>
-                     </div>
-                  </div>
-                  <div className="flex gap-3 items-start">
-                     <CloudFog className="text-slate-500 shrink-0 mt-1" size={20} />
-                     <div>
-                       <strong className="text-slate-800">Pérdida de Visibilidad (Niebla):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Si la visibilidad cae por debajo de 2 kilómetros, aplicamos un castigo de 40 puntos. Perder de vista la costa nadando es extremadamente peligroso.</p>
+                       <p className="text-sm text-slate-600 mt-1">Si el satélite detecta riesgo eléctrico, la nota caerá a 0 puntos. En el agua eres el punto más alto, un pararrayos natural. Sal inmediatamente.</p>
                      </div>
                   </div>
                   <div className="flex gap-3 items-start">
                      <TestTubes className="text-emerald-500 shrink-0 mt-1" size={20} />
                      <div>
                        <strong className="text-slate-800">Calidad del Agua (Arrastres):</strong>
-                       <p className="text-sm text-slate-600 mt-1">La app suma la lluvia desde ayer hasta hoy. Si llueve fuerte, los aliviaderos de Málaga y el río Guadalhorce escupirán suciedad que la deriva traerá a la costa. La tarjeta pasará a estado de "Precaución" (0.5mm) o "Riesgo Alto" (2mm).</p>
-                     </div>
-                  </div>
-                </div>
-              </section>
-
-              <section>
-                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Compass size={20} className="text-indigo-500"/> 2. Las Corrientes (El Radar)
-                </h4>
-                <p className="text-sm text-slate-600 mb-4">
-                  En la tabla, cruzamos los datos de las olas para vigilar los dos tipos de arrastres:
-                </p>
-                <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <div className="flex gap-3 items-start">
-                     <AlertTriangle className="text-red-500 shrink-0 mt-1" size={20} />
-                     <div>
-                       <strong className="text-slate-800">La Resaca (Hacia adentro):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Si entra mucha agua a la playa, tiene que salir, creando embudos que tiran hacia alta mar. Se marca como Baja, Media o Alta.</p>
+                       <p className="text-sm text-slate-600 mt-1">La app suma la lluvia caída desde ayer. Si llueve fuerte, los aliviaderos de Málaga y el río Guadalhorce escupirán suciedad que la corriente traerá a la playa (tarjeta en "Precaución" o "Riesgo Alto").</p>
                      </div>
                   </div>
                   <div className="flex gap-3 items-start">
-                     <Compass className="text-indigo-500 shrink-0 mt-1" size={20} />
+                     <span className="text-base shrink-0">🪼</span>
                      <div>
-                       <strong className="text-slate-800">La Deriva Lateral (Flechitas):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Cruzando la inclinación de la playa con el ángulo de la ola, sabemos si el agua "resbala" empujándote hacia el este (⬅️ etiqueta <strong>Nerja</strong>) o hacia el oeste (➡️ etiqueta <strong>Fuengirola</strong>) a lo largo de la costa.</p>
+                       <strong className="text-slate-800">Riesgo de Medusas (Heurístico de Levante):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Cuando el viento sopla de Levante (Este/Sureste) durante más de 4 horas seguidas, la app eleva la precaución por medusas, ya que esa corriente arrastra los enjambres hacia la orilla.</p>
                      </div>
                   </div>
                 </div>
               </section>
 
+              {/* 6. REGLAS LOCALES */}
               <section>
                 <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Activity size={20} className="text-orange-500"/> 3. La Energía (La Regla de Oro)
+                  <Bot size={20} className="text-indigo-500"/> 6. El "Cerebro" Malagueño (Reglas Locales)
                 </h4>
-                <p className="text-sm text-slate-600 mb-4">
-                  La columna <strong>Energía (Kj)</strong> usa <code className="bg-slate-100 px-1 rounded text-xs">altura² × periodo × coeficiente dinámico</code>. El coeficiente depende de la <strong>dirección del oleaje</strong> (Sur/SSE más noble, Sureste intermedio, Suroeste más agresivo) y del <strong>periodo</strong> (más de 5 s suma empuje; menos de 4 s resta, mar más caótico). Debajo del valor verás la <strong>procedencia del oleaje</strong> (brújula + grados, convención del modelo).
-                </p>
-                <p className="text-sm text-slate-600 mb-4">
-                  Basado en los informes de oceanografía física, la fuerza de una ola no crece en línea recta, sino de forma <strong>exponencial</strong> (al cuadrado en la altura).
-                </p>
-                <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 text-sm text-orange-800 font-medium flex items-start gap-3">
-                  <Info className="shrink-0 text-orange-600 mt-0.5" size={20} />
-                  <p>
-                    Una ola de 0.8m no tiene el doble de fuerza que una de 0.4m... <strong>¡Tiene 4 veces más energía!</strong> Por eso, a partir de 0.6m notarás que el mar golpea con mucha dureza. Fíjate en la columna de <strong>Energía (Kj)</strong> para conocer el impacto real de las olas en tu pecho.
-                  </p>
-                </div>
-              </section>
-
-              <section>
-                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Bot size={20} className="text-indigo-500"/> 4. El "Cerebro" Malagueño
-                </h4>
-                <p className="text-sm text-slate-600 mb-5">
-                  La aplicación no se fía a ciegas del satélite, sino que aplica nuestras <strong>4 Reglas de Oro</strong> automáticamente:
-                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-cyan-50 p-2.5 rounded-xl text-cyan-600"><Waves size={24} /></div>
                       <h5 className="font-bold text-slate-800">El "Magón"</h5>
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">Ola tendida sin viento. Aunque sea grande (0.5m), la app no castiga la seguridad en exceso porque es mar de fondo cómodo.</p>
+                    <p className="text-sm text-slate-600">Ola tendida sin viento. Aunque sea grande (0.5m), la app no castiga la nota en exceso porque es mar de fondo cómodo.</p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-amber-50 p-2.5 rounded-xl text-amber-600"><ThermometerSun size={24} /></div>
                       <h5 className="font-bold text-slate-800">La "Lavadora" Térmica</h5>
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">A mediodía, el Poniente superior a 12 nudos levanta un mar picado insoportable para respirar.</p>
+                    <p className="text-sm text-slate-600">A mediodía, el Poniente superior a 12 nudos levanta un mar picado insoportable para respirar.</p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-red-50 p-2.5 rounded-xl text-red-600"><Wind size={24} /></div>
                       <h5 className="font-bold text-slate-800">La trampa del Terral</h5>
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">Viento fuerte de Tierra (Norte) alisa la orilla pero empuja hacia adentro. Riesgo muy alto de deriva.</p>
+                    <p className="text-sm text-slate-600">Viento fuerte de Norte (tierra). Deja la orilla plato como un espejo, pero te empuja hacia mar adentro sin darte cuenta.</p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600"><ShieldAlert size={24} /></div>
                       <h5 className="font-bold text-slate-800">El Escudo del Puerto</h5>
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">La Malagueta y Pedregalejo están fuertemente protegidas contra las olas de Poniente o Suroeste. El satélite llega aquí muy atenuado.</p>
+                    <p className="text-sm text-slate-600">La Malagueta y Pedregalejo están fuertemente protegidas contra las olas de Poniente o Suroeste. El satélite llega aquí muy atenuado.</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-orange-50 p-2.5 rounded-xl text-orange-600"><AlertTriangle size={24} /></div>
+                      <h5 className="font-bold text-slate-800">Rompiente Dura (en Pleamar)</h5>
+                    </div>
+                    <p className="text-sm text-slate-600">Ola pequeña mar adentro que rompe con un seco y duro golpe de agua en la orilla debido al escalón de arena y la marea llena.</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-purple-50 p-2.5 rounded-xl text-purple-600"><Activity size={24} /></div>
+                      <h5 className="font-bold text-slate-800">Batalla Térmica ⚔️</h5>
+                    </div>
+                    <p className="text-sm text-slate-600">A mediodía, el terral de mañana choca de frente con la brisa marina (virazón), creando un mar cruzado, picado y desordenado.</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm md:col-span-2">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600"><Compass size={24} /></div>
+                      <h5 className="font-bold text-slate-800">Falsa Calma (Corriente de Fondo) ⚠️</h5>
+                    </div>
+                    <p className="text-sm text-slate-600">La superficie se ve lisa como un espejo (mar plato), pero por abajo las olas vienen con un periodo largo (más de 6 segundos) empujando con fuerza por el fondo.</p>
                   </div>
                 </div>
               </section>
 
+              {/* 7. LA COMUNIDAD */}
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Users size={20} className="text-emerald-500"/> 7. La Comunidad: Tú eres el mejor sensor
+                </h4>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Haz clic en el botón <strong>📝 ¿Nadaste ayer? Reportar estado</strong> para contarnos si viste medusas, si el agua estaba fría o limpia. Con tus datos reales en la orilla, la app calibra su algoritmo en tiempo real para todos los compañeros del club.
+                </p>
+              </section>
+
+              {/* ADVERTENCIA DE SENTIDO COMUN */}
               <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-sm text-amber-800 font-medium flex items-start gap-3">
                 <Info className="shrink-0 text-amber-600 mt-0.5" size={20} />
                 <p>
@@ -3192,243 +3488,530 @@ export default function App() {
                   </button>
                 </form>
               ) : (
-                /* FORMULARIO DE REPORTE */
-                <form onSubmit={handleSendReport} className="space-y-4 text-left">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Playa</label>
-                      <select 
-                        value={adminPlaya}
-                        onChange={(e) => setAdminPlaya(e.target.value)}
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
+                <>
+                  {/* PESTAÑAS NAVEGACIÓN ADMIN */}
+                  <div className="flex border-b border-slate-200 mb-5 bg-slate-100/80 p-1 rounded-2xl">
+                    <button
+                      type="button"
+                      onClick={() => setAdminTab('factors')}
+                      className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 ${adminTab === 'factors' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      ⚙️ Control de Factores
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminTab('report')}
+                      className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 ${adminTab === 'report' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      📝 Registrar Nado / Alerta
+                    </button>
+                  </div>
+
+                  {/* PESTAÑA 1: REGISTRAR NADO O ALERTA OFICIAL */}
+                  {adminTab === 'report' && (
+                    <form onSubmit={handleSendReport} className="space-y-4 text-left">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Playa</label>
+                          <select 
+                            value={adminPlaya}
+                            onChange={(e) => setAdminPlaya(e.target.value)}
+                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
+                          >
+                            <option value="misericordia">La Misericordia</option>
+                            <option value="malagueta">La Malagueta</option>
+                            <option value="pedregalejo">Pedregalejo</option>
+                            <option value="los_alamos">Los Álamos</option>
+                            <option value="bajondillo">El Bajondillo</option>
+                            <option value="rincon_victoria">Rincón de la Victoria</option>
+                            <option value="cala_del_moral">La Cala del Moral</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Hora Nado</label>
+                          <input 
+                            type="text" 
+                            value={adminHoraNado}
+                            onChange={(e) => setAdminHoraNado(e.target.value)}
+                            placeholder="11:00"
+                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 text-center"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                        <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Observación Real (1 al 5)</span>
+                        
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-slate-700">Olas:</span>
+                            <div className="flex gap-1.5">
+                              {[1,2,3,4,5].map(v => (
+                                <button 
+                                  type="button" key={v}
+                                  onClick={() => setAdminRealOlas(v)}
+                                  className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                                >
+                                  {v}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {adminRealOlas && (
+                            <div className="text-[10px] text-right font-bold text-blue-600 italic">
+                              {adminRealOlas === 1 && "1/5 = 0.05m (Mar plano / Sin olas)"}
+                              {adminRealOlas === 2 && "2/5 = 0.20m (Olas muy pequeñas)"}
+                              {adminRealOlas === 3 && "3/5 = 0.45m (Olas medianas)"}
+                              {adminRealOlas === 4 && "4/5 = 0.80m (Olas grandes)"}
+                              {adminRealOlas === 5 && "5/5 = 1.20m (Olas muy grandes / Resaca)"}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-slate-700">Resaca:</span>
+                            <div className="flex gap-1.5">
+                              {[1,2,3,4,5].map(v => (
+                                <button 
+                                  type="button" key={v}
+                                  onClick={() => setAdminRealResaca(v)}
+                                  className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                                >
+                                  {v}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {adminRealResaca && (
+                            <div className="text-[10px] text-right font-bold text-red-500 italic">
+                              {adminRealResaca === 1 && "1/5 = Sin resaca"}
+                              {adminRealResaca === 2 && "2/5 = Resaca leve"}
+                              {adminRealResaca === 3 && "3/5 = Resaca moderada"}
+                              {adminRealResaca === 4 && "4/5 = Resaca fuerte"}
+                              {adminRealResaca === 5 && "5/5 = Resaca extrema"}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-slate-700">Corriente (Deriva):</span>
+                            <div className="flex gap-1.5">
+                              {[1,2,3,4,5].map(v => (
+                                <button 
+                                  type="button" key={v}
+                                  onClick={() => setAdminRealCorriente(v)}
+                                  className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                                >
+                                  {v}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {adminRealCorriente && (
+                            <div className="text-[10px] text-right font-bold text-indigo-600 italic">
+                              {adminRealCorriente === 1 && "1/5 = Sin deriva / corriente"}
+                              {adminRealCorriente === 2 && "2/5 = Deriva leve"}
+                              {adminRealCorriente === 3 && "3/5 = Deriva moderada"}
+                              {adminRealCorriente === 4 && "4/5 = Deriva fuerte"}
+                              {adminRealCorriente === 5 && "5/5 = Deriva extrema"}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100/60 space-y-2 text-left">
+                        <span className="block text-[10px] font-black text-blue-700 uppercase tracking-wider mb-1">⚓ Datos de la Boya Real (Málaga) - Opcional</span>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Altura Boya (m)</label>
+                            <input 
+                              type="text" 
+                              value={adminBoyaAltura}
+                              onChange={(e) => setAdminBoyaAltura(e.target.value)}
+                              placeholder="Ej: 0.45"
+                              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Periodo Boya (s)</label>
+                            <input 
+                              type="text" 
+                              value={adminBoyaPeriodo}
+                              onChange={(e) => setAdminBoyaPeriodo(e.target.value)}
+                              placeholder="Ej: 4.2"
+                              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Dirección Boya (º)</label>
+                            <input 
+                              type="text" 
+                              value={adminBoyaDireccion}
+                              onChange={(e) => setAdminBoyaDireccion(e.target.value)}
+                              placeholder="Ej: 110"
+                              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Temp Agua (ºC)</label>
+                            <input 
+                              type="text" 
+                              value={adminBoyaTemp}
+                              onChange={(e) => setAdminBoyaTemp(e.target.value)}
+                              placeholder="Ej: 21.5"
+                              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Fza (Fuerza)</label>
+                          <input 
+                            type="text" 
+                            value={adminRealVientoFza}
+                            onChange={(e) => setAdminRealVientoFza(e.target.value)}
+                            placeholder="Suave / Fuerte / Medio"
+                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Dir (Dirección)</label>
+                          <input 
+                            type="text" 
+                            value={adminRealVientoDir}
+                            onChange={(e) => setAdminRealVientoDir(e.target.value)}
+                            placeholder="S/SO, Levante, Poniente..."
+                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Comentario del nadador / WhatsApp</label>
+                        <textarea 
+                          value={adminSensaciones}
+                          onChange={(e) => setAdminSensaciones(e.target.value)}
+                          placeholder="Ej. 'Agua muy limpia pero refrescando bastante, deriva fuerte hacia Fuengirola...'"
+                          className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Notas Internas Calibración</label>
+                        <input 
+                          type="text" 
+                          value={adminNotas}
+                          onChange={(e) => setAdminNotas(e.target.value)}
+                          placeholder="Ej. 'Windy falló por 3 nudos, TodoSurf clavado.'"
+                          className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700"
+                        />
+                      </div>
+
+                      {/* Publicar como alerta oficial */}
+                      <div className="flex items-center gap-2 p-1">
+                        <input
+                          type="checkbox"
+                          id="adminIsAlert"
+                          checked={adminIsAlert}
+                          onChange={(e) => setAdminIsAlert(e.target.checked)}
+                          className="w-3.5 h-3.5 text-rose-600 border-slate-300 rounded focus:ring-rose-500 cursor-pointer"
+                        />
+                        <label htmlFor="adminIsAlert" className="text-[11px] font-black text-rose-600 select-none cursor-pointer">
+                          ⚠️ Publicar como Alerta Oficial Destacada en la web
+                        </label>
+                      </div>
+
+                      {reportStatus && (
+                        <div className={`p-3 rounded-xl text-xs font-bold text-center border ${reportStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                          {reportStatus.text}
+                        </div>
+                      )}
+
+                      <button 
+                        type="submit"
+                        disabled={isSendingReport}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-md text-xs flex items-center justify-center gap-2 disabled:opacity-50"
                       >
-                        <option value="misericordia">La Misericordia</option>
-                        <option value="malagueta">La Malagueta</option>
-                        <option value="pedregalejo">Pedregalejo</option>
-                        <option value="los_alamos">Los Álamos</option>
-                        <option value="bajondillo">El Bajondillo</option>
-                        <option value="rincon_victoria">Rincón de la Victoria</option>
-                        <option value="cala_del_moral">La Cala del Moral</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Hora Nado</label>
-                      <input 
-                        type="text" 
-                        value={adminHoraNado}
-                        onChange={(e) => setAdminHoraNado(e.target.value)}
-                        placeholder="11:00"
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 text-center"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
-                    <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Observación Real (1 al 5)</span>
-                    
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-slate-700">Olas:</span>
-                        <div className="flex gap-1.5">
-                          {[1,2,3,4,5].map(v => (
-                            <button 
-                              type="button" key={v}
-                              onClick={() => setAdminRealOlas(v)}
-                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                            >
-                              {v}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {adminRealOlas && (
-                        <div className="text-[10px] text-right font-bold text-blue-600 italic">
-                          {adminRealOlas === 1 && "1/5 = 0.05m (Mar plano / Sin olas)"}
-                          {adminRealOlas === 2 && "2/5 = 0.20m (Olas muy pequeñas)"}
-                          {adminRealOlas === 3 && "3/5 = 0.45m (Olas medianas)"}
-                          {adminRealOlas === 4 && "4/5 = 0.80m (Olas grandes)"}
-                          {adminRealOlas === 5 && "5/5 = 1.20m (Olas muy grandes / Resaca)"}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-slate-700">Resaca:</span>
-                        <div className="flex gap-1.5">
-                          {[1,2,3,4,5].map(v => (
-                            <button 
-                              type="button" key={v}
-                              onClick={() => setAdminRealResaca(v)}
-                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                            >
-                              {v}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {adminRealResaca && (
-                        <div className="text-[10px] text-right font-bold text-red-500 italic">
-                          {adminRealResaca === 1 && "1/5 = Sin resaca"}
-                          {adminRealResaca === 2 && "2/5 = Resaca leve"}
-                          {adminRealResaca === 3 && "3/5 = Resaca moderada"}
-                          {adminRealResaca === 4 && "4/5 = Resaca fuerte"}
-                          {adminRealResaca === 5 && "5/5 = Resaca extrema"}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-slate-700">Corriente (Deriva):</span>
-                        <div className="flex gap-1.5">
-                          {[1,2,3,4,5].map(v => (
-                            <button 
-                              type="button" key={v}
-                              onClick={() => setAdminRealCorriente(v)}
-                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                            >
-                              {v}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {adminRealCorriente && (
-                        <div className="text-[10px] text-right font-bold text-indigo-600 italic">
-                          {adminRealCorriente === 1 && "1/5 = Sin deriva / corriente"}
-                          {adminRealCorriente === 2 && "2/5 = Deriva leve"}
-                          {adminRealCorriente === 3 && "3/5 = Deriva moderada"}
-                          {adminRealCorriente === 4 && "4/5 = Deriva fuerte"}
-                          {adminRealCorriente === 5 && "5/5 = Deriva extrema"}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100/60 space-y-2 text-left">
-                    <span className="block text-[10px] font-black text-blue-700 uppercase tracking-wider mb-1">⚓ Datos de la Boya Real (Málaga) - Opcional</span>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Altura Boya (m)</label>
-                        <input 
-                          type="text" 
-                          value={adminBoyaAltura}
-                          onChange={(e) => setAdminBoyaAltura(e.target.value)}
-                          placeholder="Ej: 0.45"
-                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Periodo Boya (s)</label>
-                        <input 
-                          type="text" 
-                          value={adminBoyaPeriodo}
-                          onChange={(e) => setAdminBoyaPeriodo(e.target.value)}
-                          placeholder="Ej: 4.2"
-                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Dirección Boya (º)</label>
-                        <input 
-                          type="text" 
-                          value={adminBoyaDireccion}
-                          onChange={(e) => setAdminBoyaDireccion(e.target.value)}
-                          placeholder="Ej: 110"
-                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Temp Agua (ºC)</label>
-                        <input 
-                          type="text" 
-                          value={adminBoyaTemp}
-                          onChange={(e) => setAdminBoyaTemp(e.target.value)}
-                          placeholder="Ej: 21.5"
-                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Fza (Fuerza)</label>
-                      <input 
-                        type="text" 
-                        value={adminRealVientoFza}
-                        onChange={(e) => setAdminRealVientoFza(e.target.value)}
-                        placeholder="Suave / Fuerte / Medio"
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Dir (Dirección)</label>
-                      <input 
-                        type="text" 
-                        value={adminRealVientoDir}
-                        onChange={(e) => setAdminRealVientoDir(e.target.value)}
-                        placeholder="S/SO, Levante, Poniente..."
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Comentario del nadador / WhatsApp</label>
-                    <textarea 
-                      value={adminSensaciones}
-                      onChange={(e) => setAdminSensaciones(e.target.value)}
-                      placeholder="Ej. 'Agua muy limpia pero refrescando bastante, deriva fuerte hacia Fuengirola...'"
-                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Notas Internas Calibración</label>
-                    <input 
-                      type="text" 
-                      value={adminNotas}
-                      onChange={(e) => setAdminNotas(e.target.value)}
-                      placeholder="Ej. 'Windy falló por 3 nudos, TodoSurf clavado.'"
-                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700"
-                    />
-                  </div>
-
-                  {/* Publicar como alerta oficial */}
-                  <div className="flex items-center gap-2 p-1">
-                    <input
-                      type="checkbox"
-                      id="adminIsAlert"
-                      checked={adminIsAlert}
-                      onChange={(e) => setAdminIsAlert(e.target.checked)}
-                      className="w-3.5 h-3.5 text-rose-600 border-slate-300 rounded focus:ring-rose-500 cursor-pointer"
-                    />
-                    <label htmlFor="adminIsAlert" className="text-[11px] font-black text-rose-600 select-none cursor-pointer">
-                      ⚠️ Publicar como Alerta Oficial Destacada en la web
-                    </label>
-                  </div>
-
-                  {reportStatus && (
-                    <div className={`p-3 rounded-xl text-xs font-bold text-center border ${reportStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                      {reportStatus.text}
-                    </div>
+                        {isSendingReport && <Loader2 size={14} className="animate-spin" />}
+                        Guardar en Google Sheets 🚀
+                      </button>
+                    </form>
                   )}
 
-                  <button 
-                    type="submit"
-                    disabled={isSendingReport}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-md text-xs flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {isSendingReport && <Loader2 size={14} className="animate-spin" />}
-                    Guardar en Google Sheets 🚀
-                  </button>
-                </form>
+                  {/* PESTAÑA 2: PANEL PRIVADO DE CONTROL DIRECTO DE FACTORES DE ESCALA */}
+                  {adminTab === 'factors' && (
+                    <div className="text-left space-y-4">
+                      <div className="flex justify-between items-center mb-1">
+                        <h4 className="text-xs font-black uppercase text-indigo-700 tracking-wider flex items-center gap-1.5">
+                          <ShieldAlert size={14} className="text-indigo-600" />
+                          <span>Control Directo por Viento</span>
+                        </h4>
+                        <span className="bg-indigo-100 text-indigo-700 text-[9px] font-black px-2.5 py-0.5 rounded-full">🔒 Acceso Supervisor</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Supervisa y modifica los factores directamente sin enviar reportes. El algoritmo evalúa la <strong>ventana móvil de los últimos 5 nados más recientes</strong>.
+                      </p>
+
+                      {/* BANNER DE NOTIFICACIÓN DE CAMBIO APLICADO */}
+                      {factorFeedbackMsg && (
+                        <div className="bg-emerald-50 text-emerald-800 border border-emerald-300 p-3 rounded-xl text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+                          <span>{factorFeedbackMsg}</span>
+                          <span className="text-[9px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-black uppercase shrink-0 ml-2">Aplicado en vivo</span>
+                        </div>
+                      )}
+                      
+                      <div className="space-y-4">
+                        {Object.keys(BEACHES).map(bKey => {
+                          const bName = BEACHES[bKey]?.name.split(',')[0] || bKey;
+
+                          function scaleToMeters(val) {
+                            const v = Number(val);
+                            if (v === 1) return 0.05;
+                            if (v === 2) return 0.20;
+                            if (v === 3) return 0.45;
+                            if (v === 4) return 0.80;
+                            if (v === 5) return 1.20;
+                            return 0.3;
+                          }
+
+                          const sectors = [
+                            { key: 'levante', title: '🌅 Sector LEVANTE (E / SE)', isLevante: true, defaultFactor: bKey === 'misericordia' ? 0.60 : 1.00 },
+                            { key: 'poniente', title: '🌇 Sector PONIENTE (S / SO)', isLevante: false, defaultFactor: bKey === 'misericordia' ? 0.50 : (bKey === 'malagueta' || bKey === 'pedregalejo' ? 0.70 : 1.00) }
+                          ];
+
+                          return (
+                            <div key={bKey} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5">
+                              <div className="border-b border-slate-200 pb-1.5 flex justify-between items-center">
+                                <strong className="text-slate-900 font-black text-sm">{bName}</strong>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase">2 Sectores Marinos</span>
+                              </div>
+
+                              <div className="grid grid-cols-1 gap-2.5">
+                                {sectors.map(sec => {
+                                  const storageKey = `${bKey}_${sec.key}`;
+                                  
+                                  // 1. Obtener todos los reportes del sector
+                                  const allSectorLogs = calibrationHistory.filter(l => {
+                                    if (l.playa !== bKey || !l.realOlas || !l.boyaAltura || Number(l.boyaAltura) === 0) return false;
+                                    const dir = Number(l.boyaDireccion || 110);
+                                    const isL = dir >= 45 && dir <= 165;
+                                    return isL === sec.isLevante;
+                                  });
+
+                                  const totalLogsCount = allSectorLogs.length;
+
+                                  // A) CALCULO HISTÓRICO GLOBAL (Todos los reportes con filtro anti-outliers ±1.5σ)
+                                  let suggestedGlobalFactor = null;
+                                  let cleanGlobalCount = 0;
+                                  if (totalLogsCount >= 5) {
+                                    const allRatios = allSectorLogs.map(l => scaleToMeters(l.realOlas) / Number(l.boyaAltura));
+                                    const cleanRatios = filterOutliers(allRatios);
+                                    cleanGlobalCount = cleanRatios.length;
+                                    const sumGlobal = cleanRatios.reduce((a, b) => a + b, 0);
+                                    suggestedGlobalFactor = Math.max(0.1, Math.min(1.5, sumGlobal / cleanRatios.length));
+                                  }
+
+                                  // B) CALCULO RECIENTE (Últimos 5 nados POST-AJUSTE con filtro anti-outliers)
+                                  const approvalTime = adminFactorApprovalTimes && adminFactorApprovalTimes[storageKey] ? Number(adminFactorApprovalTimes[storageKey]) : 0;
+                                  
+                                  const postApprovalLogs = allSectorLogs.filter(l => {
+                                    if (approvalTime > 0) {
+                                      const logTs = parseLogTimestamp(l);
+                                      if (logTs === 0 || logTs <= approvalTime) return false;
+                                    }
+                                    return true;
+                                  });
+
+                                  const recentLogs = postApprovalLogs.slice(-5);
+                                  const countRecent = recentLogs.length;
+
+                                  let suggestedRecentFactor = null;
+                                  if (countRecent >= 5) {
+                                    const recentRatios = recentLogs.map(l => scaleToMeters(l.realOlas) / Number(l.boyaAltura));
+                                    const cleanRecentRatios = filterOutliers(recentRatios);
+                                    const sumRecent = cleanRecentRatios.reduce((a, b) => a + b, 0);
+                                    suggestedRecentFactor = Math.max(0.1, Math.min(1.5, sumRecent / cleanRecentRatios.length));
+                                  }
+
+                                  // C) CALCULO DE DESVÍO (%) ENTRE SUGERENCIA RECIENTE E HISTÓRICA
+                                  let devPercentText = null;
+                                  if (suggestedRecentFactor !== null && suggestedGlobalFactor !== null && suggestedGlobalFactor > 0) {
+                                    const diffPct = ((suggestedRecentFactor - suggestedGlobalFactor) / suggestedGlobalFactor) * 100;
+                                    devPercentText = `${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(0)}%`;
+                                  }
+
+                                  const isOverridden = adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null;
+                                  const activeFactor = isOverridden ? adminManualScaleFactors[storageKey] : sec.defaultFactor;
+
+                                  return (
+                                    <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2.5">
+                                      <div className="flex justify-between items-center text-xs">
+                                        <strong className="text-slate-800 font-extrabold">{sec.title}</strong>
+                                        <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                                          {totalLogsCount} nados totales
+                                        </span>
+                                      </div>
+
+                                      <div className="flex justify-between items-center text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                        <span className="text-slate-500 font-medium">Activo en Web:</span>
+                                        <strong className="text-indigo-600 font-black text-sm">{Number(activeFactor).toFixed(2)}x {isOverridden ? '(Fijo)' : '(Default)'}</strong>
+                                      </div>
+
+                                      {/* SECCIÓN COMPARATIVA DE SUGERENCIAS DUALES CON FILTRO ANTI-RUIDO */}
+                                      <div className="bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-100/70 space-y-2">
+                                        <div className="text-[10px] font-black uppercase text-indigo-800 tracking-wider flex justify-between items-center">
+                                          <span>📊 Comparativa Algoritmo (Filtro Anti-Outliers ±1.5σ)</span>
+                                        </div>
+
+                                        {/* SUGERENCIA RECIENTE */}
+                                        <div className="flex justify-between items-center text-xs pt-1">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-emerald-700 font-bold">⚡ Reciente (Últimos 5 post-ajuste):</span>
+                                            <span className="text-[9px] font-extrabold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
+                                              {countRecent}/5
+                                            </span>
+                                          </div>
+                                          {suggestedRecentFactor !== null ? (
+                                            <strong className="text-emerald-700 font-black">{suggestedRecentFactor.toFixed(2)}x</strong>
+                                          ) : (
+                                            <span className="text-[10px] text-slate-400 italic">
+                                              {approvalTime > 0 ? `Esperando ${5 - countRecent} nados` : `Faltan ${5 - countRecent} nados`}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* SUGERENCIA HISTÓRICA GLOBAL */}
+                                        <div className="flex justify-between items-center text-xs pt-1 border-t border-indigo-100/60">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-blue-700 font-bold">📜 Histórica Global ({cleanGlobalCount} válidos):</span>
+                                          </div>
+                                          {suggestedGlobalFactor !== null ? (
+                                            <div className="flex items-center gap-2">
+                                              <strong className="text-blue-700 font-black">{suggestedGlobalFactor.toFixed(2)}x</strong>
+                                              {devPercentText && (
+                                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${parseFloat(devPercentText) >= 0 ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                                                  Desvío: {devPercentText}
+                                                </span>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <span className="text-[10px] text-slate-400 italic">Faltan {5 - totalLogsCount} nados</span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* BOTONES DE ACCIÓN */}
+                                      <div className="flex items-center justify-between gap-1.5 pt-1 flex-wrap">
+                                        {suggestedRecentFactor !== null && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const fixedVal = parseFloat(suggestedRecentFactor.toFixed(2));
+                                              const nowTs = Date.now();
+                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                              setAdminManualScaleFactors(updated);
+                                              setAdminFactorApprovalTimes(updatedTimes);
+                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                              setDataRefreshKey(k => k + 1);
+                                              setFactorFeedbackMsg(`🟢 ¡Aprobada Sugerencia Reciente (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})!`);
+                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                            }}
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm flex-1 min-w-[120px] text-center"
+                                          >
+                                            🟢 Aprobar Reciente ({suggestedRecentFactor.toFixed(2)}x)
+                                          </button>
+                                        )}
+
+                                        {suggestedGlobalFactor !== null && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const fixedVal = parseFloat(suggestedGlobalFactor.toFixed(2));
+                                              const nowTs = Date.now();
+                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                              setAdminManualScaleFactors(updated);
+                                              setAdminFactorApprovalTimes(updatedTimes);
+                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                              setDataRefreshKey(k => k + 1);
+                                              setFactorFeedbackMsg(`🔵 ¡Aprobada Sugerencia Global (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})!`);
+                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                            }}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm flex-1 min-w-[120px] text-center"
+                                          >
+                                            🔵 Aprobar Global ({suggestedGlobalFactor.toFixed(2)}x)
+                                          </button>
+                                        )}
+
+                                        {isOverridden && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const nowTs = Date.now();
+                                              const updated = { ...adminManualScaleFactors };
+                                              delete updated[storageKey];
+                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                              setAdminManualScaleFactors(updated);
+                                              setAdminFactorApprovalTimes(updatedTimes);
+                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                              setDataRefreshKey(k => k + 1);
+                                              setFactorFeedbackMsg(`🔄 Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}).`);
+                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                            }}
+                                            className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
+                                          >
+                                            ↩ Reset ({sec.defaultFactor.toFixed(2)}x)
+                                          </button>
+                                        )}
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const val = prompt(`Factor manual para ${bName} (${sec.key.toUpperCase()}):`, activeFactor);
+                                            if (val !== null && !isNaN(parseFloat(val))) {
+                                              const fixedVal = parseFloat(parseFloat(val).toFixed(2));
+                                              const nowTs = Date.now();
+                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                              setAdminManualScaleFactors(updated);
+                                              setAdminFactorApprovalTimes(updatedTimes);
+                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                              setDataRefreshKey(k => k + 1);
+                                              setFactorFeedbackMsg(`✏️ ¡Factor manual para ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x!`);
+                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                            }
+                                          }}
+                                          className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-indigo-200 transition-colors ml-auto"
+                                        >
+                                          ✏️ Manual
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
+            )}
             </div>
           </div>
         </div>
