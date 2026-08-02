@@ -3248,10 +3248,10 @@ export default function App() {
                 </div>
               </section>
 
-              {/* 5. ALERTAS DE SALUD Y AGUAS SUCIAS */}
+              {/* 5. ALERTAS DE SALUD, MEDUSAS Y AGUAS SUCIAS */}
               <section>
                 <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Zap size={20} className="text-yellow-600"/> 5. Alertas de Salud y Aguas Sucias
+                  <Zap size={20} className="text-yellow-600"/> 5. Alertas de Salud, Medusas y Aguas Sucias
                 </h4>
                 <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                   <div className="flex gap-3 items-start">
@@ -3266,6 +3266,13 @@ export default function App() {
                      <div>
                        <strong className="text-slate-800">Calidad del Agua (Arrastres):</strong>
                        <p className="text-sm text-slate-600 mt-1">La app suma la lluvia caída desde ayer. Si llueve fuerte, los aliviaderos de Málaga y el río Guadalhorce escupirán suciedad que la corriente traerá a la playa (tarjeta en "Precaución" o "Riesgo Alto").</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                     <span className="text-base shrink-0">🪼</span>
+                     <div>
+                       <strong className="text-slate-800">Riesgo de Medusas (Heurístico de Levante):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Cuando el viento sopla de Levante (Este/Sureste) durante más de 4 horas seguidas, la app eleva la precaución por medusas, ya que esa corriente arrastra los enjambres hacia la orilla.</p>
                      </div>
                   </div>
                 </div>
@@ -3304,6 +3311,27 @@ export default function App() {
                       <h5 className="font-bold text-slate-800">El Escudo del Puerto</h5>
                     </div>
                     <p className="text-sm text-slate-600">La Malagueta y Pedregalejo están fuertemente protegidas contra las olas de Poniente o Suroeste. El satélite llega aquí muy atenuado.</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-orange-50 p-2.5 rounded-xl text-orange-600"><AlertTriangle size={24} /></div>
+                      <h5 className="font-bold text-slate-800">Rompiente Dura (en Pleamar)</h5>
+                    </div>
+                    <p className="text-sm text-slate-600">Ola pequeña mar adentro que rompe con un seco y duro golpe de agua en la orilla debido al escalón de arena y la marea llena.</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-purple-50 p-2.5 rounded-xl text-purple-600"><Activity size={24} /></div>
+                      <h5 className="font-bold text-slate-800">Batalla Térmica ⚔️</h5>
+                    </div>
+                    <p className="text-sm text-slate-600">A mediodía, el terral de mañana choca de frente con la brisa marina (virazón), creando un mar cruzado, picado y desordenado.</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm md:col-span-2">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600"><Compass size={24} /></div>
+                      <h5 className="font-bold text-slate-800">Falsa Calma (Corriente de Fondo) ⚠️</h5>
+                    </div>
+                    <p className="text-sm text-slate-600">La superficie se ve lisa como un espejo (mar plato), pero por abajo las olas vienen con un periodo largo (más de 6 segundos) empujando con fuerza por el fondo.</p>
                   </div>
                 </div>
               </section>
