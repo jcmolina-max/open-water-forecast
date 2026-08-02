@@ -583,28 +583,41 @@ export default function App() {
     }
   });
 
-  // Dynamic Buoy Scale Factor (Fase 4) — función normal (hoisted) para evitar TDZ en producción
+  // Dynamic Buoy Scale Factor por Sector (Levante 🌅 vs Poniente 🌇)
   function getBoyaScaleFactor(beachKey, currentDirection) {
-    // 1. Si el Administrador (PIN 6611) fijó un factor manual o aprobó uno específico, manda ese primero
+    const dir = currentDirection || 110; // Default Levante si no se proporciona dirección
+    const isLevante = dir >= 45 && dir <= 165;
+    const sectorKey = isLevante ? 'levante' : 'poniente';
+    const storageKey = `${beachKey}_${sectorKey}`;
+
+    // 1. Si el Administrador fijó un factor manual o aprobó uno específico para este sector
+    if (adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null) {
+      return parseFloat(adminManualScaleFactors[storageKey]);
+    }
+    // Compatibilidad por si hay fijado un factor general sin sector
     if (adminManualScaleFactors && adminManualScaleFactors[beachKey] !== undefined && adminManualScaleFactors[beachKey] !== null) {
       return parseFloat(adminManualScaleFactors[beachKey]);
     }
 
-    const defaultFactor = beachKey === 'misericordia' ? 0.6 : ((beachKey === 'malagueta' || beachKey === 'pedregalejo') && currentDirection >= 200 && currentDirection <= 300 ? 0.7 : 1.0);
+    // Factor por defecto de fábrica según playa y sector de viento
+    let defaultFactor = 1.0;
+    if (beachKey === 'misericordia') {
+      defaultFactor = isLevante ? 0.60 : 0.50;
+    } else if (beachKey === 'malagueta' || beachKey === 'pedregalejo') {
+      defaultFactor = isLevante ? 1.00 : 0.70;
+    }
 
     const relevantLogs = calibrationHistory.filter(log => {
       if (log.playa !== beachKey) return false;
       if (!log.boyaAltura || Number(log.boyaAltura) === 0) return false;
       if (!log.realOlas || log.realOlas === "") return false;
-      if (log.boyaDireccion && currentDirection) {
-        let diff = Math.abs(Number(log.boyaDireccion) - currentDirection);
-        if (diff > 180) diff = 360 - diff;
-        if (diff > 35) return false;
-      }
-      return true;
+      
+      const logDir = Number(log.boyaDireccion || 110);
+      const logIsLevante = logDir >= 45 && logDir <= 165;
+      return logIsLevante === isLevante; // Solo reportes del mismo sector de viento
     });
 
-    // 2. REGLA ESTRICTA DE 5 REPORTES: Si no hay al menos 5 nados auditados en esa playa/sector, mantiene la escala base por defecto
+    // 2. REGLA ESTRICTA DE 5 REPORTES POR SECTOR
     if (relevantLogs.length < 5) {
       return defaultFactor;
     }
@@ -1417,7 +1430,7 @@ export default function App() {
 
   function handleVerifyPin(e) {
     e.preventDefault();
-    if (adminPin === "6611") {
+    if (btoa(adminPin.trim()) === "NjYxMQ==") {
       setIsAdminAuthorized(true);
       setReportStatus(null);
     } else {
@@ -3665,25 +3678,23 @@ export default function App() {
                   </button>
                 </form>
 
-                {/* PANEL PRIVADO DE CONTROL DE FACTORES DE ESCALA (PIN 6611) */}
+                {/* PANEL PRIVADO DE CONTROL DE FACTORES DE ESCALA */}
                 <div className="mt-6 pt-5 border-t border-slate-200 text-left">
                   <div className="flex justify-between items-center mb-2">
                     <h4 className="text-xs font-black uppercase text-indigo-700 tracking-wider flex items-center gap-1.5">
                       <ShieldAlert size={14} className="text-indigo-600" />
-                      <span>Control de Factores de Escala</span>
+                      <span>Control de Factores por Viento</span>
                     </h4>
-                    <span className="bg-indigo-100 text-indigo-700 text-[9px] font-black px-2 py-0.5 rounded-full">PIN 6611</span>
+                    <span className="bg-indigo-100 text-indigo-700 text-[9px] font-black px-2.5 py-0.5 rounded-full">🔒 Acceso Supervisor</span>
                   </div>
                   <p className="text-[11px] text-slate-500 font-medium mb-3">
-                    Supervisa los reportes comunitarios y decide si aplicas, ajustas o deshaces las correcciones del oleaje para cada playa.
+                    Supervisa los reportes comunitarios desglosados por sector de viento (Levante vs Poniente) para cada playa.
                   </p>
                   
-                  <div className="space-y-2.5">
-                    {['misericordia', 'malagueta', 'pedregalejo', 'los_alamos'].map(bKey => {
+                  <div className="space-y-4">
+                    {Object.keys(BEACHES).map(bKey => {
                       const bName = BEACHES[bKey]?.name.split(',')[0] || bKey;
-                      const logsForBeach = calibrationHistory.filter(l => l.playa === bKey && l.realOlas && l.boyaAltura && Number(l.boyaAltura) > 0);
-                      const count = logsForBeach.length;
-                      
+
                       function scaleToMeters(val) {
                         const v = Number(val);
                         if (v === 1) return 0.05;
@@ -3694,93 +3705,115 @@ export default function App() {
                         return 0.3;
                       }
 
-                      let suggestedFactor = null;
-                      if (count >= 5) {
-                        let sumRatio = 0;
-                        logsForBeach.forEach(log => {
-                          sumRatio += scaleToMeters(log.realOlas) / Number(log.boyaAltura);
-                        });
-                        suggestedFactor = Math.max(0.1, Math.min(1.5, sumRatio / count));
-                      }
+                      const sectors = [
+                        { key: 'levante', title: '🌅 Sector LEVANTE (E / SE)', isLevante: true, defaultFactor: bKey === 'misericordia' ? 0.60 : 1.00 },
+                        { key: 'poniente', title: '🌇 Sector PONIENTE (S / SO)', isLevante: false, defaultFactor: bKey === 'misericordia' ? 0.50 : (bKey === 'malagueta' || bKey === 'pedregalejo' ? 0.70 : 1.00) }
+                      ];
 
-                      const isOverridden = adminManualScaleFactors && adminManualScaleFactors[bKey] !== undefined && adminManualScaleFactors[bKey] !== null;
-                      const defaultFactor = bKey === 'misericordia' ? 0.6 : 1.0;
-                      const activeFactor = isOverridden ? adminManualScaleFactors[bKey] : defaultFactor;
-                      
                       return (
-                        <div key={bKey} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 flex flex-col gap-2.5 text-left">
-                          <div className="flex justify-between items-center text-xs">
-                            <strong className="text-slate-800 font-bold text-sm">{bName}</strong>
-                            <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${count >= 5 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-200 text-slate-600'}`}>
-                              {count}/5 reportes acumulados
-                            </span>
+                        <div key={bKey} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5">
+                          <div className="border-b border-slate-200 pb-1.5 flex justify-between items-center">
+                            <strong className="text-slate-900 font-black text-sm">{bName}</strong>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">2 Sectores Marinos</span>
                           </div>
 
-                          <div className="text-xs space-y-1 bg-white p-2.5 rounded-xl border border-slate-100">
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-500 font-medium">Factor Activo en Web:</span>
-                              <strong className="text-indigo-600 font-black text-sm">{Number(activeFactor).toFixed(2)}x {isOverridden ? '(Fijo Admin)' : '(Por Defecto)'}</strong>
-                            </div>
-                            
-                            {suggestedFactor !== null ? (
-                              <div className="flex justify-between items-center pt-1 border-t border-slate-100">
-                                <span className="text-emerald-700 font-bold flex items-center gap-1">
-                                  💡 Sugerencia del Algoritmo:
-                                </span>
-                                <strong className="text-emerald-700 font-black text-sm">{suggestedFactor.toFixed(2)}x</strong>
-                              </div>
-                            ) : (
-                              <div className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 italic">
-                                Faltan {5 - count} reportes para que el algoritmo calcule una sugerencia automática.
-                              </div>
-                            )}
-                          </div>
+                          <div className="grid grid-cols-1 gap-2.5">
+                            {sectors.map(sec => {
+                              const storageKey = `${bKey}_${sec.key}`;
+                              const logsForSector = calibrationHistory.filter(l => {
+                                if (l.playa !== bKey || !l.realOlas || !l.boyaAltura || Number(l.boyaAltura) === 0) return false;
+                                const dir = Number(l.boyaDireccion || 110);
+                                const isL = dir >= 45 && dir <= 165;
+                                return isL === sec.isLevante;
+                              });
 
-                          <div className="flex items-center justify-between gap-2 pt-1">
-                            {suggestedFactor !== null && !isOverridden && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const fixedVal = parseFloat(suggestedFactor.toFixed(2));
-                                  const updated = { ...adminManualScaleFactors, [bKey]: fixedVal };
-                                  setAdminManualScaleFactors(updated);
-                                  localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                }}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1"
-                              >
-                                🟢 Aprobar Sugerencia ({suggestedFactor.toFixed(2)}x)
-                              </button>
-                            )}
+                              const count = logsForSector.length;
+                              let suggestedFactor = null;
+                              if (count >= 5) {
+                                let sumRatio = 0;
+                                logsForSector.forEach(log => {
+                                  sumRatio += scaleToMeters(log.realOlas) / Number(log.boyaAltura);
+                                });
+                                suggestedFactor = Math.max(0.1, Math.min(1.5, sumRatio / count));
+                              }
 
-                            {isOverridden && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const updated = { ...adminManualScaleFactors };
-                                  delete updated[bKey];
-                                  setAdminManualScaleFactors(updated);
-                                  localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                }}
-                                className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-xl text-xs font-bold border border-red-200 transition-colors"
-                              >
-                                ↩ Restablecer Defecto ({defaultFactor.toFixed(2)}x)
-                              </button>
-                            )}
+                              const isOverridden = adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null;
+                              const activeFactor = isOverridden ? adminManualScaleFactors[storageKey] : sec.defaultFactor;
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const val = prompt(`Introduce nuevo factor de escala manual para ${bName} (ej. 0.35):`, activeFactor);
-                                if (val !== null && !isNaN(parseFloat(val))) {
-                                  const updated = { ...adminManualScaleFactors, [bKey]: parseFloat(val) };
-                                  setAdminManualScaleFactors(updated);
-                                  localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                }
-                              }}
-                              className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded-xl text-xs font-bold border border-indigo-200 transition-colors ml-auto"
-                            >
-                              ✏️ Ajuste Manual
-                            </button>
+                              return (
+                                <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2">
+                                  <div className="flex justify-between items-center text-xs">
+                                    <strong className="text-slate-800 font-extrabold">{sec.title}</strong>
+                                    <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${count >= 5 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
+                                      {count}/5 nados
+                                    </span>
+                                  </div>
+
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-500 font-medium">Activo en Web:</span>
+                                    <strong className="text-indigo-600 font-black">{Number(activeFactor).toFixed(2)}x {isOverridden ? '(Fijo)' : '(Default)'}</strong>
+                                  </div>
+
+                                  {suggestedFactor !== null ? (
+                                    <div className="flex justify-between items-center text-xs pt-1 border-t border-slate-100">
+                                      <span className="text-emerald-700 font-bold">💡 Algoritmo sugiere:</span>
+                                      <strong className="text-emerald-700 font-black">{suggestedFactor.toFixed(2)}x</strong>
+                                    </div>
+                                  ) : (
+                                    <div className="text-[9px] text-slate-400 italic pt-1 border-t border-slate-100">
+                                      Faltan {5 - count} reportes de este viento para la sugerencia.
+                                    </div>
+                                  )}
+
+                                  <div className="flex items-center justify-between gap-1.5 pt-1">
+                                    {suggestedFactor !== null && !isOverridden && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const fixedVal = parseFloat(suggestedFactor.toFixed(2));
+                                          const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                          setAdminManualScaleFactors(updated);
+                                          localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                        }}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm"
+                                      >
+                                        🟢 Aprobar ({suggestedFactor.toFixed(2)}x)
+                                      </button>
+                                    )}
+
+                                    {isOverridden && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const updated = { ...adminManualScaleFactors };
+                                          delete updated[storageKey];
+                                          setAdminManualScaleFactors(updated);
+                                          localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                        }}
+                                        className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
+                                      >
+                                        ↩ Reset ({sec.defaultFactor.toFixed(2)}x)
+                                      </button>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const val = prompt(`Factor manual para ${bName} (${sec.key.toUpperCase()}):`, activeFactor);
+                                        if (val !== null && !isNaN(parseFloat(val))) {
+                                          const updated = { ...adminManualScaleFactors, [storageKey]: parseFloat(val) };
+                                          setAdminManualScaleFactors(updated);
+                                          localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                        }
+                                      }}
+                                      className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-indigo-200 transition-colors ml-auto"
+                                    >
+                                      ✏️ Manual
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       );
