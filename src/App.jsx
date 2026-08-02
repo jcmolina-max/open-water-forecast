@@ -575,6 +575,7 @@ export default function App() {
 
   // Estado para las pestañas del Modal Admin ('factors' o 'report')
   const [adminTab, setAdminTab] = useState('factors');
+  const [factorFeedbackMsg, setFactorFeedbackMsg] = useState(null);
 
   // Estado para los Factores de Escala Ajustados/Aprobados manualmente por el Administrador (PIN 6611)
   const [adminManualScaleFactors, setAdminManualScaleFactors] = useState(() => {
@@ -3715,6 +3716,14 @@ export default function App() {
                       <p className="text-[11px] text-slate-500 font-medium">
                         Supervisa y modifica los factores directamente sin enviar reportes. El algoritmo evalúa la <strong>ventana móvil de los últimos 5 nados más recientes</strong>.
                       </p>
+
+                      {/* BANNER DE NOTIFICACIÓN DE CAMBIO APLICADO */}
+                      {factorFeedbackMsg && (
+                        <div className="bg-emerald-50 text-emerald-800 border border-emerald-300 p-3 rounded-xl text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+                          <span>{factorFeedbackMsg}</span>
+                          <span className="text-[9px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-black uppercase shrink-0 ml-2">Aplicado en vivo</span>
+                        </div>
+                      )}
                       
                       <div className="space-y-4">
                         {Object.keys(BEACHES).map(bKey => {
@@ -3802,6 +3811,9 @@ export default function App() {
                                               const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
                                               setAdminManualScaleFactors(updated);
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              setDataRefreshKey(k => k + 1);
+                                              setFactorFeedbackMsg(`✅ ¡Factor de ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x en vivo!`);
+                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm"
                                           >
@@ -3817,6 +3829,9 @@ export default function App() {
                                               delete updated[storageKey];
                                               setAdminManualScaleFactors(updated);
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              setDataRefreshKey(k => k + 1);
+                                              setFactorFeedbackMsg(`🔄 Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}).`);
+                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
                                           >
@@ -3829,9 +3844,13 @@ export default function App() {
                                           onClick={() => {
                                             const val = prompt(`Factor manual para ${bName} (${sec.key.toUpperCase()}):`, activeFactor);
                                             if (val !== null && !isNaN(parseFloat(val))) {
-                                              const updated = { ...adminManualScaleFactors, [storageKey]: parseFloat(val) };
+                                              const fixedVal = parseFloat(parseFloat(val).toFixed(2));
+                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
                                               setAdminManualScaleFactors(updated);
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              setDataRefreshKey(k => k + 1);
+                                              setFactorFeedbackMsg(`✏️ ¡Factor manual para ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x en vivo!`);
+                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }
                                           }}
                                           className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-indigo-200 transition-colors ml-auto"
