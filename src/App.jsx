@@ -573,6 +573,9 @@ export default function App() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
+  // Estado para las pestañas del Modal Admin ('factors' o 'report')
+  const [adminTab, setAdminTab] = useState('factors');
+
   // Estado para los Factores de Escala Ajustados/Aprobados manualmente por el Administrador (PIN 6611)
   const [adminManualScaleFactors, setAdminManualScaleFactors] = useState(() => {
     try {
@@ -617,8 +620,9 @@ export default function App() {
       return logIsLevante === isLevante; // Solo reportes del mismo sector de viento
     });
 
-    // 2. REGLA ESTRICTA DE 5 REPORTES POR SECTOR
-    if (relevantLogs.length < 5) {
+    // 2. REGLA ESTRICTA DE 5 REPORTES POR SECTOR (VENTANA MÓVIL DE LOS ÚLTIMOS 5 NADOS)
+    const recentLogs = relevantLogs.slice(-5);
+    if (recentLogs.length < 5) {
       return defaultFactor;
     }
 
@@ -633,13 +637,13 @@ export default function App() {
     }
 
     let sumRatio = 0;
-    relevantLogs.forEach(log => {
+    recentLogs.forEach(log => {
       const swimmerM = scaleToMeters(log.realOlas);
       const buoyM = Number(log.boyaAltura);
       sumRatio += swimmerM / buoyM;
     });
 
-    const calculatedFactor = sumRatio / relevantLogs.length;
+    const calculatedFactor = sumRatio / 5;
     return Math.max(0.1, Math.min(1.5, calculatedFactor));
   }
 
@@ -3441,386 +3445,412 @@ export default function App() {
                 </form>
               ) : (
                 <>
-                  {/* FORMULARIO DE REPORTE */}
-                <form onSubmit={handleSendReport} className="space-y-4 text-left">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Playa</label>
-                      <select 
-                        value={adminPlaya}
-                        onChange={(e) => setAdminPlaya(e.target.value)}
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
+                  {/* PESTAÑAS NAVEGACIÓN ADMIN */}
+                  <div className="flex border-b border-slate-200 mb-5 bg-slate-100/80 p-1 rounded-2xl">
+                    <button
+                      type="button"
+                      onClick={() => setAdminTab('factors')}
+                      className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 ${adminTab === 'factors' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      ⚙️ Control de Factores
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminTab('report')}
+                      className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 ${adminTab === 'report' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      📝 Registrar Nado / Alerta
+                    </button>
+                  </div>
+
+                  {/* PESTAÑA 1: REGISTRAR NADO O ALERTA OFICIAL */}
+                  {adminTab === 'report' && (
+                    <form onSubmit={handleSendReport} className="space-y-4 text-left">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Playa</label>
+                          <select 
+                            value={adminPlaya}
+                            onChange={(e) => setAdminPlaya(e.target.value)}
+                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
+                          >
+                            <option value="misericordia">La Misericordia</option>
+                            <option value="malagueta">La Malagueta</option>
+                            <option value="pedregalejo">Pedregalejo</option>
+                            <option value="los_alamos">Los Álamos</option>
+                            <option value="bajondillo">El Bajondillo</option>
+                            <option value="rincon_victoria">Rincón de la Victoria</option>
+                            <option value="cala_del_moral">La Cala del Moral</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Hora Nado</label>
+                          <input 
+                            type="text" 
+                            value={adminHoraNado}
+                            onChange={(e) => setAdminHoraNado(e.target.value)}
+                            placeholder="11:00"
+                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 text-center"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                        <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Observación Real (1 al 5)</span>
+                        
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-slate-700">Olas:</span>
+                            <div className="flex gap-1.5">
+                              {[1,2,3,4,5].map(v => (
+                                <button 
+                                  type="button" key={v}
+                                  onClick={() => setAdminRealOlas(v)}
+                                  className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                                >
+                                  {v}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {adminRealOlas && (
+                            <div className="text-[10px] text-right font-bold text-blue-600 italic">
+                              {adminRealOlas === 1 && "1/5 = 0.05m (Mar plano / Sin olas)"}
+                              {adminRealOlas === 2 && "2/5 = 0.20m (Olas muy pequeñas)"}
+                              {adminRealOlas === 3 && "3/5 = 0.45m (Olas medianas)"}
+                              {adminRealOlas === 4 && "4/5 = 0.80m (Olas grandes)"}
+                              {adminRealOlas === 5 && "5/5 = 1.20m (Olas muy grandes / Resaca)"}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-slate-700">Resaca:</span>
+                            <div className="flex gap-1.5">
+                              {[1,2,3,4,5].map(v => (
+                                <button 
+                                  type="button" key={v}
+                                  onClick={() => setAdminRealResaca(v)}
+                                  className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                                >
+                                  {v}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {adminRealResaca && (
+                            <div className="text-[10px] text-right font-bold text-red-500 italic">
+                              {adminRealResaca === 1 && "1/5 = Sin resaca"}
+                              {adminRealResaca === 2 && "2/5 = Resaca leve"}
+                              {adminRealResaca === 3 && "3/5 = Resaca moderada"}
+                              {adminRealResaca === 4 && "4/5 = Resaca fuerte"}
+                              {adminRealResaca === 5 && "5/5 = Resaca extrema"}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-slate-700">Corriente (Deriva):</span>
+                            <div className="flex gap-1.5">
+                              {[1,2,3,4,5].map(v => (
+                                <button 
+                                  type="button" key={v}
+                                  onClick={() => setAdminRealCorriente(v)}
+                                  className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                                >
+                                  {v}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {adminRealCorriente && (
+                            <div className="text-[10px] text-right font-bold text-indigo-600 italic">
+                              {adminRealCorriente === 1 && "1/5 = Sin deriva / corriente"}
+                              {adminRealCorriente === 2 && "2/5 = Deriva leve"}
+                              {adminRealCorriente === 3 && "3/5 = Deriva moderada"}
+                              {adminRealCorriente === 4 && "4/5 = Deriva fuerte"}
+                              {adminRealCorriente === 5 && "5/5 = Deriva extrema"}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100/60 space-y-2 text-left">
+                        <span className="block text-[10px] font-black text-blue-700 uppercase tracking-wider mb-1">⚓ Datos de la Boya Real (Málaga) - Opcional</span>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Altura Boya (m)</label>
+                            <input 
+                              type="text" 
+                              value={adminBoyaAltura}
+                              onChange={(e) => setAdminBoyaAltura(e.target.value)}
+                              placeholder="Ej: 0.45"
+                              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Periodo Boya (s)</label>
+                            <input 
+                              type="text" 
+                              value={adminBoyaPeriodo}
+                              onChange={(e) => setAdminBoyaPeriodo(e.target.value)}
+                              placeholder="Ej: 4.2"
+                              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Dirección Boya (º)</label>
+                            <input 
+                              type="text" 
+                              value={adminBoyaDireccion}
+                              onChange={(e) => setAdminBoyaDireccion(e.target.value)}
+                              placeholder="Ej: 110"
+                              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Temp Agua (ºC)</label>
+                            <input 
+                              type="text" 
+                              value={adminBoyaTemp}
+                              onChange={(e) => setAdminBoyaTemp(e.target.value)}
+                              placeholder="Ej: 21.5"
+                              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Fza (Fuerza)</label>
+                          <input 
+                            type="text" 
+                            value={adminRealVientoFza}
+                            onChange={(e) => setAdminRealVientoFza(e.target.value)}
+                            placeholder="Suave / Fuerte / Medio"
+                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Dir (Dirección)</label>
+                          <input 
+                            type="text" 
+                            value={adminRealVientoDir}
+                            onChange={(e) => setAdminRealVientoDir(e.target.value)}
+                            placeholder="S/SO, Levante, Poniente..."
+                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Comentario del nadador / WhatsApp</label>
+                        <textarea 
+                          value={adminSensaciones}
+                          onChange={(e) => setAdminSensaciones(e.target.value)}
+                          placeholder="Ej. 'Agua muy limpia pero refrescando bastante, deriva fuerte hacia Fuengirola...'"
+                          className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Notas Internas Calibración</label>
+                        <input 
+                          type="text" 
+                          value={adminNotas}
+                          onChange={(e) => setAdminNotas(e.target.value)}
+                          placeholder="Ej. 'Windy falló por 3 nudos, TodoSurf clavado.'"
+                          className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700"
+                        />
+                      </div>
+
+                      {/* Publicar como alerta oficial */}
+                      <div className="flex items-center gap-2 p-1">
+                        <input
+                          type="checkbox"
+                          id="adminIsAlert"
+                          checked={adminIsAlert}
+                          onChange={(e) => setAdminIsAlert(e.target.checked)}
+                          className="w-3.5 h-3.5 text-rose-600 border-slate-300 rounded focus:ring-rose-500 cursor-pointer"
+                        />
+                        <label htmlFor="adminIsAlert" className="text-[11px] font-black text-rose-600 select-none cursor-pointer">
+                          ⚠️ Publicar como Alerta Oficial Destacada en la web
+                        </label>
+                      </div>
+
+                      {reportStatus && (
+                        <div className={`p-3 rounded-xl text-xs font-bold text-center border ${reportStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                          {reportStatus.text}
+                        </div>
+                      )}
+
+                      <button 
+                        type="submit"
+                        disabled={isSendingReport}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-md text-xs flex items-center justify-center gap-2 disabled:opacity-50"
                       >
-                        <option value="misericordia">La Misericordia</option>
-                        <option value="malagueta">La Malagueta</option>
-                        <option value="pedregalejo">Pedregalejo</option>
-                        <option value="los_alamos">Los Álamos</option>
-                        <option value="bajondillo">El Bajondillo</option>
-                        <option value="rincon_victoria">Rincón de la Victoria</option>
-                        <option value="cala_del_moral">La Cala del Moral</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Hora Nado</label>
-                      <input 
-                        type="text" 
-                        value={adminHoraNado}
-                        onChange={(e) => setAdminHoraNado(e.target.value)}
-                        placeholder="11:00"
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 text-center"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
-                    <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Observación Real (1 al 5)</span>
-                    
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-slate-700">Olas:</span>
-                        <div className="flex gap-1.5">
-                          {[1,2,3,4,5].map(v => (
-                            <button 
-                              type="button" key={v}
-                              onClick={() => setAdminRealOlas(v)}
-                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                            >
-                              {v}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {adminRealOlas && (
-                        <div className="text-[10px] text-right font-bold text-blue-600 italic">
-                          {adminRealOlas === 1 && "1/5 = 0.05m (Mar plano / Sin olas)"}
-                          {adminRealOlas === 2 && "2/5 = 0.20m (Olas muy pequeñas)"}
-                          {adminRealOlas === 3 && "3/5 = 0.45m (Olas medianas)"}
-                          {adminRealOlas === 4 && "4/5 = 0.80m (Olas grandes)"}
-                          {adminRealOlas === 5 && "5/5 = 1.20m (Olas muy grandes / Resaca)"}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-slate-700">Resaca:</span>
-                        <div className="flex gap-1.5">
-                          {[1,2,3,4,5].map(v => (
-                            <button 
-                              type="button" key={v}
-                              onClick={() => setAdminRealResaca(v)}
-                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                            >
-                              {v}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {adminRealResaca && (
-                        <div className="text-[10px] text-right font-bold text-red-500 italic">
-                          {adminRealResaca === 1 && "1/5 = Sin resaca"}
-                          {adminRealResaca === 2 && "2/5 = Resaca leve"}
-                          {adminRealResaca === 3 && "3/5 = Resaca moderada"}
-                          {adminRealResaca === 4 && "4/5 = Resaca fuerte"}
-                          {adminRealResaca === 5 && "5/5 = Resaca extrema"}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-slate-700">Corriente (Deriva):</span>
-                        <div className="flex gap-1.5">
-                          {[1,2,3,4,5].map(v => (
-                            <button 
-                              type="button" key={v}
-                              onClick={() => setAdminRealCorriente(v)}
-                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                            >
-                              {v}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {adminRealCorriente && (
-                        <div className="text-[10px] text-right font-bold text-indigo-600 italic">
-                          {adminRealCorriente === 1 && "1/5 = Sin deriva / corriente"}
-                          {adminRealCorriente === 2 && "2/5 = Deriva leve"}
-                          {adminRealCorriente === 3 && "3/5 = Deriva moderada"}
-                          {adminRealCorriente === 4 && "4/5 = Deriva fuerte"}
-                          {adminRealCorriente === 5 && "5/5 = Deriva extrema"}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100/60 space-y-2 text-left">
-                    <span className="block text-[10px] font-black text-blue-700 uppercase tracking-wider mb-1">⚓ Datos de la Boya Real (Málaga) - Opcional</span>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Altura Boya (m)</label>
-                        <input 
-                          type="text" 
-                          value={adminBoyaAltura}
-                          onChange={(e) => setAdminBoyaAltura(e.target.value)}
-                          placeholder="Ej: 0.45"
-                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Periodo Boya (s)</label>
-                        <input 
-                          type="text" 
-                          value={adminBoyaPeriodo}
-                          onChange={(e) => setAdminBoyaPeriodo(e.target.value)}
-                          placeholder="Ej: 4.2"
-                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Dirección Boya (º)</label>
-                        <input 
-                          type="text" 
-                          value={adminBoyaDireccion}
-                          onChange={(e) => setAdminBoyaDireccion(e.target.value)}
-                          placeholder="Ej: 110"
-                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Temp Agua (ºC)</label>
-                        <input 
-                          type="text" 
-                          value={adminBoyaTemp}
-                          onChange={(e) => setAdminBoyaTemp(e.target.value)}
-                          placeholder="Ej: 21.5"
-                          className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Fza (Fuerza)</label>
-                      <input 
-                        type="text" 
-                        value={adminRealVientoFza}
-                        onChange={(e) => setAdminRealVientoFza(e.target.value)}
-                        placeholder="Suave / Fuerte / Medio"
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Dir (Dirección)</label>
-                      <input 
-                        type="text" 
-                        value={adminRealVientoDir}
-                        onChange={(e) => setAdminRealVientoDir(e.target.value)}
-                        placeholder="S/SO, Levante, Poniente..."
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Comentario del nadador / WhatsApp</label>
-                    <textarea 
-                      value={adminSensaciones}
-                      onChange={(e) => setAdminSensaciones(e.target.value)}
-                      placeholder="Ej. 'Agua muy limpia pero refrescando bastante, deriva fuerte hacia Fuengirola...'"
-                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Notas Internas Calibración</label>
-                    <input 
-                      type="text" 
-                      value={adminNotas}
-                      onChange={(e) => setAdminNotas(e.target.value)}
-                      placeholder="Ej. 'Windy falló por 3 nudos, TodoSurf clavado.'"
-                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700"
-                    />
-                  </div>
-
-                  {/* Publicar como alerta oficial */}
-                  <div className="flex items-center gap-2 p-1">
-                    <input
-                      type="checkbox"
-                      id="adminIsAlert"
-                      checked={adminIsAlert}
-                      onChange={(e) => setAdminIsAlert(e.target.checked)}
-                      className="w-3.5 h-3.5 text-rose-600 border-slate-300 rounded focus:ring-rose-500 cursor-pointer"
-                    />
-                    <label htmlFor="adminIsAlert" className="text-[11px] font-black text-rose-600 select-none cursor-pointer">
-                      ⚠️ Publicar como Alerta Oficial Destacada en la web
-                    </label>
-                  </div>
-
-                  {reportStatus && (
-                    <div className={`p-3 rounded-xl text-xs font-bold text-center border ${reportStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                      {reportStatus.text}
-                    </div>
+                        {isSendingReport && <Loader2 size={14} className="animate-spin" />}
+                        Guardar en Google Sheets 🚀
+                      </button>
+                    </form>
                   )}
 
-                  <button 
-                    type="submit"
-                    disabled={isSendingReport}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-md text-xs flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {isSendingReport && <Loader2 size={14} className="animate-spin" />}
-                    Guardar en Google Sheets 🚀
-                  </button>
-                </form>
+                  {/* PESTAÑA 2: PANEL PRIVADO DE CONTROL DIRECTO DE FACTORES DE ESCALA */}
+                  {adminTab === 'factors' && (
+                    <div className="text-left space-y-4">
+                      <div className="flex justify-between items-center mb-1">
+                        <h4 className="text-xs font-black uppercase text-indigo-700 tracking-wider flex items-center gap-1.5">
+                          <ShieldAlert size={14} className="text-indigo-600" />
+                          <span>Control Directo por Viento</span>
+                        </h4>
+                        <span className="bg-indigo-100 text-indigo-700 text-[9px] font-black px-2.5 py-0.5 rounded-full">🔒 Acceso Supervisor</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Supervisa y modifica los factores directamente sin enviar reportes. El algoritmo evalúa la <strong>ventana móvil de los últimos 5 nados más recientes</strong>.
+                      </p>
+                      
+                      <div className="space-y-4">
+                        {Object.keys(BEACHES).map(bKey => {
+                          const bName = BEACHES[bKey]?.name.split(',')[0] || bKey;
 
-                {/* PANEL PRIVADO DE CONTROL DE FACTORES DE ESCALA */}
-                <div className="mt-6 pt-5 border-t border-slate-200 text-left">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="text-xs font-black uppercase text-indigo-700 tracking-wider flex items-center gap-1.5">
-                      <ShieldAlert size={14} className="text-indigo-600" />
-                      <span>Control de Factores por Viento</span>
-                    </h4>
-                    <span className="bg-indigo-100 text-indigo-700 text-[9px] font-black px-2.5 py-0.5 rounded-full">🔒 Acceso Supervisor</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 font-medium mb-3">
-                    Supervisa los reportes comunitarios desglosados por sector de viento (Levante vs Poniente) para cada playa.
-                  </p>
-                  
-                  <div className="space-y-4">
-                    {Object.keys(BEACHES).map(bKey => {
-                      const bName = BEACHES[bKey]?.name.split(',')[0] || bKey;
+                          function scaleToMeters(val) {
+                            const v = Number(val);
+                            if (v === 1) return 0.05;
+                            if (v === 2) return 0.20;
+                            if (v === 3) return 0.45;
+                            if (v === 4) return 0.80;
+                            if (v === 5) return 1.20;
+                            return 0.3;
+                          }
 
-                      function scaleToMeters(val) {
-                        const v = Number(val);
-                        if (v === 1) return 0.05;
-                        if (v === 2) return 0.20;
-                        if (v === 3) return 0.45;
-                        if (v === 4) return 0.80;
-                        if (v === 5) return 1.20;
-                        return 0.3;
-                      }
+                          const sectors = [
+                            { key: 'levante', title: '🌅 Sector LEVANTE (E / SE)', isLevante: true, defaultFactor: bKey === 'misericordia' ? 0.60 : 1.00 },
+                            { key: 'poniente', title: '🌇 Sector PONIENTE (S / SO)', isLevante: false, defaultFactor: bKey === 'misericordia' ? 0.50 : (bKey === 'malagueta' || bKey === 'pedregalejo' ? 0.70 : 1.00) }
+                          ];
 
-                      const sectors = [
-                        { key: 'levante', title: '🌅 Sector LEVANTE (E / SE)', isLevante: true, defaultFactor: bKey === 'misericordia' ? 0.60 : 1.00 },
-                        { key: 'poniente', title: '🌇 Sector PONIENTE (S / SO)', isLevante: false, defaultFactor: bKey === 'misericordia' ? 0.50 : (bKey === 'malagueta' || bKey === 'pedregalejo' ? 0.70 : 1.00) }
-                      ];
+                          return (
+                            <div key={bKey} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5">
+                              <div className="border-b border-slate-200 pb-1.5 flex justify-between items-center">
+                                <strong className="text-slate-900 font-black text-sm">{bName}</strong>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase">2 Sectores Marinos</span>
+                              </div>
 
-                      return (
-                        <div key={bKey} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5">
-                          <div className="border-b border-slate-200 pb-1.5 flex justify-between items-center">
-                            <strong className="text-slate-900 font-black text-sm">{bName}</strong>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase">2 Sectores Marinos</span>
-                          </div>
+                              <div className="grid grid-cols-1 gap-2.5">
+                                {sectors.map(sec => {
+                                  const storageKey = `${bKey}_${sec.key}`;
+                                  const logsForSector = calibrationHistory.filter(l => {
+                                    if (l.playa !== bKey || !l.realOlas || !l.boyaAltura || Number(l.boyaAltura) === 0) return false;
+                                    const dir = Number(l.boyaDireccion || 110);
+                                    const isL = dir >= 45 && dir <= 165;
+                                    return isL === sec.isLevante;
+                                  });
 
-                          <div className="grid grid-cols-1 gap-2.5">
-                            {sectors.map(sec => {
-                              const storageKey = `${bKey}_${sec.key}`;
-                              const logsForSector = calibrationHistory.filter(l => {
-                                if (l.playa !== bKey || !l.realOlas || !l.boyaAltura || Number(l.boyaAltura) === 0) return false;
-                                const dir = Number(l.boyaDireccion || 110);
-                                const isL = dir >= 45 && dir <= 165;
-                                return isL === sec.isLevante;
-                              });
+                                  // Ventana móvil: Tomar únicamente los últimos 5 nados más recientes
+                                  const recentLogs = logsForSector.slice(-5);
+                                  const count = recentLogs.length;
 
-                              const count = logsForSector.length;
-                              let suggestedFactor = null;
-                              if (count >= 5) {
-                                let sumRatio = 0;
-                                logsForSector.forEach(log => {
-                                  sumRatio += scaleToMeters(log.realOlas) / Number(log.boyaAltura);
-                                });
-                                suggestedFactor = Math.max(0.1, Math.min(1.5, sumRatio / count));
-                              }
+                                  let suggestedFactor = null;
+                                  if (count >= 5) {
+                                    let sumRatio = 0;
+                                    recentLogs.forEach(log => {
+                                      sumRatio += scaleToMeters(log.realOlas) / Number(log.boyaAltura);
+                                    });
+                                    suggestedFactor = Math.max(0.1, Math.min(1.5, sumRatio / 5));
+                                  }
 
-                              const isOverridden = adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null;
-                              const activeFactor = isOverridden ? adminManualScaleFactors[storageKey] : sec.defaultFactor;
+                                  const isOverridden = adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null;
+                                  const activeFactor = isOverridden ? adminManualScaleFactors[storageKey] : sec.defaultFactor;
 
-                              return (
-                                <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2">
-                                  <div className="flex justify-between items-center text-xs">
-                                    <strong className="text-slate-800 font-extrabold">{sec.title}</strong>
-                                    <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${count >= 5 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
-                                      {count}/5 nados
-                                    </span>
-                                  </div>
+                                  return (
+                                    <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2">
+                                      <div className="flex justify-between items-center text-xs">
+                                        <strong className="text-slate-800 font-extrabold">{sec.title}</strong>
+                                        <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${count >= 5 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
+                                          {count}/5 nados recientes
+                                        </span>
+                                      </div>
 
-                                  <div className="flex justify-between items-center text-xs">
-                                    <span className="text-slate-500 font-medium">Activo en Web:</span>
-                                    <strong className="text-indigo-600 font-black">{Number(activeFactor).toFixed(2)}x {isOverridden ? '(Fijo)' : '(Default)'}</strong>
-                                  </div>
+                                      <div className="flex justify-between items-center text-xs">
+                                        <span className="text-slate-500 font-medium">Activo en Web:</span>
+                                        <strong className="text-indigo-600 font-black">{Number(activeFactor).toFixed(2)}x {isOverridden ? '(Fijo)' : '(Default)'}</strong>
+                                      </div>
 
-                                  {suggestedFactor !== null ? (
-                                    <div className="flex justify-between items-center text-xs pt-1 border-t border-slate-100">
-                                      <span className="text-emerald-700 font-bold">💡 Algoritmo sugiere:</span>
-                                      <strong className="text-emerald-700 font-black">{suggestedFactor.toFixed(2)}x</strong>
+                                      {suggestedFactor !== null ? (
+                                        <div className="flex justify-between items-center text-xs pt-1 border-t border-slate-100">
+                                          <span className="text-emerald-700 font-bold">💡 Algoritmo sugiere (últimos 5):</span>
+                                          <strong className="text-emerald-700 font-black">{suggestedFactor.toFixed(2)}x</strong>
+                                        </div>
+                                      ) : (
+                                        <div className="text-[9px] text-slate-400 italic pt-1 border-t border-slate-100">
+                                          Faltan {5 - count} reportes recientes de este viento para la sugerencia.
+                                        </div>
+                                      )}
+
+                                      <div className="flex items-center justify-between gap-1.5 pt-1">
+                                        {suggestedFactor !== null && !isOverridden && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const fixedVal = parseFloat(suggestedFactor.toFixed(2));
+                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                              setAdminManualScaleFactors(updated);
+                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                            }}
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm"
+                                          >
+                                            🟢 Aprobar ({suggestedFactor.toFixed(2)}x)
+                                          </button>
+                                        )}
+
+                                        {isOverridden && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const updated = { ...adminManualScaleFactors };
+                                              delete updated[storageKey];
+                                              setAdminManualScaleFactors(updated);
+                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                            }}
+                                            className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
+                                          >
+                                            ↩ Reset ({sec.defaultFactor.toFixed(2)}x)
+                                          </button>
+                                        )}
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const val = prompt(`Factor manual para ${bName} (${sec.key.toUpperCase()}):`, activeFactor);
+                                            if (val !== null && !isNaN(parseFloat(val))) {
+                                              const updated = { ...adminManualScaleFactors, [storageKey]: parseFloat(val) };
+                                              setAdminManualScaleFactors(updated);
+                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                            }
+                                          }}
+                                          className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-indigo-200 transition-colors ml-auto"
+                                        >
+                                          ✏️ Manual
+                                        </button>
+                                      </div>
                                     </div>
-                                  ) : (
-                                    <div className="text-[9px] text-slate-400 italic pt-1 border-t border-slate-100">
-                                      Faltan {5 - count} reportes de este viento para la sugerencia.
-                                    </div>
-                                  )}
-
-                                  <div className="flex items-center justify-between gap-1.5 pt-1">
-                                    {suggestedFactor !== null && !isOverridden && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const fixedVal = parseFloat(suggestedFactor.toFixed(2));
-                                          const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
-                                          setAdminManualScaleFactors(updated);
-                                          localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                        }}
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm"
-                                      >
-                                        🟢 Aprobar ({suggestedFactor.toFixed(2)}x)
-                                      </button>
-                                    )}
-
-                                    {isOverridden && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const updated = { ...adminManualScaleFactors };
-                                          delete updated[storageKey];
-                                          setAdminManualScaleFactors(updated);
-                                          localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                        }}
-                                        className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
-                                      >
-                                        ↩ Reset ({sec.defaultFactor.toFixed(2)}x)
-                                      </button>
-                                    )}
-
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const val = prompt(`Factor manual para ${bName} (${sec.key.toUpperCase()}):`, activeFactor);
-                                        if (val !== null && !isNaN(parseFloat(val))) {
-                                          const updated = { ...adminManualScaleFactors, [storageKey]: parseFloat(val) };
-                                          setAdminManualScaleFactors(updated);
-                                          localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                        }
-                                      }}
-                                      className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-indigo-200 transition-colors ml-auto"
-                                    >
-                                      ✏️ Manual
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             )}
             </div>
           </div>
