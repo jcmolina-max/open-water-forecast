@@ -708,7 +708,7 @@ export default function App() {
           }
         }
         const hasUpwellingMemory = recentPonienteHours >= 6; // 6+ horas de poniente reciente
-        const upwellingOffset = hasUpwellingMemory ? 3.5 : 1.5; // Descuento de 3.5°C por bolsas frías de afloramiento, o 1.5°C por gradiente térmico natural de orilla
+        const upwellingOffset = hasUpwellingMemory ? 3.5 : 0; // Descuento de 3.5°C por bolsas frías de afloramiento, o 0°C en días de mar calmo/templado sin poniente
 
         // Comprobar si algún nadador o admin reportó agua fría recientemente en la comunidad
         const recentColdWaterReport = calibrationHistory.find(log => {
@@ -1065,11 +1065,14 @@ export default function App() {
               const deltaT = dewPoint - taroEffectiveWaterTemp;
               const isSeaBreezeWind = windDir >= 80 && windDir <= 220; // Vientos de componente marítima (Levante, Sur, Sudeste)
               const isGentleWind = windKnots >= 3 && windKnots <= 12; // Viento suave que empuja pero no dispersa la niebla
+              const humidity = weatherJson?.hourly?.relative_humidity_2m?.[i];
               
               if (deltaT >= 2.0 && isSeaBreezeWind && isGentleWind) {
                 taroRisk = "Alto";
               } else if (deltaT >= 0.0 && isSeaBreezeWind && isGentleWind) {
                 taroRisk = "Moderado";
+              } else if ((deltaT >= -1.0 || (humidity !== undefined && humidity >= 80)) && isSeaBreezeWind && isGentleWind) {
+                taroRisk = "Bruma";
               }
             }
 
@@ -1089,6 +1092,14 @@ export default function App() {
                 if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo") {
                     localRule = hasUpwellingMemory ? "Bruma / Taró (Bolsas 200m) 🌫️⚠️" : "Bruma / Taró Leve 🌫️⚠️";
                     ruleColor = "text-slate-600 font-bold bg-slate-50 border border-slate-200 shadow-sm";
+                }
+            } else if (taroRisk === "Bruma") {
+                hourScore -= 10; // Penalización ligera por bruma anclada en horizonte
+                if (hourScore > 80) hourScore = 80;
+                
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo") {
+                    localRule = "Bruma Mar Adentro 🌫️";
+                    ruleColor = "text-slate-600 font-medium bg-slate-50 border border-slate-200 shadow-sm";
                 }
             }
 
@@ -2161,14 +2172,12 @@ export default function App() {
                              <p className="text-xs text-indigo-700 font-medium mt-0.5">Comprueba esta tabla y ayúdanos a calibrar el algoritmo.</p>
                            </div>
                          </div>
-                         <a
-                           href="https://docs.google.com/forms/d/e/1FAIpQLSdTjdiGOAEtBYo6wjNRtMK1KpdAijJajxhp-_uUBpMhG0Y8YQ/viewform?usp=sharing&ouid=114554177440629903097"
-                           target="_blank"
-                           rel="noreferrer"
-                           className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs w-full sm:w-auto"
-                         >
-                           📝 Rellenar Diario
-                         </a>
+                          <button
+                            onClick={() => setIsSwimmerModalOpen(true)}
+                            className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs w-full sm:w-auto"
+                          >
+                            📝 ¿Nadaste ayer? Reportar estado
+                          </button>
                      </div>
                      <p className="text-[11px] font-bold text-indigo-500 mt-3 text-center sm:text-left w-full">
                        O si lo prefieres, cuéntanoslo directamente por el grupo de WhatsApp del club.
