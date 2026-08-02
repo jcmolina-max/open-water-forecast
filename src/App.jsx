@@ -587,6 +587,16 @@ export default function App() {
     }
   });
 
+  // Estado para las marcas de tiempo de aprobación/ajuste de factores
+  const [adminFactorApprovalTimes, setAdminFactorApprovalTimes] = useState(() => {
+    try {
+      const saved = localStorage.getItem('openwater_admin_approval_times');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
   // Dynamic Buoy Scale Factor por Sector (Levante 🌅 vs Poniente 🌇)
   function getBoyaScaleFactor(beachKey, currentDirection) {
     const dir = currentDirection || 110; // Default Levante si no se proporciona dirección
@@ -3754,14 +3764,23 @@ export default function App() {
                               <div className="grid grid-cols-1 gap-2.5">
                                 {sectors.map(sec => {
                                   const storageKey = `${bKey}_${sec.key}`;
+                                  const approvalTime = adminFactorApprovalTimes && adminFactorApprovalTimes[storageKey] ? Number(adminFactorApprovalTimes[storageKey]) : 0;
+                                  
                                   const logsForSector = calibrationHistory.filter(l => {
                                     if (l.playa !== bKey || !l.realOlas || !l.boyaAltura || Number(l.boyaAltura) === 0) return false;
                                     const dir = Number(l.boyaDireccion || 110);
                                     const isL = dir >= 45 && dir <= 165;
-                                    return isL === sec.isLevante;
+                                    if (isL !== sec.isLevante) return false;
+
+                                    // Si hay una marca de tiempo de ajuste, solo considerar nados registrados POSTERIORMENTE
+                                    if (approvalTime > 0) {
+                                      const logTs = new Date(l.timestamp || l.fecha || 0).getTime();
+                                      if (logTs > 0 && logTs <= approvalTime) return false;
+                                    }
+                                    return true;
                                   });
 
-                                  // Ventana móvil: Tomar únicamente los últimos 5 nados más recientes
+                                  // Ventana móvil: Tomar únicamente los últimos 5 nados más recientes POST-AJUSTE
                                   const recentLogs = logsForSector.slice(-5);
                                   const count = recentLogs.length;
 
@@ -3782,7 +3801,7 @@ export default function App() {
                                       <div className="flex justify-between items-center text-xs">
                                         <strong className="text-slate-800 font-extrabold">{sec.title}</strong>
                                         <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${count >= 5 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
-                                          {count}/5 nados recientes
+                                          {count}/5 post-ajuste
                                         </span>
                                       </div>
 
@@ -3798,7 +3817,9 @@ export default function App() {
                                         </div>
                                       ) : (
                                         <div className="text-[9px] text-slate-400 italic pt-1 border-t border-slate-100">
-                                          Faltan {5 - count} reportes recientes de este viento para la sugerencia.
+                                          {approvalTime > 0 
+                                            ? `Esperando ${5 - count} nados nuevos posteriores al último ajuste para recalcular.` 
+                                            : `Faltan ${5 - count} reportes recientes de este viento para la sugerencia.`}
                                         </div>
                                       )}
 
@@ -3808,11 +3829,15 @@ export default function App() {
                                             type="button"
                                             onClick={() => {
                                               const fixedVal = parseFloat(suggestedFactor.toFixed(2));
+                                              const nowTs = Date.now();
                                               const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
                                               setAdminManualScaleFactors(updated);
+                                              setAdminFactorApprovalTimes(updatedTimes);
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`✅ ¡Factor de ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x en vivo!`);
+                                              setFactorFeedbackMsg(`✅ ¡Factor de ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x! Contador reseteado.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm"
@@ -3825,12 +3850,16 @@ export default function App() {
                                           <button
                                             type="button"
                                             onClick={() => {
+                                              const nowTs = Date.now();
                                               const updated = { ...adminManualScaleFactors };
                                               delete updated[storageKey];
+                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
                                               setAdminManualScaleFactors(updated);
+                                              setAdminFactorApprovalTimes(updatedTimes);
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🔄 Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}).`);
+                                              setFactorFeedbackMsg(`🔄 Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}). Contador reseteado.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
@@ -3845,11 +3874,15 @@ export default function App() {
                                             const val = prompt(`Factor manual para ${bName} (${sec.key.toUpperCase()}):`, activeFactor);
                                             if (val !== null && !isNaN(parseFloat(val))) {
                                               const fixedVal = parseFloat(parseFloat(val).toFixed(2));
+                                              const nowTs = Date.now();
                                               const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
                                               setAdminManualScaleFactors(updated);
+                                              setAdminFactorApprovalTimes(updatedTimes);
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`✏️ ¡Factor manual para ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x en vivo!`);
+                                              setFactorFeedbackMsg(`✏️ ¡Factor manual para ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x! Contador reseteado.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }
                                           }}
