@@ -3141,119 +3141,183 @@ export default function App() {
               
               <section>
                 <p className="text-slate-600 leading-relaxed text-sm md:text-base">
-                  Hemos cogido los datos en bruto de los satélites y les hemos metido <strong>"nuestra experiencia local"</strong> para crear el primer predictor de aguas abiertas pensado exclusivamente para la costa de Málaga.
+                  Hemos cogido los datos en bruto de los satélites y los sensores marinos y los hemos pasado por el <strong>"filtro de la experiencia local"</strong> para crear el primer predictor de aguas abiertas pensado por y para la costa de Málaga.
                 </p>
               </section>
 
+              {/* 1. EL TARÓ Y LA NIEBLA MARINA */}
               <section>
-                <h4 className="font-bold text-slate-800 text-lg mb-4 border-b pb-2">🛠️ 1. Alertas de Salud y Riesgo</h4>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <CloudFog size={20} className="text-slate-600"/> 1. El Taró y la Niebla Marina
+                </h4>
+                <p className="text-sm text-slate-600 mb-4">
+                  En verano es muy común el <strong>Taró</strong> (niebla de advección): esa masa de niebla espesa que entra de golpe a mediodía atrapando la costa. Se forma cuando el aire cálido y húmedo del Levante pasa por encima de bolsas de agua fría residuales de Poniente.
+                </p>
+                <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm">
+                  <div className="flex gap-3 items-start">
+                    <span className="text-base shrink-0">🚨</span>
+                    <div>
+                      <strong className="text-slate-800">Riesgo de Taró (o Bolsas 200m):</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Niebla densa en orilla o a 200m pasadas las boyas amarillas. Visibilidad muy reducida (&lt; 1 km) y castigo en el Score. Mucha precaución con perder la costa de vista.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <span className="text-base shrink-0">⚠️</span>
+                    <div>
+                      <strong className="text-slate-800">Bruma / Taró Leve:</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Niebla suave que reduce la visión de los edificios y los espigones (1 a 3 km).</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <span className="text-base shrink-0">🌫️</span>
+                    <div>
+                      <strong className="text-slate-800">Bruma Mar Adentro:</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Calima húmeda o bruma anclada en el horizonte marino (la orilla está clara, pero mar adentro se ve turbio).</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* 2. EL AGUA: BOYA REAL VS SATELITE VS BOLSAS */}
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Thermometer size={20} className="text-blue-500"/> 2. El Agua: Boya Real vs. Orilla
+                </h4>
+                <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm">
+                  <div className="flex gap-3 items-start">
+                    <Anchor className="text-blue-600 shrink-0 mt-1" size={18} />
+                    <div>
+                      <strong className="text-slate-800">Boya de Málaga (Mar abierto):</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Mide la temperatura real de la gran masa de agua mar adentro (a varias millas de la costa).</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <ThermometerSun className="text-amber-500 shrink-0 mt-1" size={18} />
+                    <div>
+                      <strong className="text-slate-800">Satélite (Modelo teórico):</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Te da una estimación general, aunque suele marcar 2ºC o 3ºC por encima de lo que sientes al meter el pie en la playa.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <Waves className="text-cyan-600 shrink-0 mt-1" size={18} />
+                    <div>
+                      <strong className="text-slate-800">Bolsas de Agua Fría (Inercia de Poniente):</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Tras días de Poniente, el mar "escupe" agua helada profunda hacia la costa. A veces la orilla está agradable pero a 150m pasas una bolsa helada a 18ºC. La app detecta el viento de los días previos para avisarte de estas bolsas.</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* 3. LAS CORRIENTES Y DERIVA */}
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Compass size={20} className="text-indigo-500"/> 3. Las Corrientes: Hacia dónde te lleva el agua
+                </h4>
+                <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="flex gap-3 items-start">
+                     <AlertTriangle className="text-red-500 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">La Resaca (Hacia adentro):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Si entra agua con fuerza a la playa, tiene que buscar salida hacia mar abierto creando embudos de succión. Se marca como Baja, Media o Alta.</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                     <Compass className="text-indigo-500 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">La Deriva Lateral (Flechitas Nerja / Fuengirola):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Cruzando el ángulo de la playa con el de la ola, sabemos si el agua "resbala" empujándote hacia el Este (⬅️ etiqueta <strong>Nerja</strong>) o hacia el Oeste (➡️ etiqueta <strong>Fuengirola</strong>) a lo largo de la costa.</p>
+                     </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* 4. ENERGÍA EN KJ */}
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Activity size={20} className="text-orange-500"/> 4. La Fuerza de las Olas (Energía en Kj)
+                </h4>
+                <p className="text-sm text-slate-600 mb-4">
+                  Lo que de verdad te empuja en el pecho no son los metros de ola, sino su <strong>Energía en Kilojulios (Kj)</strong>.
+                </p>
+                <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 text-sm text-orange-800 font-medium flex items-start gap-3">
+                  <Info className="shrink-0 text-orange-600 mt-0.5" size={20} />
+                  <p>
+                    <strong>La regla al cuadrado:</strong> Una ola de 0.8m no tiene el doble de fuerza que una de 0.4m... <strong>¡Tiene 4 veces más energía!</strong> Por eso, a partir de 0.6m notarás que el mar golpea con mucha dureza. Fíjate en la columna de <strong>Energía (Kj)</strong> para conocer el impacto real.
+                  </p>
+                </div>
+              </section>
+
+              {/* 5. ALERTAS DE SALUD Y AGUAS SUCIAS */}
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Zap size={20} className="text-yellow-600"/> 5. Alertas de Salud y Aguas Sucias
+                </h4>
                 <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                   <div className="flex gap-3 items-start">
                      <Zap className="text-yellow-600 shrink-0 mt-1" size={20} />
                      <div>
                        <strong className="text-slate-800">Corte por Tormenta (Rayos):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Si el satélite detecta riesgo eléctrico, la nota caerá a 0 puntos y aparecerá en amarillo. En el agua eres el punto más alto, un pararrayos natural. Sal inmediatamente.</p>
-                     </div>
-                  </div>
-                  <div className="flex gap-3 items-start">
-                     <CloudFog className="text-slate-500 shrink-0 mt-1" size={20} />
-                     <div>
-                       <strong className="text-slate-800">Pérdida de Visibilidad (Niebla):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Si la visibilidad cae por debajo de 2 kilómetros, aplicamos un castigo de 40 puntos. Perder de vista la costa nadando es extremadamente peligroso.</p>
+                       <p className="text-sm text-slate-600 mt-1">Si el satélite detecta riesgo eléctrico, la nota caerá a 0 puntos. En el agua eres el punto más alto, un pararrayos natural. Sal inmediatamente.</p>
                      </div>
                   </div>
                   <div className="flex gap-3 items-start">
                      <TestTubes className="text-emerald-500 shrink-0 mt-1" size={20} />
                      <div>
                        <strong className="text-slate-800">Calidad del Agua (Arrastres):</strong>
-                       <p className="text-sm text-slate-600 mt-1">La app suma la lluvia desde ayer hasta hoy. Si llueve fuerte, los aliviaderos de Málaga y el río Guadalhorce escupirán suciedad que la deriva traerá a la costa. La tarjeta pasará a estado de "Precaución" (0.5mm) o "Riesgo Alto" (2mm).</p>
+                       <p className="text-sm text-slate-600 mt-1">La app suma la lluvia caída desde ayer. Si llueve fuerte, los aliviaderos de Málaga y el río Guadalhorce escupirán suciedad que la corriente traerá a la playa (tarjeta en "Precaución" o "Riesgo Alto").</p>
                      </div>
                   </div>
                 </div>
               </section>
 
+              {/* 6. REGLAS LOCALES */}
               <section>
                 <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Compass size={20} className="text-indigo-500"/> 2. Las Corrientes (El Radar)
+                  <Bot size={20} className="text-indigo-500"/> 6. El "Cerebro" Malagueño (Reglas Locales)
                 </h4>
-                <p className="text-sm text-slate-600 mb-4">
-                  En la tabla, cruzamos los datos de las olas para vigilar los dos tipos de arrastres:
-                </p>
-                <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <div className="flex gap-3 items-start">
-                     <AlertTriangle className="text-red-500 shrink-0 mt-1" size={20} />
-                     <div>
-                       <strong className="text-slate-800">La Resaca (Hacia adentro):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Si entra mucha agua a la playa, tiene que salir, creando embudos que tiran hacia alta mar. Se marca como Baja, Media o Alta.</p>
-                     </div>
-                  </div>
-                  <div className="flex gap-3 items-start">
-                     <Compass className="text-indigo-500 shrink-0 mt-1" size={20} />
-                     <div>
-                       <strong className="text-slate-800">La Deriva Lateral (Flechitas):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Cruzando la inclinación de la playa con el ángulo de la ola, sabemos si el agua "resbala" empujándote hacia el este (⬅️ etiqueta <strong>Nerja</strong>) o hacia el oeste (➡️ etiqueta <strong>Fuengirola</strong>) a lo largo de la costa.</p>
-                     </div>
-                  </div>
-                </div>
-              </section>
-
-              <section>
-                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Activity size={20} className="text-orange-500"/> 3. La Energía (La Regla de Oro)
-                </h4>
-                <p className="text-sm text-slate-600 mb-4">
-                  La columna <strong>Energía (Kj)</strong> usa <code className="bg-slate-100 px-1 rounded text-xs">altura² × periodo × coeficiente dinámico</code>. El coeficiente depende de la <strong>dirección del oleaje</strong> (Sur/SSE más noble, Sureste intermedio, Suroeste más agresivo) y del <strong>periodo</strong> (más de 5 s suma empuje; menos de 4 s resta, mar más caótico). Debajo del valor verás la <strong>procedencia del oleaje</strong> (brújula + grados, convención del modelo).
-                </p>
-                <p className="text-sm text-slate-600 mb-4">
-                  Basado en los informes de oceanografía física, la fuerza de una ola no crece en línea recta, sino de forma <strong>exponencial</strong> (al cuadrado en la altura).
-                </p>
-                <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 text-sm text-orange-800 font-medium flex items-start gap-3">
-                  <Info className="shrink-0 text-orange-600 mt-0.5" size={20} />
-                  <p>
-                    Una ola de 0.8m no tiene el doble de fuerza que una de 0.4m... <strong>¡Tiene 4 veces más energía!</strong> Por eso, a partir de 0.6m notarás que el mar golpea con mucha dureza. Fíjate en la columna de <strong>Energía (Kj)</strong> para conocer el impacto real de las olas en tu pecho.
-                  </p>
-                </div>
-              </section>
-
-              <section>
-                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Bot size={20} className="text-indigo-500"/> 4. El "Cerebro" Malagueño
-                </h4>
-                <p className="text-sm text-slate-600 mb-5">
-                  La aplicación no se fía a ciegas del satélite, sino que aplica nuestras <strong>4 Reglas de Oro</strong> automáticamente:
-                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-cyan-50 p-2.5 rounded-xl text-cyan-600"><Waves size={24} /></div>
                       <h5 className="font-bold text-slate-800">El "Magón"</h5>
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">Ola tendida sin viento. Aunque sea grande (0.5m), la app no castiga la seguridad en exceso porque es mar de fondo cómodo.</p>
+                    <p className="text-sm text-slate-600">Ola tendida sin viento. Aunque sea grande (0.5m), la app no castiga la nota en exceso porque es mar de fondo cómodo.</p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-amber-50 p-2.5 rounded-xl text-amber-600"><ThermometerSun size={24} /></div>
                       <h5 className="font-bold text-slate-800">La "Lavadora" Térmica</h5>
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">A mediodía, el Poniente superior a 12 nudos levanta un mar picado insoportable para respirar.</p>
+                    <p className="text-sm text-slate-600">A mediodía, el Poniente superior a 12 nudos levanta un mar picado insoportable para respirar.</p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-red-50 p-2.5 rounded-xl text-red-600"><Wind size={24} /></div>
                       <h5 className="font-bold text-slate-800">La trampa del Terral</h5>
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">Viento fuerte de Tierra (Norte) alisa la orilla pero empuja hacia adentro. Riesgo muy alto de deriva.</p>
+                    <p className="text-sm text-slate-600">Viento fuerte de Norte (tierra). Deja la orilla plato como un espejo, pero te empuja hacia mar adentro sin darte cuenta.</p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600"><ShieldAlert size={24} /></div>
                       <h5 className="font-bold text-slate-800">El Escudo del Puerto</h5>
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">La Malagueta y Pedregalejo están fuertemente protegidas contra las olas de Poniente o Suroeste. El satélite llega aquí muy atenuado.</p>
+                    <p className="text-sm text-slate-600">La Malagueta y Pedregalejo están fuertemente protegidas contra las olas de Poniente o Suroeste. El satélite llega aquí muy atenuado.</p>
                   </div>
                 </div>
               </section>
 
+              {/* 7. LA COMUNIDAD */}
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Users size={20} className="text-emerald-500"/> 7. La Comunidad: Tú eres el mejor sensor
+                </h4>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Haz clic en el botón <strong>📝 ¿Nadaste ayer? Reportar estado</strong> para contarnos si viste medusas, si el agua estaba fría o limpia. Con tus datos reales en la orilla, la app calibra su algoritmo en tiempo real para todos los compañeros del club.
+                </p>
+              </section>
+
+              {/* ADVERTENCIA DE SENTIDO COMUN */}
               <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-sm text-amber-800 font-medium flex items-start gap-3">
                 <Info className="shrink-0 text-amber-600 mt-0.5" size={20} />
                 <p>
