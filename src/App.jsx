@@ -622,6 +622,17 @@ export default function App() {
     return 0;
   }
 
+  // Helper para filtrar lecturas anómalas (outliers) utilizando filtro de banda ±1.5σ
+  function filterOutliers(ratios) {
+    if (!ratios || ratios.length < 3) return ratios;
+    const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+    const variance = ratios.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / ratios.length;
+    const stdDev = Math.sqrt(variance);
+    if (stdDev === 0) return ratios;
+    const filtered = ratios.filter(r => Math.abs(r - mean) <= 1.5 * stdDev);
+    return filtered.length > 0 ? filtered : ratios;
+  }
+
   // Dynamic Buoy Scale Factor por Sector (Levante 🌅 vs Poniente 🌇)
   function getBoyaScaleFactor(beachKey, currentDirection) {
     const dir = currentDirection || 110; // Default Levante si no se proporciona dirección
@@ -656,7 +667,7 @@ export default function App() {
       return logIsLevante === isLevante; // Solo reportes del mismo sector de viento
     });
 
-    // 2. REGLA ESTRICTA DE 5 REPORTES POR SECTOR (VENTANA MÓVIL DE LOS ÚLTIMOS 5 NADOS)
+    // 2. REGLA ESTRICTA DE 5 REPORTES POR SECTOR (VENTANA MÓVIL DE LOS ÚLTIMOS 5 NADOS CON FILTRO ANTI-OUTLIERS)
     const recentLogs = relevantLogs.slice(-5);
     if (recentLogs.length < 5) {
       return defaultFactor;
@@ -672,14 +683,11 @@ export default function App() {
       return 0.3;
     }
 
-    let sumRatio = 0;
-    recentLogs.forEach(log => {
-      const swimmerM = scaleToMeters(log.realOlas);
-      const buoyM = Number(log.boyaAltura);
-      sumRatio += swimmerM / buoyM;
-    });
+    const ratios = recentLogs.map(log => scaleToMeters(log.realOlas) / Number(log.boyaAltura));
+    const cleanRatios = filterOutliers(ratios);
+    const sumRatio = cleanRatios.reduce((a, b) => a + b, 0);
 
-    const calculatedFactor = sumRatio / 5;
+    const calculatedFactor = sumRatio / cleanRatios.length;
     return Math.max(0.1, Math.min(1.5, calculatedFactor));
   }
 
@@ -3789,15 +3797,32 @@ export default function App() {
                               <div className="grid grid-cols-1 gap-2.5">
                                 {sectors.map(sec => {
                                   const storageKey = `${bKey}_${sec.key}`;
-                                  const approvalTime = adminFactorApprovalTimes && adminFactorApprovalTimes[storageKey] ? Number(adminFactorApprovalTimes[storageKey]) : 0;
                                   
-                                  const logsForSector = calibrationHistory.filter(l => {
+                                  // 1. Obtener todos los reportes del sector
+                                  const allSectorLogs = calibrationHistory.filter(l => {
                                     if (l.playa !== bKey || !l.realOlas || !l.boyaAltura || Number(l.boyaAltura) === 0) return false;
                                     const dir = Number(l.boyaDireccion || 110);
                                     const isL = dir >= 45 && dir <= 165;
-                                    if (isL !== sec.isLevante) return false;
+                                    return isL === sec.isLevante;
+                                  });
 
-                                    // Si hay una marca de tiempo de ajuste, solo considerar nados registrados POSTERIORMENTE
+                                  const totalLogsCount = allSectorLogs.length;
+
+                                  // A) CALCULO HISTÓRICO GLOBAL (Todos los reportes con filtro anti-outliers ±1.5σ)
+                                  let suggestedGlobalFactor = null;
+                                  let cleanGlobalCount = 0;
+                                  if (totalLogsCount >= 5) {
+                                    const allRatios = allSectorLogs.map(l => scaleToMeters(l.realOlas) / Number(l.boyaAltura));
+                                    const cleanRatios = filterOutliers(allRatios);
+                                    cleanGlobalCount = cleanRatios.length;
+                                    const sumGlobal = cleanRatios.reduce((a, b) => a + b, 0);
+                                    suggestedGlobalFactor = Math.max(0.1, Math.min(1.5, sumGlobal / cleanRatios.length));
+                                  }
+
+                                  // B) CALCULO RECIENTE (Últimos 5 nados POST-AJUSTE con filtro anti-outliers)
+                                  const approvalTime = adminFactorApprovalTimes && adminFactorApprovalTimes[storageKey] ? Number(adminFactorApprovalTimes[storageKey]) : 0;
+                                  
+                                  const postApprovalLogs = allSectorLogs.filter(l => {
                                     if (approvalTime > 0) {
                                       const logTs = parseLogTimestamp(l);
                                       if (logTs === 0 || logTs <= approvalTime) return false;
@@ -3805,55 +3830,91 @@ export default function App() {
                                     return true;
                                   });
 
-                                  // Ventana móvil: Tomar únicamente los últimos 5 nados más recientes POST-AJUSTE
-                                  const recentLogs = logsForSector.slice(-5);
-                                  const count = recentLogs.length;
+                                  const recentLogs = postApprovalLogs.slice(-5);
+                                  const countRecent = recentLogs.length;
 
-                                  let suggestedFactor = null;
-                                  if (count >= 5) {
-                                    let sumRatio = 0;
-                                    recentLogs.forEach(log => {
-                                      sumRatio += scaleToMeters(log.realOlas) / Number(log.boyaAltura);
-                                    });
-                                    suggestedFactor = Math.max(0.1, Math.min(1.5, sumRatio / 5));
+                                  let suggestedRecentFactor = null;
+                                  if (countRecent >= 5) {
+                                    const recentRatios = recentLogs.map(l => scaleToMeters(l.realOlas) / Number(l.boyaAltura));
+                                    const cleanRecentRatios = filterOutliers(recentRatios);
+                                    const sumRecent = cleanRecentRatios.reduce((a, b) => a + b, 0);
+                                    suggestedRecentFactor = Math.max(0.1, Math.min(1.5, sumRecent / cleanRecentRatios.length));
+                                  }
+
+                                  // C) CALCULO DE DESVÍO (%) ENTRE SUGERENCIA RECIENTE E HISTÓRICA
+                                  let devPercentText = null;
+                                  if (suggestedRecentFactor !== null && suggestedGlobalFactor !== null && suggestedGlobalFactor > 0) {
+                                    const diffPct = ((suggestedRecentFactor - suggestedGlobalFactor) / suggestedGlobalFactor) * 100;
+                                    devPercentText = `${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(0)}%`;
                                   }
 
                                   const isOverridden = adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null;
                                   const activeFactor = isOverridden ? adminManualScaleFactors[storageKey] : sec.defaultFactor;
 
                                   return (
-                                    <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2">
+                                    <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2.5">
                                       <div className="flex justify-between items-center text-xs">
                                         <strong className="text-slate-800 font-extrabold">{sec.title}</strong>
-                                        <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${count >= 5 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
-                                          {count}/5 post-ajuste
+                                        <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                                          {totalLogsCount} nados totales
                                         </span>
                                       </div>
 
-                                      <div className="flex justify-between items-center text-xs">
+                                      <div className="flex justify-between items-center text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
                                         <span className="text-slate-500 font-medium">Activo en Web:</span>
-                                        <strong className="text-indigo-600 font-black">{Number(activeFactor).toFixed(2)}x {isOverridden ? '(Fijo)' : '(Default)'}</strong>
+                                        <strong className="text-indigo-600 font-black text-sm">{Number(activeFactor).toFixed(2)}x {isOverridden ? '(Fijo)' : '(Default)'}</strong>
                                       </div>
 
-                                      {suggestedFactor !== null ? (
-                                        <div className="flex justify-between items-center text-xs pt-1 border-t border-slate-100">
-                                          <span className="text-emerald-700 font-bold">💡 Algoritmo sugiere (últimos 5):</span>
-                                          <strong className="text-emerald-700 font-black">{suggestedFactor.toFixed(2)}x</strong>
+                                      {/* SECCIÓN COMPARATIVA DE SUGERENCIAS DUALES CON FILTRO ANTI-RUIDO */}
+                                      <div className="bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-100/70 space-y-2">
+                                        <div className="text-[10px] font-black uppercase text-indigo-800 tracking-wider flex justify-between items-center">
+                                          <span>📊 Comparativa Algoritmo (Filtro Anti-Outliers ±1.5σ)</span>
                                         </div>
-                                      ) : (
-                                        <div className="text-[9px] text-slate-400 italic pt-1 border-t border-slate-100">
-                                          {approvalTime > 0 
-                                            ? `Esperando ${5 - count} nados nuevos posteriores al último ajuste para recalcular.` 
-                                            : `Faltan ${5 - count} reportes recientes de este viento para la sugerencia.`}
-                                        </div>
-                                      )}
 
-                                      <div className="flex items-center justify-between gap-1.5 pt-1">
-                                        {suggestedFactor !== null && !isOverridden && (
+                                        {/* SUGERENCIA RECIENTE */}
+                                        <div className="flex justify-between items-center text-xs pt-1">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-emerald-700 font-bold">⚡ Reciente (Últimos 5 post-ajuste):</span>
+                                            <span className="text-[9px] font-extrabold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
+                                              {countRecent}/5
+                                            </span>
+                                          </div>
+                                          {suggestedRecentFactor !== null ? (
+                                            <strong className="text-emerald-700 font-black">{suggestedRecentFactor.toFixed(2)}x</strong>
+                                          ) : (
+                                            <span className="text-[10px] text-slate-400 italic">
+                                              {approvalTime > 0 ? `Esperando ${5 - countRecent} nados` : `Faltan ${5 - countRecent} nados`}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* SUGERENCIA HISTÓRICA GLOBAL */}
+                                        <div className="flex justify-between items-center text-xs pt-1 border-t border-indigo-100/60">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-blue-700 font-bold">📜 Histórica Global ({cleanGlobalCount} válidos):</span>
+                                          </div>
+                                          {suggestedGlobalFactor !== null ? (
+                                            <div className="flex items-center gap-2">
+                                              <strong className="text-blue-700 font-black">{suggestedGlobalFactor.toFixed(2)}x</strong>
+                                              {devPercentText && (
+                                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${parseFloat(devPercentText) >= 0 ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                                                  Desvío: {devPercentText}
+                                                </span>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <span className="text-[10px] text-slate-400 italic">Faltan {5 - totalLogsCount} nados</span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* BOTONES DE ACCIÓN */}
+                                      <div className="flex items-center justify-between gap-1.5 pt-1 flex-wrap">
+                                        {suggestedRecentFactor !== null && (
                                           <button
                                             type="button"
                                             onClick={() => {
-                                              const fixedVal = parseFloat(suggestedFactor.toFixed(2));
+                                              const fixedVal = parseFloat(suggestedRecentFactor.toFixed(2));
                                               const nowTs = Date.now();
                                               const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
                                               const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
@@ -3862,12 +3923,34 @@ export default function App() {
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`✅ ¡Factor de ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x! Contador reseteado.`);
+                                              setFactorFeedbackMsg(`🟢 ¡Aprobada Sugerencia Reciente (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})!`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
-                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm"
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm flex-1 min-w-[120px] text-center"
                                           >
-                                            🟢 Aprobar ({suggestedFactor.toFixed(2)}x)
+                                            🟢 Aprobar Reciente ({suggestedRecentFactor.toFixed(2)}x)
+                                          </button>
+                                        )}
+
+                                        {suggestedGlobalFactor !== null && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const fixedVal = parseFloat(suggestedGlobalFactor.toFixed(2));
+                                              const nowTs = Date.now();
+                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                              setAdminManualScaleFactors(updated);
+                                              setAdminFactorApprovalTimes(updatedTimes);
+                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                              setDataRefreshKey(k => k + 1);
+                                              setFactorFeedbackMsg(`🔵 ¡Aprobada Sugerencia Global (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})!`);
+                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                            }}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm flex-1 min-w-[120px] text-center"
+                                          >
+                                            🔵 Aprobar Global ({suggestedGlobalFactor.toFixed(2)}x)
                                           </button>
                                         )}
 
@@ -3884,7 +3967,7 @@ export default function App() {
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🔄 Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}). Contador reseteado.`);
+                                              setFactorFeedbackMsg(`🔄 Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}).`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
@@ -3907,7 +3990,7 @@ export default function App() {
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`✏️ ¡Factor manual para ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x! Contador reseteado.`);
+                                              setFactorFeedbackMsg(`✏️ ¡Factor manual para ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x!`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }
                                           }}
