@@ -3427,7 +3427,8 @@ export default function App() {
                   </button>
                 </form>
               ) : (
-                /* FORMULARIO DE REPORTE */
+                <>
+                  {/* FORMULARIO DE REPORTE */}
                 <form onSubmit={handleSendReport} className="space-y-4 text-left">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -3786,7 +3787,8 @@ export default function App() {
                     })}
                   </div>
                 </div>
-              )}
+              </>
+            )}
             </div>
           </div>
         </div>
