@@ -1133,6 +1133,26 @@ export default function App() {
             if (hourScore > maxScore) { maxScore = hourScore; bestHourTime = formattedTime; }
             if (hourScore < minScore) { minScore = hourScore; worstHourTime = formattedTime; }
 
+            // CÁLCULO DE VISIBILIDAD EFECTIVA (Adecuación por Taró y Niebla)
+            let visText = "Excelente";
+            let visColor = "text-slate-800 font-bold";
+            if (localClimateDown) {
+                visText = "Dato no disp.";
+                visColor = "text-slate-400 font-medium";
+            } else if (taroRisk === "Alto" || (!localClimateDown && visibility < 1000)) {
+                visText = "Mala (< 1 km)";
+                visColor = "text-red-600 font-black animate-pulse";
+            } else if (taroRisk === "Moderado" || (!localClimateDown && visibility < 3000)) {
+                visText = "Reducida (1-3 km)";
+                visColor = "text-amber-600 font-bold";
+            } else if (taroRisk === "Bruma" || (!localClimateDown && visibility < 6000)) {
+                visText = "Moderada (3-6 km)";
+                visColor = "text-slate-600 font-semibold";
+            } else if (visibility !== undefined && visibility < 10000) {
+                visText = `${(visibility / 1000).toFixed(1)} km`;
+                visColor = "text-slate-700 font-semibold";
+            }
+
             const uvVal = localClimateDown ? "-" : (weatherJson?.hourly?.uv_index?.[i]);
 
             translatedHourlyData.push({
@@ -1159,7 +1179,9 @@ export default function App() {
               ruleColor: ruleColor,
               seaLevel: hourSeaLevel,
               dewPoint: dewPoint,
-              taroRisk: taroRisk
+              taroRisk: taroRisk,
+              visText: visText,
+              visColor: visColor
             });
           }
 
@@ -2346,8 +2368,8 @@ export default function App() {
                                   </div>
                                   <div className="text-right">
                                     <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide block">Visibilidad</span>
-                                    <span className="font-bold text-slate-700 text-xs">
-                                      {hour.visibility ? `${(hour.visibility / 1000).toFixed(1)} km` : 'Excelente'}
+                                    <span className={`text-xs ${hour.visColor || 'font-bold text-slate-700'}`}>
+                                      {hour.visText || 'Excelente'}
                                     </span>
                                   </div>
                                 </div>
