@@ -597,6 +597,31 @@ export default function App() {
     }
   });
 
+  // Helper para interpretar marcas de tiempo de logs en diversos formatos (ISO, DD/MM/YYYY, etc.)
+  function parseLogTimestamp(log) {
+    if (!log) return 0;
+    const raw = log.fechaRegistro || log.fecha || log.timestamp || "";
+    if (!raw) return 0;
+    if (!isNaN(Number(raw)) && Number(raw) > 1000000000) return Number(raw);
+
+    const direct = Date.parse(raw);
+    if (!isNaN(direct)) return direct;
+
+    const p = String(raw).split(/[/, :]+/);
+    if (p.length >= 3) {
+      const day = parseInt(p[0], 10);
+      const month = parseInt(p[1], 10) - 1;
+      const year = parseInt(p[2], 10);
+      const hour = p[3] ? parseInt(p[3], 10) : 0;
+      const min = p[4] ? parseInt(p[4], 10) : 0;
+      const sec = p[5] ? parseInt(p[5], 10) : 0;
+      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+        return new Date(year, month, day, hour, min, sec).getTime();
+      }
+    }
+    return 0;
+  }
+
   // Dynamic Buoy Scale Factor por Sector (Levante 🌅 vs Poniente 🌇)
   function getBoyaScaleFactor(beachKey, currentDirection) {
     const dir = currentDirection || 110; // Default Levante si no se proporciona dirección
@@ -3774,8 +3799,8 @@ export default function App() {
 
                                     // Si hay una marca de tiempo de ajuste, solo considerar nados registrados POSTERIORMENTE
                                     if (approvalTime > 0) {
-                                      const logTs = new Date(l.timestamp || l.fecha || 0).getTime();
-                                      if (logTs > 0 && logTs <= approvalTime) return false;
+                                      const logTs = parseLogTimestamp(l);
+                                      if (logTs === 0 || logTs <= approvalTime) return false;
                                     }
                                     return true;
                                   });
