@@ -2045,8 +2045,54 @@ export default function App() {
                     {currentDayData.score > 70 ? 'Nado Seguro' : currentDayData.score > 40 ? 'Precaución: Mar Agitado' : 'No Recomendado Nadar'}
                   </p>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1 block">
-                    Cálculo por algoritmo matemático
-                  </span>
+                </div>
+
+                {/* Tarjeta de Boya Real en Tiempo Real (Puertos del Estado) */}
+                <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-800 space-y-3.5 relative overflow-hidden">
+                  <div className="flex justify-between items-center border-b border-slate-800/80 pb-2.5">
+                    <h3 className="text-slate-200 font-extrabold flex items-center gap-2 uppercase tracking-wider text-xs">
+                      <Anchor size={16} className="text-cyan-400" />
+                      <span>Boya Real de Málaga</span>
+                    </h3>
+                    <span className="text-[9px] font-black text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> EN VIVO
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 pt-0.5 text-left">
+                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hs)</span>
+                      <strong className="text-lg font-black text-cyan-300 block mt-0.5">
+                        {latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—'}
+                      </strong>
+                    </div>
+
+                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp)</span>
+                      <strong className="text-lg font-black text-indigo-300 block mt-0.5">
+                        {latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—'}
+                      </strong>
+                    </div>
+
+                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
+                      <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
+                        {latestBuoyDir ? `${getWindDirection(latestBuoyDir)} (${latestBuoyDir}º)` : '—'}
+                      </strong>
+                    </div>
+
+                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
+                      <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
+                        {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '—'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
+                    <span>Origen: Puertos del Estado</span>
+                    <span>Última lectura: {latestBuoyDate ? formatFriendlyDate(latestBuoyDate) : 'Sin datos'}</span>
+                  </div>
                 </div>
 
                 {/* Tarjeta 2: Temperaturas */}
