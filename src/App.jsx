@@ -508,6 +508,7 @@ export default function App() {
   // Por defecto seleccionamos "Hoy" (Índice 1, ya que Ayer es 0)
   const [selectedDay, setSelectedDay] = useState(1); 
   const [beachData, setBeachData] = useState(null); 
+  const [rawMarineData, setRawMarineData] = useState(null);
   const [currentNowData, setCurrentNowData] = useState(null); // Datos del momento exacto actual
   const [isLoading, setIsLoading] = useState(true);
   
@@ -659,8 +660,8 @@ export default function App() {
     // 1. Resolver dirección de oleaje histórica por la fecha y hora exacta del nado (Idea 3)
     let historicalSwellDir = null;
 
-    // 1. PASO 1 (Prioridad Máxima): Buscar en el mapa satelital marino histórico (marineJson) por la fecha y hora exacta del nado
-    if (marineJson && marineJson.hourly && marineJson.hourly.time) {
+    // 1. PASO 1 (Prioridad Máxima): Buscar en el mapa satelital marino histórico (rawMarineData) por la fecha y hora exacta del nado
+    if (rawMarineData && rawMarineData.hourly && rawMarineData.hourly.time) {
       const logTs = parseLogTimestamp(log);
       if (logTs > 0) {
         const dObj = new Date(logTs);
@@ -669,9 +670,9 @@ export default function App() {
         const dd = String(dObj.getDate()).padStart(2, '0');
         const hh = (log.horaNado || "12").split(":")[0].padStart(2, '0');
         const targetIsoTime = `${yyyy}-${mm}-${dd}T${hh}:00`;
-        const matchedIdx = marineJson.hourly.time.findIndex(t => t.startsWith(targetIsoTime));
-        if (matchedIdx !== -1 && marineJson.hourly.wave_direction?.[matchedIdx] != null) {
-          historicalSwellDir = marineJson.hourly.wave_direction[matchedIdx];
+        const matchedIdx = rawMarineData.hourly.time.findIndex(t => t.startsWith(targetIsoTime));
+        if (matchedIdx !== -1 && rawMarineData.hourly.wave_direction?.[matchedIdx] != null) {
+          historicalSwellDir = rawMarineData.hourly.wave_direction[matchedIdx];
         }
       }
     }
@@ -900,6 +901,7 @@ export default function App() {
       // 2. SATÉLITE MARINO
       try {
         marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,sea_level_height_msl&timezone=Europe%2FMadrid&past_days=14`);
+        setRawMarineData(marineJson);
       } catch (e) {
          setErrorDetails({ general: `El satélite marino no responde: ${e.message}` });
          setIsLoading(false);
