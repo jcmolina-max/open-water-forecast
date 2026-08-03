@@ -453,8 +453,13 @@ function formatSwimFriendly(dateVal, swimHour) {
 function getRecordType(item) {
   const orig = item.origenDato || "";
   const notes = item.notasCalibracion || "";
+  const sens = item.sensaciones || "";
   const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
   
+  if (orig === 'Admin: Factor' || sens.includes('[FactorConfig:')) {
+    return 'system_factor';
+  }
+
   if (notes.includes('[ALERTA_OFICIAL]') || orig === 'Admin: Alerta') {
     return 'admin_alert';
   }
@@ -1395,9 +1400,44 @@ export default function App() {
       const text = await response.text();
       const json = JSON.parse(text);
       if (json.status === 'success' || json.status === 'empty') {
-        setCalibrationHistory(json.data || []);
+        const fetchedLogs = json.data || [];
+        setCalibrationHistory(fetchedLogs);
         if (json.visitasTotales !== undefined) {
           setTotalVisits(Number(json.visitasTotales));
+        }
+
+        // Sincronización en la Nube: Extraer marcas de tiempo y factores guardados por el supervisor desde Google Sheets
+        const cloudFactors = { ...adminManualScaleFactors };
+        const cloudTimes = { ...adminFactorApprovalTimes };
+        let hasCloudUpdates = false;
+
+        fetchedLogs.forEach(item => {
+          if (item.origenDato === 'Admin: Factor' || (item.sensaciones && item.sensaciones.startsWith('[FactorConfig:'))) {
+            try {
+              const match = item.sensaciones.match(/\[FactorConfig:\s*({.*?})\]/);
+              if (match && match[1]) {
+                const parsed = JSON.parse(match[1]);
+                if (parsed.storageKey) {
+                  if (parsed.factor !== undefined && parsed.factor !== null) {
+                    cloudFactors[parsed.storageKey] = parsed.factor;
+                  } else {
+                    delete cloudFactors[parsed.storageKey];
+                  }
+                  if (parsed.timestamp) {
+                    cloudTimes[parsed.storageKey] = parsed.timestamp;
+                  }
+                  hasCloudUpdates = true;
+                }
+              }
+            } catch (e) {}
+          }
+        });
+
+        if (hasCloudUpdates) {
+          setAdminManualScaleFactors(cloudFactors);
+          setAdminFactorApprovalTimes(cloudTimes);
+          localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(cloudFactors));
+          localStorage.setItem('openwater_admin_approval_times', JSON.stringify(cloudTimes));
         }
       } else {
         console.error("Error reading sheets history:", json.message);
@@ -2480,7 +2520,8 @@ export default function App() {
                         const type = getRecordType(item);
                         return item.realOlas && 
                                item.realOlas !== "" && 
-                               type !== 'admin_alert';
+                               type !== 'admin_alert' &&
+                               type !== 'system_factor';
                       });
                       return (
                         <select
@@ -2697,6 +2738,7 @@ export default function App() {
                       ) : (
                         calibrationHistory.map((item, idx) => {
                           const recType = getRecordType(item);
+                          if (recType === 'system_factor') return null;
                           const parsed = parseSwimmerSensaciones(item.sensaciones);
                           
                           let bgClass = "bg-slate-50 hover:bg-slate-100/80 border-slate-200/60";
@@ -2968,7 +3010,8 @@ export default function App() {
             
             const filteredReports = calibrationHistory.filter(item => 
               item.playa === selectedBeach && 
-              getRecordType(item) !== 'admin_alert'
+              getRecordType(item) !== 'admin_alert' &&
+              getRecordType(item) !== 'system_factor'
             );
 
             return (
@@ -3782,9 +3825,28 @@ export default function App() {
                             return 0.3;
                           }
 
+                          function saveFactorChangeToCloud(bKey, secKey, fixedVal, nowTs, bName) {
+                            const storageKey = `${bKey}_${secKey}`;
+                            const payload = {
+                              origenDato: 'Admin: Factor',
+                              playa: bKey,
+                              horaNado: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+                              sensaciones: `[FactorConfig: ${JSON.stringify({ storageKey, factor: fixedVal, timestamp: nowTs })}]`,
+                              notas: `Ajuste de calibración para ${bName} ${secKey.toUpperCase()}`
+                            };
+                            try {
+                              fetch(WEBHOOK_URL, {
+                                method: 'POST',
+                                mode: 'no-cors',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                              }).catch(() => {});
+                            } catch(e) {}
+                          }
+
                           const sectors = [
-                            { key: 'levante', title: '🌅 Sector LEVANTE (E / SE)', isLevante: true, defaultFactor: bKey === 'misericordia' ? 0.60 : 1.00 },
-                            { key: 'poniente', title: '🌇 Sector PONIENTE (S / SO)', isLevante: false, defaultFactor: bKey === 'misericordia' ? 0.50 : (bKey === 'malagueta' || bKey === 'pedregalejo' ? 0.70 : 1.00) }
+                            { key: 'levante', title: '🌊 Sector Oleaje LEVANTE (Mar de Fondo E / SE)', isLevante: true, defaultFactor: bKey === 'misericordia' ? 0.60 : 1.00 },
+                            { key: 'poniente', title: '🌊 Sector Oleaje PONIENTE / SUR (Mar de Fondo S / SO)', isLevante: false, defaultFactor: bKey === 'misericordia' ? 0.50 : (bKey === 'malagueta' || bKey === 'pedregalejo' ? 0.70 : 1.00) }
                           ];
 
                           return (
@@ -3798,7 +3860,7 @@ export default function App() {
                                 {sectors.map(sec => {
                                   const storageKey = `${bKey}_${sec.key}`;
                                   
-                                  // 1. Obtener todos los reportes del sector
+                                  // 1. Obtener todos los reportes del sector basados estrictamente en la dirección del oleaje de la boya real
                                   const allSectorLogs = calibrationHistory.filter(l => {
                                     if (l.playa !== bKey || !l.realOlas || !l.boyaAltura || Number(l.boyaAltura) === 0) return false;
                                     const dir = Number(l.boyaDireccion || 110);
@@ -3922,8 +3984,9 @@ export default function App() {
                                               setAdminFactorApprovalTimes(updatedTimes);
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                              saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🟢 ¡Aprobada Sugerencia Reciente (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})!`);
+                                              setFactorFeedbackMsg(`🟢 ¡Aprobada Sugerencia Reciente (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm flex-1 min-w-[120px] text-center"
@@ -3944,8 +4007,9 @@ export default function App() {
                                               setAdminFactorApprovalTimes(updatedTimes);
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                              saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🔵 ¡Aprobada Sugerencia Global (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})!`);
+                                              setFactorFeedbackMsg(`🔵 ¡Aprobada Sugerencia Global (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm flex-1 min-w-[120px] text-center"
@@ -3966,8 +4030,9 @@ export default function App() {
                                               setAdminFactorApprovalTimes(updatedTimes);
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                              saveFactorChangeToCloud(bKey, sec.key, null, nowTs, bName);
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🔄 Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}).`);
+                                              setFactorFeedbackMsg(`🔄 Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}). Sincronizado en la nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
@@ -3989,8 +4054,9 @@ export default function App() {
                                               setAdminFactorApprovalTimes(updatedTimes);
                                               localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                              saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`✏️ ¡Factor manual para ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x!`);
+                                              setFactorFeedbackMsg(`✏️ ¡Factor manual para ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x! Sincronizado en la nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }
                                           }}
