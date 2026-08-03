@@ -2955,6 +2955,7 @@ export default function App() {
                       ) : (
                         calibrationHistory.map((item, idx) => {
                           const recType = getRecordType(item);
+                          if (recType === 'system_factor') return null;
                           const parsed = parseSwimmerSensaciones(item.sensaciones);
                           let bgClass = "bg-slate-50 hover:bg-slate-100/80 border-slate-200/60";
                           let typeBadge = null;
