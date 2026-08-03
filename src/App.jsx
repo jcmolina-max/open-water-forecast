@@ -930,12 +930,13 @@ export default function App() {
         for (let d = 0; d < dayOffsets.length; d++) {
           const offset = dayOffsets[d];
           
-          const baseIndex = (offset + 2) * 24; 
-          const startIndex = baseIndex + 6;
-          const endIndex = baseIndex + 21;
+          const weatherBaseIndex = (offset + 2) * 24; 
+          const marineBaseIndex = (offset + 14) * 24; 
+          const startIndex = weatherBaseIndex + 6;
+          const endIndex = weatherBaseIndex + 21;
 
           // ----- CÁLCULO DE TEMPERATURA DEL AGUA (Predicción + Boya Real) -----
-          const noonIndex = baseIndex + 12;
+          const noonIndex = marineBaseIndex + 12;
           const sstNoon = marineJson?.hourly?.sea_surface_temperature?.[noonIndex];
           const predictedWaterTemp =
             sstNoon !== undefined && sstNoon !== null && !Number.isNaN(Number(sstNoon))
@@ -947,7 +948,7 @@ export default function App() {
           // ----- CÁLCULO DE CALIDAD DEL AGUA (Aguas Sucias) -----
           let rainSum = 0;
           if (!localClimateDown && weatherJson?.hourly?.precipitation) {
-              for (let k = baseIndex - 24; k <= baseIndex + 21; k++) {
+              for (let k = weatherBaseIndex - 24; k <= weatherBaseIndex + 21; k++) {
                   if (k >= 0 && k < weatherJson.hourly.precipitation.length) {
                       rainSum += weatherJson.hourly.precipitation[k] || 0;
                   }
@@ -979,7 +980,7 @@ export default function App() {
           // ----- DETECCION DE MAREAS DEL DIA (24 HORAS DE ESTE OFFSET) -----
           let dayTides = [];
           for (let hourOffset = 0; hourOffset < 24; hourOffset++) {
-            const idx = baseIndex + hourOffset;
+            const idx = marineBaseIndex + hourOffset;
             const val = marineJson?.hourly?.sea_level_height_msl?.[idx];
             const valNum = val !== undefined && val !== null ? Number(val) : 0.0;
             dayTides.push({ time: `${hourOffset.toString().padStart(2, '0')}:00`, height: valNum });
@@ -988,8 +989,8 @@ export default function App() {
           let detectedTides = [];
           for (let j = 0; j < 24; j++) {
             const curr = dayTides[j].height;
-            const prev = j > 0 ? dayTides[j - 1].height : (marineJson?.hourly?.sea_level_height_msl?.[baseIndex - 1] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex - 1]) : curr);
-            const next = j < 23 ? dayTides[j + 1].height : (marineJson?.hourly?.sea_level_height_msl?.[baseIndex + 24] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex + 24]) : curr);
+            const prev = j > 0 ? dayTides[j - 1].height : (marineJson?.hourly?.sea_level_height_msl?.[marineBaseIndex - 1] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[marineBaseIndex - 1]) : curr);
+            const next = j < 23 ? dayTides[j + 1].height : (marineJson?.hourly?.sea_level_height_msl?.[marineBaseIndex + 24] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[marineBaseIndex + 24]) : curr);
 
             const isPeak = curr >= prev && curr >= next && (curr > prev || curr > next);
             const isTrough = curr <= prev && curr <= next && (curr < prev || curr < next);
@@ -1009,8 +1010,8 @@ export default function App() {
 
           let tideState = "Marea Parada (Estacionaria) ⏸️";
           if (offset === 0) {
-            const currentHourVal = marineJson?.hourly?.sea_level_height_msl?.[baseIndex + currentSystemHour] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex + currentSystemHour]) : 0;
-            const nextHourVal = marineJson?.hourly?.sea_level_height_msl?.[baseIndex + ((currentSystemHour + 1) % 24)] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[baseIndex + ((currentSystemHour + 1) % 24)]) : currentHourVal;
+            const currentHourVal = marineJson?.hourly?.sea_level_height_msl?.[marineBaseIndex + currentSystemHour] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[marineBaseIndex + currentSystemHour]) : 0;
+            const nextHourVal = marineJson?.hourly?.sea_level_height_msl?.[marineBaseIndex + ((currentSystemHour + 1) % 24)] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[marineBaseIndex + ((currentSystemHour + 1) % 24)]) : currentHourVal;
             const diff = nextHourVal - currentHourVal;
             if (diff > 0.01) {
               tideState = "Subiendo (Llenante) 📈";
@@ -1036,8 +1037,8 @@ export default function App() {
           let hasStormRiskToday = false;
           // 🚀 MOTOR DOBLE DESACOPLADO: Factor de Sesgo del Satélite (F_sesgo) & Factor de Refracción (F_refraccion)
           let todaySatHeights = [];
-          const todayBaseStart = baseIndex + 6;
-          const todayBaseEnd = baseIndex + 21;
+          const todayBaseStart = marineBaseIndex + 6;
+          const todayBaseEnd = marineBaseIndex + 21;
           for (let k = todayBaseStart; k <= todayBaseEnd; k++) {
             const rawH = marineJson?.hourly?.wave_height_marine_best_match?.[k] ?? marineJson?.hourly?.wave_height?.[k];
             if (rawH != null) {
@@ -1059,15 +1060,17 @@ export default function App() {
           const waveArr = marineJson?.hourly?.wave_height_marine_best_match || marineJson?.hourly?.wave_height;
 
           for (let i = startIndex; i <= endIndex; i++) {
-            if (!waveArr || i >= waveArr.length) break;
+            if (!waveArr) break;
+            const marineI = marineBaseIndex + (i % 24);
+            if (marineI >= waveArr.length) break;
 
-            const waveHeightStr = waveArr[i];
+            const waveHeightStr = waveArr[marineI];
             const waveHeight = waveHeightStr !== null && waveHeightStr !== undefined ? Number(waveHeightStr) : 0.1;
-            const period = marineJson.hourly?.wave_period?.[i] || 4;
-            const waveDir = marineJson.hourly?.wave_direction?.[i];
+            const period = marineJson.hourly?.wave_period?.[marineI] || 4;
+            const waveDir = marineJson.hourly?.wave_direction?.[marineI];
             
             const displayHour = i % 24;
-            const hourSeaLevel = marineJson?.hourly?.sea_level_height_msl?.[i] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[i]) : 0.0;
+            const hourSeaLevel = marineJson?.hourly?.sea_level_height_msl?.[marineI] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[marineI]) : 0.0;
             const isHighTideHour = hourSeaLevel >= (dailyMaxSeaLevel - 0.08);
             const windKmh = localClimateDown ? 0 : (weatherJson?.hourly?.wind_speed_10m?.[i] || 0);
             let windKnots = Math.round(windKmh / 1.852);
