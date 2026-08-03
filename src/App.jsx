@@ -4051,14 +4051,23 @@ export default function App() {
 
                                   const totalLogsCount = allSectorLogs.length;
 
+                                  // Helper para obtener la previsión del satélite bruto registrada a la hora del nado
+                                  function getLogSatHeight(l) {
+                                    const satH = parseFloat((l.modelEcmwfOlas || l.appOlas || "").toString().replace(",", "."));
+                                    if (!isNaN(satH) && satH > 0) return satH;
+                                    const buoyInfo = getBuoyReadingForLog(l);
+                                    const bH = parseFloat((buoyInfo.height || "").toString().replace(",", "."));
+                                    if (!isNaN(bH) && bH > 0) return bH;
+                                    return 0.36;
+                                  }
+
                                   // A) CALCULO HISTÓRICO GLOBAL (Todos los reportes con filtro anti-outliers ±1.5σ)
                                   let suggestedGlobalFactor = null;
                                   let cleanGlobalCount = 0;
                                   if (totalLogsCount >= 5) {
                                     const allRatios = allSectorLogs.map(l => {
-                                      const buoyData = getBuoyReadingForLog(l);
-                                      return scaleToMeters(l.realOlas) / Number(buoyData.height);
-                                    });
+                                      return scaleToMeters(l.realOlas) / getLogSatHeight(l);
+                                    }).filter(r => !isNaN(r) && isFinite(r) && r > 0);
                                     const cleanRatios = filterOutliers(allRatios);
                                     cleanGlobalCount = cleanRatios.length;
                                     const sumGlobal = cleanRatios.reduce((a, b) => a + b, 0);
@@ -4082,9 +4091,8 @@ export default function App() {
                                   let suggestedRecentFactor = null;
                                   if (countRecent >= 5) {
                                     const recentRatios = recentLogs.map(l => {
-                                      const buoyData = getBuoyReadingForLog(l);
-                                      return scaleToMeters(l.realOlas) / Number(buoyData.height);
-                                    });
+                                      return scaleToMeters(l.realOlas) / getLogSatHeight(l);
+                                    }).filter(r => !isNaN(r) && isFinite(r) && r > 0);
                                     const cleanRecentRatios = filterOutliers(recentRatios);
                                     const sumRecent = cleanRecentRatios.reduce((a, b) => a + b, 0);
                                     suggestedRecentFactor = Math.max(0.1, Math.min(1.5, sumRecent / cleanRecentRatios.length));
