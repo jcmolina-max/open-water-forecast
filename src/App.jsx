@@ -656,6 +656,18 @@ export default function App() {
   function getBuoyReadingForLog(log) {
     if (!log) return { height: null, period: null, dir: null };
 
+    const hourIdx = parseInt((log.horaNado || "12").split(":")[0], 10);
+    const fallbackSwellDir = (currentDayData && currentDayData.hourly && currentDayData.hourly[hourIdx])
+      ? currentDayData.hourly[hourIdx].swellDir
+      : (currentDayData && currentDayData.hourly && currentDayData.hourly[0] ? currentDayData.hourly[0].swellDir : null);
+
+    function cleanDir(raw) {
+      if (raw === undefined || raw === null || raw === "") return fallbackSwellDir;
+      const num = Number(raw);
+      if (isNaN(num) || num === 110) return fallbackSwellDir;
+      return num;
+    }
+
     // 1. Buscar en calibrationHistory un registro de 'Boya: Sincronización' del MISMO DÍA y a la HORA MÁS CERCANA del nado
     const logDateTs = parseLogTimestamp(log);
 
@@ -685,7 +697,7 @@ export default function App() {
       return {
         height: parseFloat((closestBuoyLog.boyaAltura || "").toString().replace(",", ".")).toFixed(2),
         period: formatBoyaPeriod(closestBuoyLog.boyaPeriodo),
-        dir: closestBuoyLog.boyaDireccion || null
+        dir: cleanDir(closestBuoyLog.boyaDireccion)
       };
     }
 
@@ -696,7 +708,7 @@ export default function App() {
       return {
         height: parseFloat(rawH).toFixed(2),
         period: formatBoyaPeriod(log.boyaPeriodo),
-        dir: log.boyaDireccion || null
+        dir: cleanDir(log.boyaDireccion)
       };
     }
 
@@ -704,7 +716,7 @@ export default function App() {
     return {
       height: log.modelEcmwfOlas ? parseFloat(log.modelEcmwfOlas.toString().replace(",", ".")).toFixed(2) : null,
       period: formatBoyaPeriod(log.boyaPeriodo),
-      dir: log.boyaDireccion || null
+      dir: cleanDir(log.boyaDireccion)
     };
   }
 
@@ -745,10 +757,11 @@ export default function App() {
 
     const relevantLogs = calibrationHistory.filter(log => {
       if (log.playa !== beachKey) return false;
-      if (!log.boyaAltura || Number(log.boyaAltura) === 0) return false;
+      const buoyInfo = getBuoyReadingForLog(log);
+      if (!buoyInfo.height || Number(buoyInfo.height) === 0) return false;
       if (!log.realOlas || log.realOlas === "") return false;
       
-      const logDir = Number(log.boyaDireccion || 110);
+      const logDir = Number(buoyInfo.dir || 110);
       const logIsLevante = logDir >= 45 && logDir <= 165;
       return logIsLevante === isLevante; // Solo reportes del mismo sector de viento
     });
