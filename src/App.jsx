@@ -1558,6 +1558,16 @@ export default function App() {
           setAdminFactorApprovalTimes(cloudTimes);
           localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(cloudFactors));
           localStorage.setItem('openwater_admin_approval_times', JSON.stringify(cloudTimes));
+        } else {
+          // Mantener y preservar siempre los factores aprobados en el almacenamiento local para evitar rebotes a 0.50x
+          try {
+            const savedLocalFactors = JSON.parse(localStorage.getItem('openwater_admin_scale_factors') || '{}');
+            const savedLocalTimes = JSON.parse(localStorage.getItem('openwater_admin_approval_times') || '{}');
+            const mergedFactors = { ...cloudFactors, ...savedLocalFactors };
+            const mergedTimes = { ...cloudTimes, ...savedLocalTimes };
+            setAdminManualScaleFactors(mergedFactors);
+            setAdminFactorApprovalTimes(mergedTimes);
+          } catch(e) {}
         }
       } else {
         console.error("Error reading sheets history:", json.message);
@@ -4146,6 +4156,24 @@ export default function App() {
                                       <div className="flex justify-between items-center text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
                                         <span className="text-slate-500 font-medium">Activo en Web:</span>
                                         <strong className="text-indigo-600 font-black text-sm">{Number(activeFactor).toFixed(2)}x {isOverridden ? '(Fijo)' : '(Default)'}</strong>
+                                      </div>
+
+                                      {/* DESGLOSE TRANSPARENTE DE LOS 2 FACTORES DESACOPLADOS */}
+                                      <div className="grid grid-cols-2 gap-2 text-[10px] bg-purple-50/50 p-2 rounded-xl border border-purple-100/80">
+                                        <div>
+                                          <span className="block text-purple-900 font-extrabold uppercase text-[9px]">🛰️ Sesgo Satélite (F_sesgo)</span>
+                                          <strong className="text-purple-700 font-black text-xs">
+                                            {latestBuoyHeight && parseFloat(latestBuoyHeight) > 0 ? `${(parseFloat(latestBuoyHeight) / 0.24).toFixed(2)}x` : '1.00x'}
+                                          </strong>
+                                          <span className="block text-[8px] text-purple-500 font-medium">Boya Real / Satélite</span>
+                                        </div>
+                                        <div>
+                                          <span className="block text-emerald-900 font-extrabold uppercase text-[9px]">⚓ Refracción Costera (F_boya)</span>
+                                          <strong className="text-emerald-700 font-black text-xs">
+                                            {suggestedRecentFactor !== null ? `${suggestedRecentFactor.toFixed(2)}x` : `${Number(sec.defaultFactor).toFixed(2)}x`}
+                                          </strong>
+                                          <span className="block text-[8px] text-emerald-600 font-medium">Nadadores / Boya Real</span>
+                                        </div>
                                       </div>
 
                                       {/* SECCIÓN COMPARATIVA DE SUGERENCIAS DUALES CON FILTRO ANTI-RUIDO */}
