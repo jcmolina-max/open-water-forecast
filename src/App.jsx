@@ -1663,7 +1663,7 @@ export default function App() {
       notasCalibracion: adminIsAlert ? `[ALERTA_OFICIAL] ${adminNotas}` : adminNotas,
       boyaAltura: adminBoyaAltura || (latestBuoyHeight ? latestBuoyHeight : (ecmwfVal || "")), 
       boyaPeriodo: adminBoyaPeriodo || (latestBuoyPeriod || ""),
-      boyaDireccion: adminBoyaDireccion || (latestBuoyDir ? latestBuoyDir : (hourForecast && hourForecast.swellDir ? hourForecast.swellDir : "110")),
+      boyaDireccion: adminBoyaDireccion || ((latestBuoyDir && Number(latestBuoyDir) !== 110) ? latestBuoyDir : (hourForecast && hourForecast.swellDir ? hourForecast.swellDir : "")),
       boyaTemp: adminBoyaTemp || (latestBuoyTemp || ""),
       modelEcmwfOlas: ecmwfVal,
       modelGfsOlas: gfsVal,
@@ -1817,10 +1817,10 @@ export default function App() {
       appVientoNudos: "",
       appVientoDir: "",
       notasCalibracion: "Actualización forzada de boya real",
-      boyaAltura: "", 
-      boyaPeriodo: "",
-      boyaDireccion: "",
-      boyaTemp: "",
+      boyaAltura: latestBuoyHeight || "", 
+      boyaPeriodo: latestBuoyPeriod || "",
+      boyaDireccion: (latestBuoyDir && Number(latestBuoyDir) !== 110) ? String(latestBuoyDir) : (currentDayData && currentDayData.hourly && currentDayData.hourly[0] ? String(Math.round(currentDayData.hourly[0].swellDir)) : ""),
+      boyaTemp: latestBuoyTemp || "",
       modelEcmwfOlas: "",
       modelGfsOlas: "",
       modelTodoSurfOlas: ""
@@ -2955,7 +2955,10 @@ export default function App() {
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Dir</span>
                                     <span className="font-extrabold text-amber-600">
                                       {(() => {
-                                        const dirVal = (item.boyaDireccion && item.boyaDireccion !== "") ? item.boyaDireccion : (currentDayData && currentDayData.hourly && currentDayData.hourly[0] ? currentDayData.hourly[0].swellDir : null);
+                                        const rawDir = item.boyaDireccion;
+                                        const dirVal = (rawDir && Number(rawDir) !== 110)
+                                          ? rawDir
+                                          : (currentDayData && currentDayData.hourly && currentDayData.hourly[0] ? currentDayData.hourly[0].swellDir : null);
                                         return dirVal ? getWindDirection(dirVal) : '—';
                                       })()}
                                     </span>
