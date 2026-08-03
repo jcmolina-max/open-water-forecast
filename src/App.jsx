@@ -1007,6 +1007,7 @@ export default function App() {
           let eastWindCount = 0;
           let maxEastWind = 0;
           let validHoursCount = 0;
+          let hasStormRiskToday = false;
           // 🚀 MOTOR DOBLE DESACOPLADO: Factor de Sesgo del Satélite (F_sesgo) & Factor de Refracción (F_refraccion)
           let todaySatHeights = [];
           const todayBaseStart = baseIndex + 6;
