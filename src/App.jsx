@@ -2728,10 +2728,7 @@ export default function App() {
                     {(() => {
                       const calibrationLogsOnly = calibrationHistory.filter(item => {
                         const type = getRecordType(item);
-                        return item.realOlas && 
-                               item.realOlas !== "" && 
-                               type !== 'admin_alert' &&
-                               type !== 'system_factor';
+                        return type !== 'admin_alert' && type !== 'system_factor';
                       });
                       return (
                         <select
@@ -2745,7 +2742,7 @@ export default function App() {
                           <option value="">-- Seleccionar Sesión Guardada --</option>
                           {calibrationLogsOnly.map((item, idx) => (
                             <option key={idx} value={idx}>
-                              {new Date(item.fechaRegistro).toLocaleDateString('es-ES')} ({item.horaNado}) - {BEACHES[item.playa]?.name.split(',')[0]}
+                              {new Date(item.fechaRegistro || item.fecha || Date.now()).toLocaleDateString('es-ES')} ({item.horaNado || '12:00'}) - {BEACHES[item.playa]?.name.split(',')[0] || item.playa || 'Misericordia'}
                             </option>
                           ))}
                         </select>
@@ -3239,11 +3236,13 @@ export default function App() {
               getRecordType(item) === 'admin_alert'
             );
             
-            const filteredReports = calibrationHistory.filter(item => 
-              item.playa === selectedBeach && 
-              getRecordType(item) !== 'admin_alert' &&
-              getRecordType(item) !== 'system_factor'
-            );
+            const filteredReports = calibrationHistory.filter(item => {
+              const itemPlaya = (item.playa || '').toString().toLowerCase();
+              const targetPlaya = selectedBeach.toLowerCase();
+              const isBeachMatch = !item.playa || itemPlaya.includes(targetPlaya) || targetPlaya.includes(itemPlaya);
+              const type = getRecordType(item);
+              return isBeachMatch && type !== 'admin_alert' && type !== 'system_factor';
+            });
 
             return (
               <>
