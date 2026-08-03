@@ -1092,27 +1092,26 @@ export default function App() {
             const isThunderstorm = (wCode === 95 || wCode === 96 || wCode === 99);
             if (isThunderstorm) hasStormRiskToday = true;
 
-            // Ola Satélite de cada hora escalada por el Factor de Sesgo del Satélite (F_sesgo)
-            const waveScaledBySesgo = waveHeight * fSesgo;
-            let effectiveWaveHeight = waveScaledBySesgo;
+            // Ola Satélite de cada hora multiplicada por el Factor Activo del Sector (F_orilla)
+            let effectiveWaveHeight = waveHeight;
             let localRule = null;
             let ruleColor = "";
 
-            // Factor de Refracción Costera por Sector (F_refraccion = Nadadores Orilla / Boya Real)
+            // Dynamic Scale Factor por Sector (F_orilla)
             const scaleFactor = getBoyaScaleFactor(selectedBeach, waveDir);
             
             // Apply scale factor (Misericordia, Escudo de la Malagueta/Pedregalejo o factor directo de boya)
             if (isMisericordia) {
                 const isSouthWestWindStrong = (windDir >= 202.5 && windDir <= 247.5) && windKnots >= 15;
                 if (!isSouthWestWindStrong) {
-                    effectiveWaveHeight = waveScaledBySesgo * scaleFactor;
+                    effectiveWaveHeight = waveHeight * scaleFactor;
                 }
             } else if ((selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') && waveDir >= 200 && waveDir <= 300) {
-                effectiveWaveHeight = waveScaledBySesgo * scaleFactor;
+                effectiveWaveHeight = waveHeight * scaleFactor;
                 localRule = "Escudo Activo";
                 ruleColor = "text-indigo-500";
             } else {
-                effectiveWaveHeight = waveScaledBySesgo * scaleFactor;
+                effectiveWaveHeight = waveHeight * scaleFactor;
             }
             
             let driftInfo = { icon: "⏺️", color: "text-slate-400", short: "Nula" };
@@ -4271,6 +4270,29 @@ export default function App() {
 
                                       {/* BOTONES DE ACCIÓN */}
                                       <div className="flex items-center justify-between gap-1.5 pt-1 flex-wrap">
+                                        {suggestedGlobalFactor !== null && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const fixedVal = parseFloat(suggestedGlobalFactor.toFixed(2));
+                                              const nowTs = Date.now();
+                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                              setAdminManualScaleFactors(updated);
+                                              setAdminFactorApprovalTimes(updatedTimes);
+                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                              saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
+                                              setDataRefreshKey(k => k + 1);
+                                              setFactorFeedbackMsg(`🟢 ¡Aprobada Media General (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Preservada en navegador y nube.`);
+                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                            }}
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold transition-all shadow-sm flex-1 min-w-[140px] text-center"
+                                          >
+                                            🟢 Aprobar Media General ({suggestedGlobalFactor.toFixed(2)}x)
+                                          </button>
+                                        )}
+
                                         {suggestedRecentFactor !== null && (
                                           <button
                                             type="button"
