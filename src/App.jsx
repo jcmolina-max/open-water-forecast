@@ -1552,11 +1552,18 @@ export default function App() {
           setTotalVisits(Number(json.visitasTotales));
         }
 
-        // Sincronización en la Nube: Extraer marcas de tiempo y factores guardados por el supervisor desde Google Sheets
-        const cloudFactors = { ...adminManualScaleFactors };
-        const cloudTimes = { ...adminFactorApprovalTimes };
-        let hasCloudUpdates = false;
+        // 1. Cargar factores y marcas de tiempo locales guardadas en localStorage
+        let localFactors = {};
+        let localTimes = {};
+        try {
+          localFactors = JSON.parse(localStorage.getItem('openwater_admin_scale_factors') || '{}');
+          localTimes = JSON.parse(localStorage.getItem('openwater_admin_approval_times') || '{}');
+        } catch (e) {}
 
+        const mergedFactors = { ...localFactors };
+        const mergedTimes = { ...localTimes };
+
+        // 2. Extraer marcas de tiempo y factores guardados por el supervisor desde Google Sheets
         fetchedLogs.forEach(item => {
           if (item.origenDato === 'Admin: Factor' || (item.sensaciones && item.sensaciones.startsWith('[FactorConfig:'))) {
             try {
@@ -1564,37 +1571,25 @@ export default function App() {
               if (match && match[1]) {
                 const parsed = JSON.parse(match[1]);
                 if (parsed.storageKey) {
-                  if (parsed.factor !== undefined && parsed.factor !== null) {
-                    cloudFactors[parsed.storageKey] = parsed.factor;
-                  } else {
-                    delete cloudFactors[parsed.storageKey];
+                  const cloudTs = Number(parsed.timestamp || 0);
+                  const localTs = Number(localTimes[parsed.storageKey] || 0);
+                  // Solo aceptar la actualización de la nube si es más reciente o igual a la marca de tiempo local
+                  if (cloudTs >= localTs) {
+                    if (parsed.factor !== undefined && parsed.factor !== null) {
+                      mergedFactors[parsed.storageKey] = parsed.factor;
+                      mergedTimes[parsed.storageKey] = cloudTs;
+                    }
                   }
-                  if (parsed.timestamp) {
-                    cloudTimes[parsed.storageKey] = parsed.timestamp;
-                  }
-                  hasCloudUpdates = true;
                 }
               }
             } catch (e) {}
           }
         });
 
-        if (hasCloudUpdates) {
-          setAdminManualScaleFactors(cloudFactors);
-          setAdminFactorApprovalTimes(cloudTimes);
-          localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(cloudFactors));
-          localStorage.setItem('openwater_admin_approval_times', JSON.stringify(cloudTimes));
-        } else {
-          // Mantener y preservar siempre los factores aprobados en el almacenamiento local para evitar rebotes a 0.50x
-          try {
-            const savedLocalFactors = JSON.parse(localStorage.getItem('openwater_admin_scale_factors') || '{}');
-            const savedLocalTimes = JSON.parse(localStorage.getItem('openwater_admin_approval_times') || '{}');
-            const mergedFactors = { ...cloudFactors, ...savedLocalFactors };
-            const mergedTimes = { ...cloudTimes, ...savedLocalTimes };
-            setAdminManualScaleFactors(mergedFactors);
-            setAdminFactorApprovalTimes(mergedTimes);
-          } catch(e) {}
-        }
+        setAdminManualScaleFactors(mergedFactors);
+        setAdminFactorApprovalTimes(mergedTimes);
+        localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(mergedFactors));
+        localStorage.setItem('openwater_admin_approval_times', JSON.stringify(mergedTimes));
       } else {
         console.error("Error reading sheets history:", json.message);
       }
@@ -4207,6 +4202,31 @@ export default function App() {
                                           <span className="block text-[8px] text-emerald-600 font-medium">Nadadores / Boya Real</span>
                                         </div>
                                       </div>
+
+                                      {/* CUADRO MORADO: FACTOR COMBINADO FINAL PARA MAÑANA Y PASADO */}
+                                      {(() => {
+                                        const fSesgoVal = getSectorSesgoFactor(bKey, sec.isLevante);
+                                        const fRefraccionVal = Number(activeFactor);
+                                        const fCombinadoFuturo = fSesgoVal * fRefraccionVal;
+                                        const estOrillaFutura = 0.24 * fCombinadoFuturo;
+
+                                        return (
+                                          <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-2.5 rounded-xl border border-purple-700 shadow-sm space-y-1">
+                                            <div className="flex justify-between items-center text-[10px] font-black uppercase text-purple-200 tracking-wider">
+                                              <span>🔮 Factor Combinado Final (Mañana / Pasado)</span>
+                                              <span className="bg-amber-400 text-purple-950 px-2 py-0.5 rounded-full font-black text-xs shadow-sm">
+                                                {fCombinadoFuturo.toFixed(2)}x
+                                              </span>
+                                            </div>
+                                            <p className="text-[9px] text-purple-200 leading-tight">
+                                              Fórmula: <strong>Satélite (0.24m)</strong> × <strong>Sesgo ({fSesgoVal.toFixed(2)}x)</strong> × <strong>Refracción Orilla ({fRefraccionVal.toFixed(2)}x)</strong>
+                                            </p>
+                                            <div className="text-[10px] font-extrabold text-amber-300 pt-0.5">
+                                              🌊 Estimación esperada en la Orilla a las 07:00h: {estOrillaFutura.toFixed(2)}m
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
 
                                       {/* SECCIÓN COMPARATIVA DE SUGERENCIAS DUALES CON FILTRO ANTI-RUIDO */}
                                       <div className="bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-100/70 space-y-2">
