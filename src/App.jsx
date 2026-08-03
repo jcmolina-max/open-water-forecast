@@ -4169,7 +4169,8 @@ export default function App() {
 
                                   const isOverridden = adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null;
                                   const activeFactor = isOverridden ? adminManualScaleFactors[storageKey] : sec.defaultFactor;
-return (
+
+                                  return (
                                     <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2.5">
                                       <div className="flex justify-between items-center text-xs">
                                         <strong className="text-slate-800 font-extrabold">{sec.title}</strong>
@@ -4184,53 +4185,6 @@ return (
                                           {Number(activeFactor).toFixed(2)}x {isOverridden ? '🔒 (Aprobado Admin)' : '(Default Fábrica)'}
                                         </strong>
                                       </div>
-
-                                      {/* DESGLOSE TRANSPARENTE DE LOS 2 FACTORES DESACOPLADOS POR SECTOR */}
-                                      <div className="grid grid-cols-2 gap-2 text-[10px] bg-purple-50/50 p-2 rounded-xl border border-purple-100/80">
-                                        <div>
-                                          <div className="flex justify-between items-center">
-                                            <span className="block text-purple-900 font-extrabold uppercase text-[9px]">🛰️ Sesgo Satélite (F_sesgo)</span>
-                                          </div>
-                                          <strong className="text-purple-700 font-black text-xs">
-                                            {getSectorSesgoFactor(bKey, sec.isLevante).toFixed(2)}x
-                                          </strong>
-                                          <span className="block text-[8px] text-purple-500 font-medium">Boya Real / Satélite</span>
-                                        </div>
-                                        <div>
-                                          <div className="flex justify-between items-center">
-                                            <span className="block text-emerald-900 font-extrabold uppercase text-[9px]">⚓ Refracción Orilla (F_boya)</span>
-                                          </div>
-                                          <strong className="text-emerald-700 font-black text-xs">
-                                            {Number(activeFactor).toFixed(2)}x
-                                          </strong>
-                                          <span className="block text-[8px] text-emerald-600 font-medium">Nadadores / Boya Real</span>
-                                        </div>
-                                      </div>
-
-                                      {/* CUADRO MORADO: FACTOR COMBINADO FINAL PARA MAÑANA Y PASADO */}
-                                      {(() => {
-                                        const fSesgoVal = getSectorSesgoFactor(bKey, sec.isLevante);
-                                        const fRefraccionVal = Number(activeFactor);
-                                        const fCombinadoFuturo = fSesgoVal * fRefraccionVal;
-                                        const estOrillaFutura = 0.24 * fCombinadoFuturo;
-
-                                        return (
-                                          <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-2.5 rounded-xl border border-purple-700 shadow-sm space-y-1">
-                                            <div className="flex justify-between items-center text-[10px] font-black uppercase text-purple-200 tracking-wider">
-                                              <span>🔮 Factor Combinado Final (Mañana / Pasado)</span>
-                                              <span className="bg-amber-400 text-purple-950 px-2 py-0.5 rounded-full font-black text-xs shadow-sm">
-                                                {fCombinadoFuturo.toFixed(2)}x
-                                              </span>
-                                            </div>
-                                            <p className="text-[9px] text-purple-200 leading-tight">
-                                              Fórmula: <strong>Satélite (0.24m)</strong> × <strong>Sesgo ({fSesgoVal.toFixed(2)}x)</strong> × <strong>Refracción Orilla ({fRefraccionVal.toFixed(2)}x)</strong>
-                                            </p>
-                                            <div className="text-[10px] font-extrabold text-amber-300 pt-0.5">
-                                              🌊 Estimación esperada en la Orilla a las 07:00h: {estOrillaFutura.toFixed(2)}m
-                                            </div>
-                                          </div>
-                                        );
-                                      })()}
 
                                       {/* SECCIÓN COMPARATIVA DE SUGERENCIAS DUALES CON FILTRO ANTI-RUIDO */}
                                       <div className="bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-100/70 space-y-2">
