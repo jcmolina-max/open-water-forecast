@@ -1048,7 +1048,7 @@ export default function App() {
 
             // 🚀 IDEA 3: Conmutación Automática "Hoy en Vivo" vs "Mañana Futuro"
             const buoyRealH = latestBuoyHeight ? parseFloat(latestBuoyHeight) : null;
-            const isToday = (dayOffset === 0);
+            const isToday = (offset === 0);
             
             // Factor de Sesgo del Satélite (F_modelo = Boya Real / Satélite Bruto)
             let fModelo = 1.0;
