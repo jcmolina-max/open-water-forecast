@@ -656,15 +656,51 @@ export default function App() {
   function getBuoyReadingForLog(log) {
     if (!log) return { height: null, period: null, dir: null };
 
-    const hourIdx = parseInt((log.horaNado || "12").split(":")[0], 10);
-    const fallbackSwellDir = (currentDayData && currentDayData.hourly && currentDayData.hourly[hourIdx])
-      ? currentDayData.hourly[hourIdx].swellDir
-      : (currentDayData && currentDayData.hourly && currentDayData.hourly[0] ? currentDayData.hourly[0].swellDir : null);
+    // 1. Resolver dirección de oleaje histórica por la fecha y hora exacta del nado (Idea 3)
+    let historicalSwellDir = null;
+
+    // 1. PASO 1 (Prioridad Máxima): Buscar en el mapa satelital marino histórico (marineJson) por la fecha y hora exacta del nado
+    if (marineJson && marineJson.hourly && marineJson.hourly.time) {
+      const logTs = parseLogTimestamp(log);
+      if (logTs > 0) {
+        const dObj = new Date(logTs);
+        const yyyy = dObj.getFullYear();
+        const mm = String(dObj.getMonth() + 1).padStart(2, '0');
+        const dd = String(dObj.getDate()).padStart(2, '0');
+        const hh = (log.horaNado || "12").split(":")[0].padStart(2, '0');
+        const targetIsoTime = `${yyyy}-${mm}-${dd}T${hh}:00`;
+        const matchedIdx = marineJson.hourly.time.findIndex(t => t.startsWith(targetIsoTime));
+        if (matchedIdx !== -1 && marineJson.hourly.wave_direction?.[matchedIdx] != null) {
+          historicalSwellDir = marineJson.hourly.wave_direction[matchedIdx];
+        }
+      }
+    }
+
+    // 2. PASO 2: Si el satélite marino no tuviera dato para esa fecha, consultar la dirección de viento del formulario (realVientoDir)
+    if (!historicalSwellDir && log.realVientoDir && log.realVientoDir !== "") {
+      const vUpper = String(log.realVientoDir).toUpperCase().trim();
+      if (vUpper === "E" || vUpper === "LEVANTE") historicalSwellDir = 90;
+      else if (vUpper === "SE" || vUpper === "SUDESTE") historicalSwellDir = 135;
+      else if (vUpper === "ENE") historicalSwellDir = 67.5;
+      else if (vUpper === "ESE") historicalSwellDir = 112.5;
+      else if (vUpper === "S" || vUpper === "SUR") historicalSwellDir = 180;
+      else if (vUpper === "SO" || vUpper === "SW" || vUpper === "SUDOESTE" || vUpper === "PONIENTE") historicalSwellDir = 225;
+      else if (vUpper === "O" || vUpper === "W" || vUpper === "OESTE") historicalSwellDir = 270;
+      else if (vUpper === "NO" || vUpper === "NW" || vUpper === "NOROESTE") historicalSwellDir = 315;
+      else if (vUpper === "N" || vUpper === "NORTE") historicalSwellDir = 0;
+    }
+
+    // 3. PASO 3: Fallback de seguridad para nados anteriores a agosto sin boya ni satélite ni viento: 110º (Levante)
+    if (!historicalSwellDir) {
+      const logTs = parseLogTimestamp(log);
+      const isBeforeAug3 = logTs > 0 && logTs < new Date("2026-08-03T00:00:00").getTime();
+      historicalSwellDir = isBeforeAug3 ? 110 : ((currentDayData && currentDayData.hourly && currentDayData.hourly[0]) ? currentDayData.hourly[0].swellDir : 110);
+    }
 
     function cleanDir(raw) {
-      if (raw === undefined || raw === null || raw === "") return fallbackSwellDir;
+      if (raw === undefined || raw === null || raw === "") return historicalSwellDir;
       const num = Number(raw);
-      if (isNaN(num) || num === 110) return fallbackSwellDir;
+      if (isNaN(num) || num === 110) return historicalSwellDir;
       return num;
     }
 
@@ -863,7 +899,7 @@ export default function App() {
 
       // 2. SATÉLITE MARINO
       try {
-        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,sea_level_height_msl&timezone=Europe%2FMadrid&past_days=2`);
+        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,sea_level_height_msl&timezone=Europe%2FMadrid&past_days=14`);
       } catch (e) {
          setErrorDetails({ general: `El satélite marino no responde: ${e.message}` });
          setIsLoading(false);
