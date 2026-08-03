@@ -722,13 +722,15 @@ export default function App() {
 
   // Helper para filtrar lecturas anómalas (outliers) utilizando filtro de banda ±1.5σ
   function filterOutliers(ratios) {
-    if (!ratios || ratios.length < 3) return ratios;
-    const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length;
-    const variance = ratios.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / ratios.length;
+    if (!ratios || ratios.length === 0) return [];
+    const valid = ratios.filter(r => typeof r === "number" && !isNaN(r) && isFinite(r) && r > 0);
+    if (valid.length < 3) return valid;
+    const mean = valid.reduce((a, b) => a + b, 0) / valid.length;
+    const variance = valid.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / valid.length;
     const stdDev = Math.sqrt(variance);
-    if (stdDev === 0) return ratios;
-    const filtered = ratios.filter(r => Math.abs(r - mean) <= 1.5 * stdDev);
-    return filtered.length > 0 ? filtered : ratios;
+    if (stdDev === 0) return valid;
+    const filtered = valid.filter(r => Math.abs(r - mean) <= 1.5 * stdDev);
+    return filtered.length > 0 ? filtered : valid;
   }
 
   // Dynamic Buoy Scale Factor por Sector (Levante 🌅 vs Poniente 🌇)
@@ -782,11 +784,19 @@ export default function App() {
       return 0.3;
     }
 
-    const ratios = recentLogs.map(log => scaleToMeters(log.realOlas) / Number(log.boyaAltura));
-    const cleanRatios = filterOutliers(ratios);
-    const sumRatio = cleanRatios.reduce((a, b) => a + b, 0);
+    const ratios = recentLogs.map(log => {
+      const buoyInfo = getBuoyReadingForLog(log);
+      const bH = buoyInfo.height ? Number(buoyInfo.height) : Number(log.boyaAltura || 0);
+      if (isNaN(bH) || bH <= 0) return null;
+      return scaleToMeters(log.realOlas) / bH;
+    }).filter(r => r !== null && !isNaN(r) && isFinite(r));
 
+    const cleanRatios = filterOutliers(ratios);
+    if (!cleanRatios || cleanRatios.length === 0) return defaultFactor;
+
+    const sumRatio = cleanRatios.reduce((a, b) => a + b, 0);
     const calculatedFactor = sumRatio / cleanRatios.length;
+    if (isNaN(calculatedFactor) || !isFinite(calculatedFactor)) return defaultFactor;
     return Math.max(0.1, Math.min(1.5, calculatedFactor));
   }
 
