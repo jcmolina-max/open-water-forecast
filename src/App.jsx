@@ -4169,8 +4169,7 @@ export default function App() {
 
                                   const isOverridden = adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null;
                                   const activeFactor = isOverridden ? adminManualScaleFactors[storageKey] : sec.defaultFactor;
-
-                                  return (
+return (
                                     <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2.5">
                                       <div className="flex justify-between items-center text-xs">
                                         <strong className="text-slate-800 font-extrabold">{sec.title}</strong>
@@ -4242,7 +4241,7 @@ export default function App() {
                                         {/* SUGERENCIA RECIENTE PROGRESIVA */}
                                         <div className="flex justify-between items-center text-xs pt-1">
                                           <div className="flex items-center gap-1.5">
-                                            <span className="text-emerald-700 font-bold">⚡ Reciente ({countRecent >= 5 ? 'Consolidado' : 'Progresivo'}):</span>
+                                            <span className="text-emerald-700 font-bold">⚡ Reciente ({countRecent >= 5 ? 'Consolidado' : 'Post-Ajuste'}):</span>
                                             <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${countRecent >= 5 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
                                               {countRecent}/5 nados
                                             </span>
@@ -4276,29 +4275,6 @@ export default function App() {
 
                                       {/* BOTONES DE ACCIÓN */}
                                       <div className="flex items-center justify-between gap-1.5 pt-1 flex-wrap">
-                                        {suggestedGlobalFactor !== null && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const fixedVal = parseFloat(suggestedGlobalFactor.toFixed(2));
-                                              const nowTs = Date.now();
-                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
-                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
-                                              setAdminManualScaleFactors(updated);
-                                              setAdminFactorApprovalTimes(updatedTimes);
-                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                              saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
-                                              setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🟢 ¡Aprobada Media General (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Preservada en navegador y nube.`);
-                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
-                                            }}
-                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold transition-all shadow-sm flex-1 min-w-[140px] text-center"
-                                          >
-                                            🟢 Aprobar Media General ({suggestedGlobalFactor.toFixed(2)}x)
-                                          </button>
-                                        )}
-
                                         {suggestedRecentFactor !== null && (
                                           <button
                                             type="button"
@@ -4313,13 +4289,12 @@ export default function App() {
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🟢 ¡Aprobado Factor Refracción Orilla (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Preservado en navegador y nube.`);
+                                              setFactorFeedbackMsg(`🟢 ¡Aprobado Factor Reciente (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
-                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm flex-1 min-w-[120px] text-center"
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm flex-1 min-w-[120px] text-center"
                                           >
-                                        )}
-                                            {countRecent >= 5 ? `🟢 Aprobar Consolidado (${suggestedRecentFactor.toFixed(2)}x)` : `⚡ Aprobar Progresivo (${suggestedRecentFactor.toFixed(2)}x)`}
+                                            {countRecent >= 5 ? `🟢 Aprobar Consolidado (${suggestedRecentFactor.toFixed(2)}x)` : `⚡ Aprobar Reciente (${suggestedRecentFactor.toFixed(2)}x)`}
                                           </button>
                                         )}
 
@@ -4340,7 +4315,7 @@ export default function App() {
                                               setFactorFeedbackMsg(`🔵 ¡Aprobada Sugerencia Global (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
-                                            className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm flex-1 min-w-[120px] text-center"
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm flex-1 min-w-[120px] text-center"
                                           >
                                             🔵 Aprobar Global ({suggestedGlobalFactor.toFixed(2)}x)
                                           </button>
@@ -4363,7 +4338,7 @@ export default function App() {
                                               setFactorFeedbackMsg(`🔄 Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}). Sincronizado en la nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
-                                            className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
+                                            className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
                                           >
                                             ↩ Reset ({sec.defaultFactor.toFixed(2)}x)
                                           </button>
