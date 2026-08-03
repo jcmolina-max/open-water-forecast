@@ -450,6 +450,15 @@ function formatSwimFriendly(dateVal, swimHour) {
   }
 };
 
+function formatBoyaPeriod(raw) {
+  if (!raw) return '—';
+  const str = String(raw).trim();
+  if (str.includes('T') || str.includes('Z') || str.length > 10) return '—';
+  const num = parseFloat(str.replace(',', '.'));
+  if (isNaN(num) || num <= 0 || num > 30) return '—';
+  return `${num.toFixed(1)}s`;
+}
+
 function getRecordType(item) {
   const orig = item.origenDato || "";
   const notes = item.notasCalibracion || "";
@@ -668,7 +677,7 @@ export default function App() {
     if (closestBuoyLog) {
       return {
         height: parseFloat((closestBuoyLog.boyaAltura || "").toString().replace(",", ".")).toFixed(2),
-        period: closestBuoyLog.boyaPeriodo || null,
+        period: formatBoyaPeriod(closestBuoyLog.boyaPeriodo),
         dir: closestBuoyLog.boyaDireccion || null
       };
     }
@@ -679,7 +688,7 @@ export default function App() {
     if (rawH && rawH !== appH && !isNaN(parseFloat(rawH)) && parseFloat(rawH) > 0) {
       return {
         height: parseFloat(rawH).toFixed(2),
-        period: log.boyaPeriodo || null,
+        period: formatBoyaPeriod(log.boyaPeriodo),
         dir: log.boyaDireccion || null
       };
     }
@@ -687,7 +696,7 @@ export default function App() {
     // 3. Fallback: modelo satélite ECMWF de esa hora
     return {
       height: log.modelEcmwfOlas ? parseFloat(log.modelEcmwfOlas.toString().replace(",", ".")).toFixed(2) : null,
-      period: log.boyaPeriodo || null,
+      period: formatBoyaPeriod(log.boyaPeriodo),
       dir: log.boyaDireccion || null
     };
   }
@@ -2752,9 +2761,11 @@ export default function App() {
                             <span className="text-[9px] text-slate-500 font-semibold mt-1">
                               {(() => {
                                 const buoyData = getBuoyReadingForLog(selectedHistoryLog);
-                                const dirText = buoyData.dir ? getWindDirection(buoyData.dir) : '';
-                                const periodText = buoyData.period ? ` (${buoyData.period}s)` : '';
-                                return `${dirText}${periodText}`.trim() || '—';
+                                const dirVal = buoyData.dir || selectedHistoryLog.boyaDireccion;
+                                const dirText = dirVal ? `${getWindDirection(dirVal)} (${Math.round(dirVal)}º)` : '';
+                                const periodText = (buoyData.period && buoyData.period !== '—') ? buoyData.period : '';
+                                if (dirText && periodText) return `${dirText} • ${periodText}`;
+                                return dirText || periodText || '—';
                               })()}
                             </span>
                           </div>
@@ -2920,18 +2931,24 @@ export default function App() {
                               </div>
 
                               {recType === 'buoy_sync' ? (
-                                <div className="grid grid-cols-3 gap-2 border-y border-blue-100/60 py-2 my-2 text-center text-xs">
+                                <div className="grid grid-cols-4 gap-1 border-y border-blue-100/60 py-2 my-2 text-center text-xs">
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Altura</span>
-                                    <span className="font-black text-blue-600">{item.boyaAltura ? `${item.boyaAltura}m` : '—'}</span>
+                                    <span className="font-black text-blue-600">{item.boyaAltura ? `${parseFloat(item.boyaAltura.toString().replace(',', '.')).toFixed(2)}m` : '—'}</span>
                                   </div>
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Periodo</span>
-                                    <span className="font-black text-slate-600">{item.boyaPeriodo ? `${item.boyaPeriodo}s` : '—'}</span>
+                                    <span className="font-black text-slate-600">{formatBoyaPeriod(item.boyaPeriodo)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-[8px] font-bold text-slate-400 uppercase">Dir</span>
+                                    <span className="font-extrabold text-amber-600">
+                                      {item.boyaDireccion ? `${getWindDirection(item.boyaDireccion)}` : '—'}
+                                    </span>
                                   </div>
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Temp</span>
-                                    <span className="font-black text-indigo-600">{item.boyaTemp ? `${formatBoyaTemp(item.boyaTemp)}ºC` : '—'}</span>
+                                    <span className="font-black text-indigo-600">{formatBoyaTemp(item.boyaTemp)}</span>
                                   </div>
                                 </div>
                               ) : (recType === 'swimmer_msg' || recType === 'admin_alert') ? (
