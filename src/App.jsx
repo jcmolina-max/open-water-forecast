@@ -1100,13 +1100,8 @@ export default function App() {
             // Dynamic Scale Factor por Sector (F_orilla)
             const scaleFactor = getBoyaScaleFactor(selectedBeach, waveDir);
             
-            // Apply scale factor (Misericordia, Escudo de la Malagueta/Pedregalejo o factor directo de boya)
-            if (isMisericordia) {
-                const isSouthWestWindStrong = (windDir >= 202.5 && windDir <= 247.5) && windKnots >= 15;
-                if (!isSouthWestWindStrong) {
-                    effectiveWaveHeight = waveHeight * scaleFactor;
-                }
-            } else if ((selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') && waveDir >= 200 && waveDir <= 300) {
+            // La clasificación del sector y el factor de escala aplicado dependen 100% EXCLUSIVAMENTE de la dirección real de la ola (waveDir)
+            if ((selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') && waveDir >= 200 && waveDir <= 300) {
                 effectiveWaveHeight = waveHeight * scaleFactor;
                 localRule = "Escudo Activo";
                 ruleColor = "text-indigo-500";
@@ -4032,7 +4027,7 @@ export default function App() {
                       <div className="flex justify-between items-center mb-1">
                         <h4 className="text-xs font-black uppercase text-indigo-700 tracking-wider flex items-center gap-1.5">
                           <ShieldAlert size={14} className="text-indigo-600" />
-                          <span>Control Directo por Viento</span>
+                          <span>Control por Dirección de Ola</span>
                         </h4>
                         <span className="bg-indigo-100 text-indigo-700 text-[9px] font-black px-2.5 py-0.5 rounded-full">🔒 Acceso Supervisor</span>
                       </div>
