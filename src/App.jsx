@@ -2091,8 +2091,17 @@ export default function App() {
                       <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
                       <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
                         {(() => {
-                          const currentSwellDir = (latestBuoyDir && latestBuoyDir !== "110") ? latestBuoyDir : (currentDayData && currentDayData.hourly && currentDayData.hourly[0] ? currentDayData.hourly[0].swellDir : latestBuoyDir);
-                          return currentSwellDir ? `${getWindDirection(currentSwellDir)} (${Math.round(currentSwellDir)}º)` : '—';
+                          let activeDir = null;
+                          if (latestBuoyDir && Number(latestBuoyDir) !== 110) {
+                            activeDir = Number(latestBuoyDir);
+                          } else if (currentDayData && currentDayData.hourly && currentDayData.hourly.length > 0) {
+                            const nowH = new Date().getHours();
+                            const hourRec = currentDayData.hourly.find(h => parseInt((h.time || "").split(':')[0], 10) === nowH) || currentDayData.hourly[0];
+                            if (hourRec && hourRec.swellDir != null && !isNaN(Number(hourRec.swellDir))) {
+                              activeDir = Number(hourRec.swellDir);
+                            }
+                          }
+                          return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}º)` : '—';
                         })()}
                       </strong>
                     </div>
