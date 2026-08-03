@@ -318,22 +318,19 @@ function HourlySvgChart({ hourlyData }) {
   );
 };
 
+function parseBoyaTemp(val) {
+  if (!val) return null;
+  const str = String(val).trim();
+  if (str.includes('T') || str.includes('Z') || str.length > 10) return null;
+  const num = parseFloat(str.replace(',', '.'));
+  if (isNaN(num) || num < 5 || num > 35) return null;
+  return num;
+}
+
 function formatBoyaTemp(val) {
-  if (!val) return '—';
-  const str = val.toString().trim();
-  if (str.includes('-') && str.includes('T')) {
-    try {
-      const d = new Date(str);
-      if (!isNaN(d.getTime())) {
-        const day = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric' });
-        const month = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', month: 'numeric' });
-        return `${day}.${month}`;
-      }
-    } catch (e) {
-      // Fallback
-    }
-  }
-  return str.replace(',', '.');
+  const parsed = parseBoyaTemp(val);
+  if (parsed === null) return '—';
+  return `${parsed.toFixed(1)}`;
 };
 
 function getWindDirection(degrees) {
@@ -791,13 +788,11 @@ export default function App() {
       
       const beach = BEACHES[selectedBeach];
       
-      // Temperatura real de la boya calculada localmente (sin depender de latestBuoyTemp del estado externo)
+      // Temperatura real de la boya calculada localmente (sin depender de la ISO fecha)
       const buoyReport = calibrationHistory.find(item => {
-        if (!item.boyaTemp || item.boyaTemp === "") return false;
-        const v = parseFloat(item.boyaTemp.toString().replace(',', '.'));
-        return !isNaN(v);
+        return parseBoyaTemp(item.boyaTemp) !== null;
       });
-      const buoyTempForToday = buoyReport ? parseFloat(buoyReport.boyaTemp.toString().replace(',', '.')) : null;
+      const buoyTempForToday = buoyReport ? parseBoyaTemp(buoyReport.boyaTemp) : null;
       
       let marineJson = null;
       let weatherJson = null;
