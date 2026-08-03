@@ -1007,7 +1007,26 @@ export default function App() {
           let eastWindCount = 0;
           let maxEastWind = 0;
           let validHoursCount = 0;
-          let hasStormRiskToday = false;
+          // 🚀 MOTOR DOBLE DESACOPLADO: Factor de Sesgo del Satélite (F_sesgo) & Factor de Refracción (F_refraccion)
+          let todaySatHeights = [];
+          const todayBaseStart = baseIndex + 6;
+          const todayBaseEnd = baseIndex + 21;
+          for (let k = todayBaseStart; k <= todayBaseEnd; k++) {
+            if (marineJson?.hourly?.wave_height?.[k] != null) {
+              todaySatHeights.push(Number(marineJson.hourly.wave_height[k]));
+            }
+          }
+          const avgTodaySatH = todaySatHeights.length > 0
+            ? (todaySatHeights.reduce((a, b) => a + b, 0) / todaySatHeights.length)
+            : 0.24;
+
+          const buoyRealH = latestBuoyHeight ? parseFloat(latestBuoyHeight) : null;
+          
+          // Factor de Sesgo del Satélite (F_sesgo = Boya Real Física / Satélite Promedio)
+          let fSesgo = 1.0;
+          if (buoyRealH !== null && buoyRealH > 0 && avgTodaySatH > 0) {
+            fSesgo = buoyRealH / avgTodaySatH;
+          }
 
           for (let i = startIndex; i <= endIndex; i++) {
             if (!marineJson?.hourly?.wave_height || i >= marineJson.hourly.wave_height.length) break;
@@ -1046,43 +1065,27 @@ export default function App() {
             const isThunderstorm = (wCode === 95 || wCode === 96 || wCode === 99);
             if (isThunderstorm) hasStormRiskToday = true;
 
-            // 🚀 IDEA 3: Conmutación Automática "Hoy en Vivo" vs "Mañana Futuro"
-            const buoyRealH = latestBuoyHeight ? parseFloat(latestBuoyHeight) : null;
-            const isToday = (offset === 0);
-            
-            // Factor de Sesgo del Satélite (F_modelo = Boya Real / Satélite Bruto)
-            let fModelo = 1.0;
-            if (buoyRealH !== null && buoyRealH > 0 && waveHeight > 0) {
-                fModelo = buoyRealH / waveHeight;
-            }
-
-            // Ola base a utilizar: Hoy usa Boya Real en directo; Mañana usa Satélite * F_modelo
-            let baseWaveForBeach = waveHeight;
-            if (isToday && buoyRealH !== null && buoyRealH > 0) {
-                baseWaveForBeach = buoyRealH; // 100% Boya Real en directo para Hoy
-            } else if (!isToday && fModelo !== 1.0) {
-                baseWaveForBeach = waveHeight * fModelo; // Satélite corregido por F_modelo para Futuro
-            }
-
-            let effectiveWaveHeight = baseWaveForBeach;
+            // Ola Satélite de cada hora escalada por el Factor de Sesgo del Satélite (F_sesgo)
+            const waveScaledBySesgo = waveHeight * fSesgo;
+            let effectiveWaveHeight = waveScaledBySesgo;
             let localRule = null;
             let ruleColor = "";
 
-            // Dynamic Buoy Scale Factor por Sector (F_boya)
+            // Factor de Refracción Costera por Sector (F_refraccion = Nadadores Orilla / Boya Real)
             const scaleFactor = getBoyaScaleFactor(selectedBeach, waveDir);
             
             // Apply scale factor (Misericordia, Escudo de la Malagueta/Pedregalejo o factor directo de boya)
             if (isMisericordia) {
                 const isSouthWestWindStrong = (windDir >= 202.5 && windDir <= 247.5) && windKnots >= 15;
                 if (!isSouthWestWindStrong) {
-                    effectiveWaveHeight = baseWaveForBeach * scaleFactor;
+                    effectiveWaveHeight = waveScaledBySesgo * scaleFactor;
                 }
             } else if ((selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') && waveDir >= 200 && waveDir <= 300) {
-                effectiveWaveHeight = baseWaveForBeach * scaleFactor;
+                effectiveWaveHeight = waveScaledBySesgo * scaleFactor;
                 localRule = "Escudo Activo";
                 ruleColor = "text-indigo-500";
             } else {
-                effectiveWaveHeight = baseWaveForBeach * scaleFactor;
+                effectiveWaveHeight = waveScaledBySesgo * scaleFactor;
             }
             
             let driftInfo = { icon: "⏺️", color: "text-slate-400", short: "Nula" };
