@@ -2943,12 +2943,15 @@ export default function App() {
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Dir</span>
                                     <span className="font-extrabold text-amber-600">
-                                      {item.boyaDireccion ? `${getWindDirection(item.boyaDireccion)}` : '—'}
+                                      {(() => {
+                                        const dirVal = (item.boyaDireccion && item.boyaDireccion !== "") ? item.boyaDireccion : (currentDayData && currentDayData.hourly && currentDayData.hourly[0] ? currentDayData.hourly[0].swellDir : null);
+                                        return dirVal ? getWindDirection(dirVal) : '—';
+                                      })()}
                                     </span>
                                   </div>
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Temp</span>
-                                    <span className="font-black text-indigo-600">{formatBoyaTemp(item.boyaTemp)}</span>
+                                    <span className="font-black text-indigo-600">{item.boyaTemp ? `${formatBoyaTemp(item.boyaTemp)}ºC` : '—'}</span>
                                   </div>
                                 </div>
                               ) : (recType === 'swimmer_msg' || recType === 'admin_alert') ? (
