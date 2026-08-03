@@ -453,8 +453,13 @@ function formatSwimFriendly(dateVal, swimHour) {
 function getRecordType(item) {
   const orig = item.origenDato || "";
   const notes = item.notasCalibracion || "";
+  const sens = item.sensaciones || "";
   const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
   
+  if (orig === 'Admin: Factor' || sens.includes('[FactorConfig:')) {
+    return 'system_factor';
+  }
+
   if (notes.includes('[ALERTA_OFICIAL]') || orig === 'Admin: Alerta') {
     return 'admin_alert';
   }
@@ -2515,7 +2520,8 @@ export default function App() {
                         const type = getRecordType(item);
                         return item.realOlas && 
                                item.realOlas !== "" && 
-                               type !== 'admin_alert';
+                               type !== 'admin_alert' &&
+                               type !== 'system_factor';
                       });
                       return (
                         <select
@@ -2732,6 +2738,7 @@ export default function App() {
                       ) : (
                         calibrationHistory.map((item, idx) => {
                           const recType = getRecordType(item);
+                          if (recType === 'system_factor') return null;
                           const parsed = parseSwimmerSensaciones(item.sensaciones);
                           
                           let bgClass = "bg-slate-50 hover:bg-slate-100/80 border-slate-200/60";
@@ -3003,7 +3010,8 @@ export default function App() {
             
             const filteredReports = calibrationHistory.filter(item => 
               item.playa === selectedBeach && 
-              getRecordType(item) !== 'admin_alert'
+              getRecordType(item) !== 'admin_alert' &&
+              getRecordType(item) !== 'system_factor'
             );
 
             return (
