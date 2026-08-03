@@ -2728,7 +2728,8 @@ export default function App() {
                     {(() => {
                       const calibrationLogsOnly = calibrationHistory.filter(item => {
                         const type = getRecordType(item);
-                        return type !== 'admin_alert' && type !== 'system_factor';
+                        return (type === 'swimmer_report' || type === 'admin_report') &&
+                               item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
                       });
                       return (
                         <select
@@ -2954,13 +2955,17 @@ export default function App() {
                       ) : (
                         calibrationHistory.map((item, idx) => {
                           const recType = getRecordType(item);
-                          if (recType === 'system_factor') return null;
-                          const parsed = parseSwimmerSensaciones(item.sensaciones);
-                          
                           let bgClass = "bg-slate-50 hover:bg-slate-100/80 border-slate-200/60";
                           let typeBadge = null;
                           
-                          if (recType === 'buoy_sync') {
+                          if (recType === 'system_factor') {
+                            bgClass = "bg-amber-50/20 hover:bg-amber-50/40 border-amber-100/60";
+                            typeBadge = (
+                              <span className="text-[8px] font-black text-amber-700 bg-amber-100/70 px-1.5 py-0.5 rounded">
+                                🔒 Factor Admin
+                              </span>
+                            );
+                          } else if (recType === 'buoy_sync') {
                             bgClass = "bg-blue-50/20 hover:bg-blue-50/45 border-blue-100/60";
                             typeBadge = (
                               <span className="text-[8px] font-black text-blue-600 bg-blue-100/70 px-1.5 py-0.5 rounded">
@@ -3241,10 +3246,7 @@ export default function App() {
               const targetPlaya = selectedBeach.toLowerCase();
               const isBeachMatch = !item.playa || itemPlaya.includes(targetPlaya) || targetPlaya.includes(itemPlaya);
               const type = getRecordType(item);
-              return isBeachMatch && 
-                     type !== 'admin_alert' && 
-                     type !== 'system_factor' && 
-                     type !== 'buoy_sync'; // Excluir sincros automáticas para dar protagonismo total a los reportes de personas
+              return isBeachMatch && (type === 'swimmer_report' || type === 'swimmer_msg' || type === 'admin_report');
             });
 
             return (
