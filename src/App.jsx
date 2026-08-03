@@ -4155,22 +4155,28 @@ export default function App() {
 
                                       <div className="flex justify-between items-center text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
                                         <span className="text-slate-500 font-medium">Activo en Web:</span>
-                                        <strong className="text-indigo-600 font-black text-sm">{Number(activeFactor).toFixed(2)}x {isOverridden ? '(Fijo)' : '(Default)'}</strong>
+                                        <strong className={`font-black text-sm ${isOverridden ? 'text-emerald-700' : 'text-indigo-600'}`}>
+                                          {Number(activeFactor).toFixed(2)}x {isOverridden ? '🔒 (Aprobado Admin)' : '(Default Fábrica)'}
+                                        </strong>
                                       </div>
 
-                                      {/* DESGLOSE TRANSPARENTE DE LOS 2 FACTORES DESACOPLADOS */}
+                                      {/* DESGLOSE TRANSPARENTE DE LOS 2 FACTORES DESACOPLADOS POR SECTOR */}
                                       <div className="grid grid-cols-2 gap-2 text-[10px] bg-purple-50/50 p-2 rounded-xl border border-purple-100/80">
                                         <div>
-                                          <span className="block text-purple-900 font-extrabold uppercase text-[9px]">🛰️ Sesgo Satélite (F_sesgo)</span>
+                                          <div className="flex justify-between items-center">
+                                            <span className="block text-purple-900 font-extrabold uppercase text-[9px]">🛰️ Sesgo Satélite (F_sesgo)</span>
+                                          </div>
                                           <strong className="text-purple-700 font-black text-xs">
-                                            {latestBuoyHeight && parseFloat(latestBuoyHeight) > 0 ? `${(parseFloat(latestBuoyHeight) / 0.24).toFixed(2)}x` : '1.00x'}
+                                            {getSectorSesgoFactor(bKey, sec.isLevante).toFixed(2)}x
                                           </strong>
                                           <span className="block text-[8px] text-purple-500 font-medium">Boya Real / Satélite</span>
                                         </div>
                                         <div>
-                                          <span className="block text-emerald-900 font-extrabold uppercase text-[9px]">⚓ Refracción Costera (F_boya)</span>
+                                          <div className="flex justify-between items-center">
+                                            <span className="block text-emerald-900 font-extrabold uppercase text-[9px]">⚓ Refracción Orilla (F_boya)</span>
+                                          </div>
                                           <strong className="text-emerald-700 font-black text-xs">
-                                            {suggestedRecentFactor !== null ? `${suggestedRecentFactor.toFixed(2)}x` : `${Number(sec.defaultFactor).toFixed(2)}x`}
+                                            {Number(activeFactor).toFixed(2)}x
                                           </strong>
                                           <span className="block text-[8px] text-emerald-600 font-medium">Nadadores / Boya Real</span>
                                         </div>
@@ -4233,11 +4239,12 @@ export default function App() {
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🟢 ¡Aprobada Sugerencia ${countRecent >= 5 ? 'Consolidada' : 'Progresiva'} (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
+                                              setFactorFeedbackMsg(`🟢 ¡Aprobado Factor Refracción Orilla (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Preservado en navegador y nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm flex-1 min-w-[120px] text-center"
                                           >
+                                        )}
                                             {countRecent >= 5 ? `🟢 Aprobar Consolidado (${suggestedRecentFactor.toFixed(2)}x)` : `⚡ Aprobar Progresivo (${suggestedRecentFactor.toFixed(2)}x)`}
                                           </button>
                                         )}
