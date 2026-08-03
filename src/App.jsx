@@ -1046,25 +1046,43 @@ export default function App() {
             const isThunderstorm = (wCode === 95 || wCode === 96 || wCode === 99);
             if (isThunderstorm) hasStormRiskToday = true;
 
-            let effectiveWaveHeight = waveHeight;
+            // 🚀 IDEA 3: Conmutación Automática "Hoy en Vivo" vs "Mañana Futuro"
+            const buoyRealH = latestBuoyHeight ? parseFloat(latestBuoyHeight) : null;
+            const isToday = (dayOffset === 0);
+            
+            // Factor de Sesgo del Satélite (F_modelo = Boya Real / Satélite Bruto)
+            let fModelo = 1.0;
+            if (buoyRealH !== null && buoyRealH > 0 && waveHeight > 0) {
+                fModelo = buoyRealH / waveHeight;
+            }
+
+            // Ola base a utilizar: Hoy usa Boya Real en directo; Mañana usa Satélite * F_modelo
+            let baseWaveForBeach = waveHeight;
+            if (isToday && buoyRealH !== null && buoyRealH > 0) {
+                baseWaveForBeach = buoyRealH; // 100% Boya Real en directo para Hoy
+            } else if (!isToday && fModelo !== 1.0) {
+                baseWaveForBeach = waveHeight * fModelo; // Satélite corregido por F_modelo para Futuro
+            }
+
+            let effectiveWaveHeight = baseWaveForBeach;
             let localRule = null;
             let ruleColor = "";
 
-            // Dynamic Buoy Scale Factor (Fase 4)
+            // Dynamic Buoy Scale Factor por Sector (F_boya)
             const scaleFactor = getBoyaScaleFactor(selectedBeach, waveDir);
             
             // Apply scale factor (Misericordia, Escudo de la Malagueta/Pedregalejo o factor directo de boya)
             if (isMisericordia) {
                 const isSouthWestWindStrong = (windDir >= 202.5 && windDir <= 247.5) && windKnots >= 15;
                 if (!isSouthWestWindStrong) {
-                    effectiveWaveHeight = waveHeight * scaleFactor;
+                    effectiveWaveHeight = baseWaveForBeach * scaleFactor;
                 }
             } else if ((selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') && waveDir >= 200 && waveDir <= 300) {
-                effectiveWaveHeight = waveHeight * scaleFactor;
+                effectiveWaveHeight = baseWaveForBeach * scaleFactor;
                 localRule = "Escudo Activo";
                 ruleColor = "text-indigo-500";
             } else {
-                effectiveWaveHeight = waveHeight * scaleFactor;
+                effectiveWaveHeight = baseWaveForBeach * scaleFactor;
             }
             
             let driftInfo = { icon: "⏺️", color: "text-slate-400", short: "Nula" };
