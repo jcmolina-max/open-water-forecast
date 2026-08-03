@@ -512,17 +512,26 @@ export default function App() {
   const [calibrationHistory, setCalibrationHistory] = useState([]);
   const [isCalHistoryLoading, setIsCalHistoryLoading] = useState(false);
 
+  const [latestBuoyHeight, setLatestBuoyHeight] = useState(null);
+  const [latestBuoyPeriod, setLatestBuoyPeriod] = useState(null);
+  const [latestBuoyDir, setLatestBuoyDir] = useState(null);
   const [latestBuoyTemp, setLatestBuoyTemp] = useState(null);
   const [latestBuoyDate, setLatestBuoyDate] = useState(null);
 
   useEffect(() => {
     const latestBuoyReport = calibrationHistory.find(item => {
-      if (!item.boyaTemp || item.boyaTemp === "") return false;
-      const formatted = formatBoyaTemp(item.boyaTemp);
-      return formatted !== '—' && !isNaN(parseFloat(formatted));
+      const orig = item.origenDato || "";
+      const isBoyaSync = orig.includes('Boya') || (item.boyaAltura && item.boyaAltura !== "" && Number(item.boyaAltura) > 0);
+      return isBoyaSync;
     });
-    setLatestBuoyTemp(latestBuoyReport ? formatBoyaTemp(latestBuoyReport.boyaTemp) : null);
-    setLatestBuoyDate(latestBuoyReport ? new Date(latestBuoyReport.fechaRegistro) : null);
+
+    if (latestBuoyReport) {
+      if (latestBuoyReport.boyaAltura) setLatestBuoyHeight(latestBuoyReport.boyaAltura);
+      if (latestBuoyReport.boyaPeriodo) setLatestBuoyPeriod(latestBuoyReport.boyaPeriodo);
+      if (latestBuoyReport.boyaDireccion) setLatestBuoyDir(latestBuoyReport.boyaDireccion);
+      if (latestBuoyReport.boyaTemp) setLatestBuoyTemp(formatBoyaTemp(latestBuoyReport.boyaTemp));
+      if (latestBuoyReport.fechaRegistro) setLatestBuoyDate(new Date(latestBuoyReport.fechaRegistro));
+    }
   }, [calibrationHistory]);
   
   // Formulario del Administrador
@@ -625,6 +634,62 @@ export default function App() {
       }
     }
     return 0;
+  }
+
+  // Helper para rescatar la lectura física real de la boya en la fecha y HORA EXACTA DEL NADO
+  function getBuoyReadingForLog(log) {
+    if (!log) return { height: null, period: null, dir: null };
+
+    // 1. Buscar en calibrationHistory un registro de 'Boya: Sincronización' del MISMO DÍA y a la HORA MÁS CERCANA del nado
+    const logDateTs = parseLogTimestamp(log);
+
+    let closestBuoyLog = null;
+    let minDiffMs = Infinity;
+
+    calibrationHistory.forEach(item => {
+      const orig = item.origenDato || "";
+      const isBuoySync = orig.includes('Boya') && item.boyaAltura && Number(item.boyaAltura.toString().replace(",", ".")) > 0;
+      if (isBuoySync) {
+        const buoyTs = parseLogTimestamp(item);
+        if (logDateTs > 0 && buoyTs > 0) {
+          const d1 = new Date(logDateTs).toDateString();
+          const d2 = new Date(buoyTs).toDateString();
+          if (d1 === d2) {
+            const diff = Math.abs(buoyTs - logDateTs);
+            if (diff < minDiffMs) {
+              minDiffMs = diff;
+              closestBuoyLog = item;
+            }
+          }
+        }
+      }
+    });
+
+    if (closestBuoyLog) {
+      return {
+        height: parseFloat((closestBuoyLog.boyaAltura || "").toString().replace(",", ".")).toFixed(2),
+        period: closestBuoyLog.boyaPeriodo || null,
+        dir: closestBuoyLog.boyaDireccion || null
+      };
+    }
+
+    // 2. Si el propio registro ya tiene guardada una altura de boya válida (> 0) distinta de appOlas
+    const rawH = (log.boyaAltura || "").toString().replace(",", ".");
+    const appH = (log.appOlas || "").toString().replace(",", ".");
+    if (rawH && rawH !== appH && !isNaN(parseFloat(rawH)) && parseFloat(rawH) > 0) {
+      return {
+        height: parseFloat(rawH).toFixed(2),
+        period: log.boyaPeriodo || null,
+        dir: log.boyaDireccion || null
+      };
+    }
+
+    // 3. Fallback: modelo satélite ECMWF de esa hora
+    return {
+      height: log.modelEcmwfOlas ? parseFloat(log.modelEcmwfOlas.toString().replace(",", ".")).toFixed(2) : null,
+      period: log.boyaPeriodo || null,
+      dir: log.boyaDireccion || null
+    };
   }
 
   // Helper para filtrar lecturas anómalas (outliers) utilizando filtro de banda ±1.5σ
@@ -1585,9 +1650,9 @@ export default function App() {
       appVientoNudos: hourForecast ? hourForecast.windS : "",
       appVientoDir: hourForecast ? hourForecast.windDir : "",
       notasCalibracion: adminIsAlert ? `[ALERTA_OFICIAL] ${adminNotas}` : adminNotas,
-      boyaAltura: adminBoyaAltura || (hourForecast ? hourForecast.swellH : ""), 
-      boyaPeriodo: adminBoyaPeriodo || "",
-      boyaDireccion: adminBoyaDireccion || (hourForecast && hourForecast.swellDir ? hourForecast.swellDir : "110"),
+      boyaAltura: adminBoyaAltura || (latestBuoyHeight ? latestBuoyHeight : (ecmwfVal || "")), 
+      boyaPeriodo: adminBoyaPeriodo || (latestBuoyPeriod || ""),
+      boyaDireccion: adminBoyaDireccion || (latestBuoyDir ? latestBuoyDir : (hourForecast && hourForecast.swellDir ? hourForecast.swellDir : "110")),
       boyaTemp: adminBoyaTemp || (latestBuoyTemp || ""),
       modelEcmwfOlas: ecmwfVal,
       modelGfsOlas: gfsVal,
@@ -1686,9 +1751,9 @@ export default function App() {
       appVientoNudos: hourForecast ? hourForecast.windS : "",
       appVientoDir: hourForecast ? hourForecast.windDir : "",
       notasCalibracion: swimmerIsOnlyMessage ? "Mensaje libre de nadador" : "Reporte público de nadador",
-      boyaAltura: hourForecast ? hourForecast.swellH : "", 
-      boyaPeriodo: "",
-      boyaDireccion: hourForecast && hourForecast.swellDir ? hourForecast.swellDir : (latestBuoyDir || "110"),
+      boyaAltura: latestBuoyHeight || ecmwfVal || (hourForecast ? hourForecast.swellH : ""), 
+      boyaPeriodo: latestBuoyPeriod || "",
+      boyaDireccion: latestBuoyDir || (hourForecast && hourForecast.swellDir ? hourForecast.swellDir : "110"),
       boyaTemp: latestBuoyTemp || "",
       modelEcmwfOlas: ecmwfVal,
       modelGfsOlas: gfsVal,
@@ -2626,13 +2691,20 @@ export default function App() {
                           </div>
 
                           <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center col-span-2 md:col-span-1">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase">Boya Real</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">Boya Real (Hora Nado)</span>
                             <span className="text-sm font-black text-slate-800 mt-1">
-                              {selectedHistoryLog.boyaAltura ? `${parseFloat(selectedHistoryLog.boyaAltura.toString().replace(",", ".")).toFixed(2)}m` : '—'}
+                              {(() => {
+                                const buoyData = getBuoyReadingForLog(selectedHistoryLog);
+                                return buoyData.height ? `${buoyData.height}m` : '—';
+                              })()}
                             </span>
                             <span className="text-[9px] text-slate-500 font-semibold mt-1">
-                              {selectedHistoryLog.boyaDireccion ? `${getWindDirection(selectedHistoryLog.boyaDireccion)}` : ''}
-                              {selectedHistoryLog.boyaPeriodo ? ` (${selectedHistoryLog.boyaPeriodo}s)` : ''}
+                              {(() => {
+                                const buoyData = getBuoyReadingForLog(selectedHistoryLog);
+                                const dirText = buoyData.dir ? getWindDirection(buoyData.dir) : '';
+                                const periodText = buoyData.period ? ` (${buoyData.period}s)` : '';
+                                return `${dirText}${periodText}`.trim() || '—';
+                              })()}
                             </span>
                           </div>
                         </div>
@@ -3860,10 +3932,12 @@ export default function App() {
                                 {sectors.map(sec => {
                                   const storageKey = `${bKey}_${sec.key}`;
                                   
-                                  // 1. Obtener todos los reportes del sector basados estrictamente en la dirección del oleaje de la boya real
+                                  // 1. Obtener todos los reportes del sector basados estrictamente en la dirección del oleaje a la HORA DEL NADO
                                   const allSectorLogs = calibrationHistory.filter(l => {
-                                    if (l.playa !== bKey || !l.realOlas || !l.boyaAltura || Number(l.boyaAltura) === 0) return false;
-                                    const dir = Number(l.boyaDireccion || 110);
+                                    if (l.playa !== bKey || !l.realOlas) return false;
+                                    const buoyData = getBuoyReadingForLog(l);
+                                    if (!buoyData.height || Number(buoyData.height) === 0) return false;
+                                    const dir = Number(buoyData.dir || l.boyaDireccion || 110);
                                     const isL = dir >= 45 && dir <= 165;
                                     return isL === sec.isLevante;
                                   });
@@ -3874,7 +3948,10 @@ export default function App() {
                                   let suggestedGlobalFactor = null;
                                   let cleanGlobalCount = 0;
                                   if (totalLogsCount >= 5) {
-                                    const allRatios = allSectorLogs.map(l => scaleToMeters(l.realOlas) / Number(l.boyaAltura));
+                                    const allRatios = allSectorLogs.map(l => {
+                                      const buoyData = getBuoyReadingForLog(l);
+                                      return scaleToMeters(l.realOlas) / Number(buoyData.height);
+                                    });
                                     const cleanRatios = filterOutliers(allRatios);
                                     cleanGlobalCount = cleanRatios.length;
                                     const sumGlobal = cleanRatios.reduce((a, b) => a + b, 0);
@@ -3897,7 +3974,10 @@ export default function App() {
 
                                   let suggestedRecentFactor = null;
                                   if (countRecent >= 5) {
-                                    const recentRatios = recentLogs.map(l => scaleToMeters(l.realOlas) / Number(l.boyaAltura));
+                                    const recentRatios = recentLogs.map(l => {
+                                      const buoyData = getBuoyReadingForLog(l);
+                                      return scaleToMeters(l.realOlas) / Number(buoyData.height);
+                                    });
                                     const cleanRecentRatios = filterOutliers(recentRatios);
                                     const sumRecent = cleanRecentRatios.reduce((a, b) => a + b, 0);
                                     suggestedRecentFactor = Math.max(0.1, Math.min(1.5, sumRecent / cleanRecentRatios.length));
