@@ -3241,7 +3241,10 @@ export default function App() {
               const targetPlaya = selectedBeach.toLowerCase();
               const isBeachMatch = !item.playa || itemPlaya.includes(targetPlaya) || targetPlaya.includes(itemPlaya);
               const type = getRecordType(item);
-              return isBeachMatch && type !== 'admin_alert' && type !== 'system_factor';
+              return isBeachMatch && 
+                     type !== 'admin_alert' && 
+                     type !== 'system_factor' && 
+                     type !== 'buoy_sync'; // Excluir sincros automáticas para dar protagonismo total a los reportes de personas
             });
 
             return (
