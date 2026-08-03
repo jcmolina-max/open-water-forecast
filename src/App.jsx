@@ -2045,6 +2045,8 @@ export default function App() {
                     {currentDayData.score > 70 ? 'Nado Seguro' : currentDayData.score > 40 ? 'Precaución: Mar Agitado' : 'No Recomendado Nadar'}
                   </p>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1 block">
+                    Cálculo por algoritmo matemático
+                  </span>
                 </div>
 
                 {/* Tarjeta de Boya Real en Tiempo Real (Puertos del Estado) */}
