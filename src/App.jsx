@@ -4061,20 +4061,22 @@ export default function App() {
                                     return 0.36;
                                   }
 
-                                  // A) CALCULO HISTÓRICO GLOBAL (Todos los reportes con filtro anti-outliers ±1.5σ)
+                                  // A) CALCULO HISTÓRICO GLOBAL (Sugerencia progresiva desde el Nado #1, con filtro ±1.5σ si hay >=5 nados)
                                   let suggestedGlobalFactor = null;
                                   let cleanGlobalCount = 0;
-                                  if (totalLogsCount >= 5) {
+                                  if (totalLogsCount >= 1) {
                                     const allRatios = allSectorLogs.map(l => {
                                       return scaleToMeters(l.realOlas) / getLogSatHeight(l);
                                     }).filter(r => !isNaN(r) && isFinite(r) && r > 0);
-                                    const cleanRatios = filterOutliers(allRatios);
+                                    const cleanRatios = totalLogsCount >= 5 ? filterOutliers(allRatios) : allRatios;
                                     cleanGlobalCount = cleanRatios.length;
-                                    const sumGlobal = cleanRatios.reduce((a, b) => a + b, 0);
-                                    suggestedGlobalFactor = Math.max(0.1, Math.min(1.5, sumGlobal / cleanRatios.length));
+                                    if (cleanRatios.length > 0) {
+                                      const sumGlobal = cleanRatios.reduce((a, b) => a + b, 0);
+                                      suggestedGlobalFactor = Math.max(0.1, Math.min(1.5, sumGlobal / cleanRatios.length));
+                                    }
                                   }
 
-                                  // B) CALCULO RECIENTE (Últimos 5 nados POST-AJUSTE con filtro anti-outliers)
+                                  // B) CALCULO RECIENTE (Sugerencia progresiva desde el Nado #1 post-ajuste)
                                   const approvalTime = adminFactorApprovalTimes && adminFactorApprovalTimes[storageKey] ? Number(adminFactorApprovalTimes[storageKey]) : 0;
                                   
                                   const postApprovalLogs = allSectorLogs.filter(l => {
@@ -4089,13 +4091,15 @@ export default function App() {
                                   const countRecent = recentLogs.length;
 
                                   let suggestedRecentFactor = null;
-                                  if (countRecent >= 5) {
+                                  if (countRecent >= 1) {
                                     const recentRatios = recentLogs.map(l => {
                                       return scaleToMeters(l.realOlas) / getLogSatHeight(l);
                                     }).filter(r => !isNaN(r) && isFinite(r) && r > 0);
-                                    const cleanRecentRatios = filterOutliers(recentRatios);
-                                    const sumRecent = cleanRecentRatios.reduce((a, b) => a + b, 0);
-                                    suggestedRecentFactor = Math.max(0.1, Math.min(1.5, sumRecent / cleanRecentRatios.length));
+                                    const cleanRecentRatios = countRecent >= 5 ? filterOutliers(recentRatios) : recentRatios;
+                                    if (cleanRecentRatios.length > 0) {
+                                      const sumRecent = cleanRecentRatios.reduce((a, b) => a + b, 0);
+                                      suggestedRecentFactor = Math.max(0.1, Math.min(1.5, sumRecent / cleanRecentRatios.length));
+                                    }
                                   }
 
                                   // C) CALCULO DE DESVÍO (%) ENTRE SUGERENCIA RECIENTE E HISTÓRICA
@@ -4125,27 +4129,25 @@ export default function App() {
                                       {/* SECCIÓN COMPARATIVA DE SUGERENCIAS DUALES CON FILTRO ANTI-RUIDO */}
                                       <div className="bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-100/70 space-y-2">
                                         <div className="text-[10px] font-black uppercase text-indigo-800 tracking-wider flex justify-between items-center">
-                                          <span>📊 Comparativa Algoritmo (Filtro Anti-Outliers ±1.5σ)</span>
+                                          <span>📊 Comparativa Algoritmo (Progresivo desde 1er Nado)</span>
                                         </div>
 
-                                        {/* SUGERENCIA RECIENTE */}
+                                        {/* SUGERENCIA RECIENTE PROGRESIVA */}
                                         <div className="flex justify-between items-center text-xs pt-1">
                                           <div className="flex items-center gap-1.5">
-                                            <span className="text-emerald-700 font-bold">⚡ Reciente (Últimos 5 post-ajuste):</span>
-                                            <span className="text-[9px] font-extrabold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
-                                              {countRecent}/5
+                                            <span className="text-emerald-700 font-bold">⚡ Reciente ({countRecent >= 5 ? 'Consolidado' : 'Progresivo'}):</span>
+                                            <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${countRecent >= 5 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                              {countRecent}/5 nados
                                             </span>
                                           </div>
                                           {suggestedRecentFactor !== null ? (
                                             <strong className="text-emerald-700 font-black">{suggestedRecentFactor.toFixed(2)}x</strong>
                                           ) : (
-                                            <span className="text-[10px] text-slate-400 italic">
-                                              {approvalTime > 0 ? `Esperando ${5 - countRecent} nados` : `Faltan ${5 - countRecent} nados`}
-                                            </span>
+                                            <span className="text-[10px] text-slate-400 italic">Esperando 1er nado</span>
                                           )}
                                         </div>
 
-                                        {/* SUGERENCIA HISTÓRICA GLOBAL */}
+                                        {/* SUGERENCIA HISTÓRICA GLOBAL PROGRESIVA */}
                                         <div className="flex justify-between items-center text-xs pt-1 border-t border-indigo-100/60">
                                           <div className="flex items-center gap-1.5">
                                             <span className="text-blue-700 font-bold">📜 Histórica Global ({cleanGlobalCount} válidos):</span>
@@ -4160,7 +4162,7 @@ export default function App() {
                                               )}
                                             </div>
                                           ) : (
-                                            <span className="text-[10px] text-slate-400 italic">Faltan {5 - totalLogsCount} nados</span>
+                                            <span className="text-[10px] text-slate-400 italic">Esperando 1er nado</span>
                                           )}
                                         </div>
                                       </div>
@@ -4181,12 +4183,12 @@ export default function App() {
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🟢 ¡Aprobada Sugerencia Reciente (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
+                                              setFactorFeedbackMsg(`🟢 ¡Aprobada Sugerencia ${countRecent >= 5 ? 'Consolidada' : 'Progresiva'} (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm flex-1 min-w-[120px] text-center"
                                           >
-                                            🟢 Aprobar Reciente ({suggestedRecentFactor.toFixed(2)}x)
+                                            {countRecent >= 5 ? `🟢 Aprobar Consolidado (${suggestedRecentFactor.toFixed(2)}x)` : `⚡ Aprobar Progresivo (${suggestedRecentFactor.toFixed(2)}x)`}
                                           </button>
                                         )}
 
