@@ -794,47 +794,8 @@ export default function App() {
       defaultFactor = isLevante ? 1.00 : 0.70;
     }
 
-    const relevantLogs = calibrationHistory.filter(log => {
-      if (log.playa !== beachKey) return false;
-      const buoyInfo = getBuoyReadingForLog(log);
-      if (!buoyInfo.height || Number(buoyInfo.height) === 0) return false;
-      if (!log.realOlas || log.realOlas === "") return false;
-      
-      const logDir = Number(buoyInfo.dir || 110);
-      const logIsLevante = logDir >= 45 && logDir <= 165;
-      return logIsLevante === isLevante; // Solo reportes del mismo sector de viento
-    });
-
-    // 2. REGLA ESTRICTA DE 5 REPORTES POR SECTOR (VENTANA MÓVIL DE LOS ÚLTIMOS 5 NADOS CON FILTRO ANTI-OUTLIERS)
-    const recentLogs = relevantLogs.slice(-5);
-    if (recentLogs.length < 5) {
-      return defaultFactor;
-    }
-
-    function scaleToMeters(val) {
-      const v = Number(val);
-      if (v === 1) return 0.05;
-      if (v === 2) return 0.20;
-      if (v === 3) return 0.45;
-      if (v === 4) return 0.80;
-      if (v === 5) return 1.20;
-      return 0.3;
-    }
-
-    const ratios = recentLogs.map(log => {
-      const buoyInfo = getBuoyReadingForLog(log);
-      const bH = buoyInfo.height ? Number(buoyInfo.height) : Number(log.boyaAltura || 0);
-      if (isNaN(bH) || bH <= 0) return null;
-      return scaleToMeters(log.realOlas) / bH;
-    }).filter(r => r !== null && !isNaN(r) && isFinite(r));
-
-    const cleanRatios = filterOutliers(ratios);
-    if (!cleanRatios || cleanRatios.length === 0) return defaultFactor;
-
-    const sumRatio = cleanRatios.reduce((a, b) => a + b, 0);
-    const calculatedFactor = sumRatio / cleanRatios.length;
-    if (isNaN(calculatedFactor) || !isFinite(calculatedFactor)) return defaultFactor;
-    return Math.max(0.1, Math.min(1.5, calculatedFactor));
+    // La web pública aplica el factor por defecto de fábrica hasta que el Administrador apruebe explícitamente una sugerencia
+    return defaultFactor;
   }
 
   useEffect(() => {
