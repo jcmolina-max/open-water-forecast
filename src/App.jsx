@@ -2079,7 +2079,10 @@ export default function App() {
                     <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
                       <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
                       <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
-                        {latestBuoyDir ? `${getWindDirection(latestBuoyDir)} (${latestBuoyDir}º)` : '—'}
+                        {(() => {
+                          const currentSwellDir = (latestBuoyDir && latestBuoyDir !== "110") ? latestBuoyDir : (currentDayData && currentDayData.hourly && currentDayData.hourly[0] ? currentDayData.hourly[0].swellDir : latestBuoyDir);
+                          return currentSwellDir ? `${getWindDirection(currentSwellDir)} (${Math.round(currentSwellDir)}º)` : '—';
+                        })()}
                       </strong>
                     </div>
 
