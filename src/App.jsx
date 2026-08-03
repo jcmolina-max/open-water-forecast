@@ -3285,15 +3285,15 @@ export default function App() {
                                 <div className="grid grid-cols-3 gap-2 border-y border-blue-100/60 py-2 my-2 text-center text-xs bg-white/50 rounded-lg">
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Altura</span>
-                                    <span className="font-black text-blue-600">{item.boyaAltura ? `${item.boyaAltura}m` : '—'}</span>
+                                    <span className="font-black text-blue-600">{parseBoyaNum(item.boyaAltura, 0.05, 15) !== null ? `${parseBoyaNum(item.boyaAltura, 0.05, 15).toFixed(2)}m` : '—'}</span>
                                   </div>
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Periodo</span>
-                                    <span className="font-black text-slate-600">{item.boyaPeriodo ? `${item.boyaPeriodo}s` : '—'}</span>
+                                    <span className="font-black text-slate-600">{formatBoyaPeriod(item.boyaPeriodo)}</span>
                                   </div>
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Temp</span>
-                                    <span className="font-black text-indigo-600">{item.boyaTemp ? `${formatBoyaTemp(item.boyaTemp)}ºC` : '—'}</span>
+                                    <span className="font-black text-indigo-600">{formatBoyaTemp(item.boyaTemp) !== '—' ? `${formatBoyaTemp(item.boyaTemp)}ºC` : '—'}</span>
                                   </div>
                                 </div>
                               ) : (recType === 'swimmer_msg') ? (
