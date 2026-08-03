@@ -318,22 +318,23 @@ function HourlySvgChart({ hourlyData }) {
   );
 };
 
+function parseBoyaNum(val, min = -100, max = 500) {
+  if (val === undefined || val === null || val === "") return null;
+  const str = String(val).trim();
+  if (str.includes('T') || str.includes('Z') || str.length > 10) return null;
+  const num = parseFloat(str.replace(',', '.'));
+  if (isNaN(num) || num < min || num > max) return null;
+  return num;
+}
+
+function parseBoyaTemp(val) {
+  return parseBoyaNum(val, 5, 35);
+}
+
 function formatBoyaTemp(val) {
-  if (!val) return '—';
-  const str = val.toString().trim();
-  if (str.includes('-') && str.includes('T')) {
-    try {
-      const d = new Date(str);
-      if (!isNaN(d.getTime())) {
-        const day = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric' });
-        const month = d.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', month: 'numeric' });
-        return `${day}.${month}`;
-      }
-    } catch (e) {
-      // Fallback
-    }
-  }
-  return str.replace(',', '.');
+  const parsed = parseBoyaTemp(val);
+  if (parsed === null) return '—';
+  return `${parsed.toFixed(1)}`;
 };
 
 function getWindDirection(degrees) {
@@ -528,19 +529,25 @@ export default function App() {
   const [latestBuoyDate, setLatestBuoyDate] = useState(null);
 
   useEffect(() => {
-    const latestBuoyReport = calibrationHistory.find(item => {
-      const orig = item.origenDato || "";
-      const isBoyaSync = orig.includes('Boya') || (item.boyaAltura && item.boyaAltura !== "" && Number(item.boyaAltura) > 0);
-      return isBoyaSync;
-    });
+    // 1. Buscar última altura real de boya válida (0.05m a 15m)
+    const heightLog = calibrationHistory.find(item => parseBoyaNum(item.boyaAltura, 0.05, 15) !== null);
+    setLatestBuoyHeight(heightLog ? parseBoyaNum(heightLog.boyaAltura, 0.05, 15).toFixed(2) : null);
 
-    if (latestBuoyReport) {
-      if (latestBuoyReport.boyaAltura) setLatestBuoyHeight(latestBuoyReport.boyaAltura);
-      if (latestBuoyReport.boyaPeriodo) setLatestBuoyPeriod(latestBuoyReport.boyaPeriodo);
-      if (latestBuoyReport.boyaDireccion) setLatestBuoyDir(latestBuoyReport.boyaDireccion);
-      if (latestBuoyReport.boyaTemp) setLatestBuoyTemp(formatBoyaTemp(latestBuoyReport.boyaTemp));
-      if (latestBuoyReport.fechaRegistro) setLatestBuoyDate(new Date(latestBuoyReport.fechaRegistro));
-    }
+    // 2. Buscar último periodo real de boya válido (1s a 30s)
+    const periodLog = calibrationHistory.find(item => parseBoyaNum(item.boyaPeriodo, 1, 30) !== null);
+    setLatestBuoyPeriod(periodLog ? `${parseBoyaNum(periodLog.boyaPeriodo, 1, 30).toFixed(1)}` : null);
+
+    // 3. Buscar última dirección real de boya válida (0º a 360º)
+    const dirLog = calibrationHistory.find(item => parseBoyaNum(item.boyaDireccion, 0, 360) !== null);
+    setLatestBuoyDir(dirLog ? parseBoyaNum(dirLog.boyaDireccion, 0, 360) : null);
+
+    // 4. Buscar última temperatura real de agua válida (5ºC a 35ºC)
+    const tempLog = calibrationHistory.find(item => parseBoyaNum(item.boyaTemp, 5, 35) !== null);
+    setLatestBuoyTemp(tempLog ? parseBoyaNum(tempLog.boyaTemp, 5, 35).toFixed(1) : null);
+
+    // 5. Fecha de la última lectura física de la boya
+    const dateLog = heightLog || tempLog || periodLog;
+    setLatestBuoyDate(dateLog && dateLog.fechaRegistro ? new Date(dateLog.fechaRegistro) : null);
   }, [calibrationHistory]);
   
   // Formulario del Administrador
@@ -791,13 +798,11 @@ export default function App() {
       
       const beach = BEACHES[selectedBeach];
       
-      // Temperatura real de la boya calculada localmente (sin depender de latestBuoyTemp del estado externo)
+      // Temperatura real de la boya calculada localmente (sin depender de la ISO fecha)
       const buoyReport = calibrationHistory.find(item => {
-        if (!item.boyaTemp || item.boyaTemp === "") return false;
-        const v = parseFloat(item.boyaTemp.toString().replace(',', '.'));
-        return !isNaN(v);
+        return parseBoyaTemp(item.boyaTemp) !== null;
       });
-      const buoyTempForToday = buoyReport ? parseFloat(buoyReport.boyaTemp.toString().replace(',', '.')) : null;
+      const buoyTempForToday = buoyReport ? parseBoyaTemp(buoyReport.boyaTemp) : null;
       
       let marineJson = null;
       let weatherJson = null;
@@ -887,12 +892,9 @@ export default function App() {
           const predictedWaterTemp =
             sstNoon !== undefined && sstNoon !== null && !Number.isNaN(Number(sstNoon))
               ? Math.round(Number(sstNoon) * 10) / 10
-              : 15;
+              : 21.5;
 
           let waterTemp = predictedWaterTemp;
-          if (offset === 0 && buoyTempForToday !== null && !isNaN(buoyTempForToday)) {
-            waterTemp = Math.round(buoyTempForToday * 10) / 10;
-          }
 
           // ----- CÁLCULO DE CALIDAD DEL AGUA (Aguas Sucias) -----
           let rainSum = 0;
@@ -2089,8 +2091,17 @@ export default function App() {
                       <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
                       <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
                         {(() => {
-                          const currentSwellDir = (latestBuoyDir && latestBuoyDir !== "110") ? latestBuoyDir : (currentDayData && currentDayData.hourly && currentDayData.hourly[0] ? currentDayData.hourly[0].swellDir : latestBuoyDir);
-                          return currentSwellDir ? `${getWindDirection(currentSwellDir)} (${Math.round(currentSwellDir)}º)` : '—';
+                          let activeDir = null;
+                          if (latestBuoyDir && Number(latestBuoyDir) !== 110) {
+                            activeDir = Number(latestBuoyDir);
+                          } else if (currentDayData && currentDayData.hourly && currentDayData.hourly.length > 0) {
+                            const nowH = new Date().getHours();
+                            const hourRec = currentDayData.hourly.find(h => parseInt((h.time || "").split(':')[0], 10) === nowH) || currentDayData.hourly[0];
+                            if (hourRec && hourRec.swellDir != null && !isNaN(Number(hourRec.swellDir))) {
+                              activeDir = Number(hourRec.swellDir);
+                            }
+                          }
+                          return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}º)` : '—';
                         })()}
                       </strong>
                     </div>
