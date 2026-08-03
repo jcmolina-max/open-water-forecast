@@ -628,6 +628,16 @@ export default function App() {
     }
   });
 
+  // Estado para los Factores de Sesgo del Satélite (F_sesgo) ajustados manualmente por el Administrador
+  const [adminManualSesgoFactors, setAdminManualSesgoFactors] = useState(() => {
+    try {
+      const saved = localStorage.getItem('openwater_admin_sesgo_factors');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
   // Helper para interpretar marcas de tiempo de logs en diversos formatos (ISO, DD/MM/YYYY, etc.)
   function parseLogTimestamp(log) {
     if (!log) return 0;
@@ -796,6 +806,22 @@ export default function App() {
 
     // La web pública aplica el factor por defecto de fábrica hasta que el Administrador apruebe explícitamente una sugerencia
     return defaultFactor;
+  }
+
+  // Dynamic Sector Satellite Bias Factor (F_sesgo = Boya Real / Satélite Promedio)
+  function getSectorSesgoFactor(beachKey, isLevante) {
+    const sectorKey = isLevante ? 'levante' : 'poniente';
+    const storageKey = `${beachKey}_${sectorKey}`;
+
+    if (adminManualSesgoFactors && adminManualSesgoFactors[storageKey] !== undefined && adminManualSesgoFactors[storageKey] !== null) {
+      return parseFloat(adminManualSesgoFactors[storageKey]);
+    }
+
+    const buoyRealH = latestBuoyHeight ? parseFloat(latestBuoyHeight) : null;
+    if (buoyRealH !== null && buoyRealH > 0) {
+      return buoyRealH / 0.24;
+    }
+    return 1.0;
   }
 
   useEffect(() => {
