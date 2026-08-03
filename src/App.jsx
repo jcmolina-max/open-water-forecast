@@ -887,7 +887,7 @@ export default function App() {
 
       // 2. SATÉLITE MARINO
       try {
-        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,sea_level_height_msl&timezone=Europe%2FMadrid&past_days=14`);
+        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,sea_level_height_msl&models=best_match&timezone=Europe%2FMadrid&past_days=14`);
         setRawMarineData(marineJson);
       } catch (e) {
          setErrorDetails({ general: `El satélite marino no responde: ${e.message}` });
@@ -1039,8 +1039,9 @@ export default function App() {
           const todayBaseStart = baseIndex + 6;
           const todayBaseEnd = baseIndex + 21;
           for (let k = todayBaseStart; k <= todayBaseEnd; k++) {
-            if (marineJson?.hourly?.wave_height?.[k] != null) {
-              todaySatHeights.push(Number(marineJson.hourly.wave_height[k]));
+            const rawH = marineJson?.hourly?.wave_height_marine_best_match?.[k] ?? marineJson?.hourly?.wave_height?.[k];
+            if (rawH != null) {
+              todaySatHeights.push(Number(rawH));
             }
           }
           const avgTodaySatH = todaySatHeights.length > 0
@@ -1055,11 +1056,13 @@ export default function App() {
             fSesgo = buoyRealH / avgTodaySatH;
           }
 
-          for (let i = startIndex; i <= endIndex; i++) {
-            if (!marineJson?.hourly?.wave_height || i >= marineJson.hourly.wave_height.length) break;
+          const waveArr = marineJson?.hourly?.wave_height_marine_best_match || marineJson?.hourly?.wave_height;
 
-            const waveHeightStr = marineJson.hourly.wave_height[i];
-            const waveHeight = waveHeightStr !== null ? waveHeightStr : 0.1;
+          for (let i = startIndex; i <= endIndex; i++) {
+            if (!waveArr || i >= waveArr.length) break;
+
+            const waveHeightStr = waveArr[i];
+            const waveHeight = waveHeightStr !== null && waveHeightStr !== undefined ? Number(waveHeightStr) : 0.1;
             const period = marineJson.hourly?.wave_period?.[i] || 4;
             const waveDir = marineJson.hourly?.wave_direction?.[i];
             
