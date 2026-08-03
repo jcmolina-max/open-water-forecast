@@ -3781,11 +3781,11 @@ export default function App() {
                           </div>
                           {adminRealOlas && (
                             <div className="text-[10px] text-right font-bold text-blue-600 italic">
-                              {adminRealOlas === 1 && "1/5 = 0.05m (Mar plano / Sin olas)"}
-                              {adminRealOlas === 2 && "2/5 = 0.20m (Olas muy pequeñas)"}
-                              {adminRealOlas === 3 && "3/5 = 0.45m (Olas medianas)"}
-                              {adminRealOlas === 4 && "4/5 = 0.80m (Olas grandes)"}
-                              {adminRealOlas === 5 && "5/5 = 1.20m (Olas muy grandes / Resaca)"}
+                              {adminRealOlas === 1 && "1/5 (0.05m) • Plato: Mar balsa, nadas sin turbulencia alguna"}
+                              {adminRealOlas === 2 && "2/5 (0.20m) • Rizado suave: Mar rizado, no interrumpe la respiración"}
+                              {adminRealOlas === 3 && "3/5 (0.45m) • Marejada / Incómodo: Salpica al respirar, girar cabeza"}
+                              {adminRealOlas === 4 && "4/5 (0.80m) • Fuerte / Oleaje: Dificultad para orientarse, picado"}
+                              {adminRealOlas === 5 && "5/5 (1.20m) • Muy Duro / Rompiente: Impide nadar con normalidad"}
                             </div>
                           )}
                         </div>
@@ -4391,11 +4391,11 @@ export default function App() {
                     </div>
                     {swimmerRealOlas && (
                       <div className="text-[9px] text-right font-bold text-blue-600 italic">
-                        {swimmerRealOlas === 1 && "1/5 = 0.05m (Mar plato)"}
-                        {swimmerRealOlas === 2 && "2/5 = 0.20m (Olas muy pequeñas)"}
-                        {swimmerRealOlas === 3 && "3/5 = 0.45m (Olas medianas / picado)"}
-                        {swimmerRealOlas === 4 && "4/5 = 0.80m (Rompiente fuerte)"}
-                        {swimmerRealOlas === 5 && "5/5 = 1.20m (Muy fuerte / Resaca)"}
+                        {swimmerRealOlas === 1 && "1/5 (0.05m) • Plato: Mar balsa, nadas sin turbulencia alguna"}
+                        {swimmerRealOlas === 2 && "2/5 (0.20m) • Rizado suave: Mar rizado, no interrumpe la respiración"}
+                        {swimmerRealOlas === 3 && "3/5 (0.45m) • Marejada / Incómodo: Salpica al respirar, girar cabeza"}
+                        {swimmerRealOlas === 4 && "4/5 (0.80m) • Fuerte / Oleaje: Dificultad para orientarse, picado"}
+                        {swimmerRealOlas === 5 && "5/5 (1.20m) • Muy Duro / Rompiente: Impide nadar con normalidad"}
                       </div>
                     )}
                   </div>
