@@ -425,7 +425,22 @@ function formatFriendlyDate(dateString) {
   }
 }
 
-function formatSwimFriendly(dateVal, swimHour) {
+function cleanHourString(raw) {
+  if (!raw) return '';
+  const str = String(raw).trim();
+  if (str.includes('1899') || str.includes('GMT') || str.includes('T')) {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      return `${hh}:${mm}`;
+    }
+  }
+  return str;
+}
+
+function formatSwimFriendly(dateVal, swimHourRaw) {
+  const swimHour = cleanHourString(swimHourRaw);
   if (!dateVal) return swimHour || '—';
   try {
     const regDate = new Date(dateVal);
@@ -443,6 +458,13 @@ function formatSwimFriendly(dateVal, swimHour) {
       const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
       const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
       const dayNum = regDate.getDate();
+      const monthName = regDate.toLocaleString('es-ES', { month: 'short' });
+      return `${capitalizedDay} ${dayNum} ${monthName}${hourSuffix}`;
+    }
+  } catch (e) {
+    return dateVal || swimHour || '—';
+  }
+}
       const monthStr = regDate.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
       const timeBrackets = swimHour ? ` (${swimHour})` : '';
       return `${capitalizedDay}, ${dayNum} ${monthStr}${timeBrackets}`;
@@ -531,24 +553,25 @@ export default function App() {
   const [latestBuoyDate, setLatestBuoyDate] = useState(null);
 
   useEffect(() => {
+    const reversedHistory = [...calibrationHistory].reverse();
     // 1. Buscar última altura real de boya válida (0.05m a 15m)
-    const heightLog = calibrationHistory.find(item => parseBoyaNum(item.boyaAltura, 0.05, 15) !== null);
+    const heightLog = reversedHistory.find(item => parseBoyaNum(item.boyaAltura, 0.05, 15) !== null);
     setLatestBuoyHeight(heightLog ? parseBoyaNum(heightLog.boyaAltura, 0.05, 15).toFixed(2) : null);
 
     // 2. Buscar último periodo real de boya válido (1s a 30s)
-    const periodLog = calibrationHistory.find(item => parseBoyaNum(item.boyaPeriodo, 1, 30) !== null);
+    const periodLog = reversedHistory.find(item => parseBoyaNum(item.boyaPeriodo, 1, 30) !== null);
     setLatestBuoyPeriod(periodLog ? `${parseBoyaNum(periodLog.boyaPeriodo, 1, 30).toFixed(1)}` : null);
 
     // 3. Buscar última dirección real de boya válida (0º a 360º)
-    const dirLog = calibrationHistory.find(item => parseBoyaNum(item.boyaDireccion, 0, 360) !== null);
+    const dirLog = reversedHistory.find(item => parseBoyaNum(item.boyaDireccion, 0, 360) !== null);
     setLatestBuoyDir(dirLog ? parseBoyaNum(dirLog.boyaDireccion, 0, 360) : null);
 
     // 4. Buscar última temperatura real de agua válida (5ºC a 35ºC)
-    const tempLog = calibrationHistory.find(item => parseBoyaNum(item.boyaTemp, 5, 35) !== null);
+    const tempLog = reversedHistory.find(item => parseBoyaNum(item.boyaTemp, 5, 35) !== null);
     setLatestBuoyTemp(tempLog ? parseBoyaNum(tempLog.boyaTemp, 5, 35).toFixed(1) : null);
 
     // 5. Fecha de la última lectura física de la boya
-    const dateLog = heightLog || tempLog || periodLog;
+    const dateLog = heightLog || tempLog || periodLog || reversedHistory[0];
     setLatestBuoyDate(dateLog && dateLog.fechaRegistro ? new Date(dateLog.fechaRegistro) : null);
   }, [calibrationHistory]);
   
@@ -2774,10 +2797,12 @@ export default function App() {
                       <p className="text-xs text-slate-500 mt-1">Selecciona una sesión real para auditar qué falló o acertó en los modelos satelitales.</p>
                     </div>
                     {(() => {
-                      const calibrationLogsOnly = calibrationHistory.filter(item => {
+                      const calibrationLogsOnly = [...calibrationHistory].reverse().filter(item => {
                         const type = getRecordType(item);
-                        return (type === 'swimmer_report' || type === 'admin_report') &&
-                               item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
+                        const sensStr = String(item.sensaciones || "");
+                        const noteStr = String(item.notasCalibracion || "");
+                        return (type === 'swimmer_report' || type === 'admin_report' || type === 'swimmer_msg' || type === 'admin_note') &&
+                               (item.realOlas != null || sensStr !== "" || noteStr !== "");
                       });
                       return (
                         <select
@@ -2786,12 +2811,12 @@ export default function App() {
                             const idx = e.target.value;
                             setSelectedHistoryLog(idx !== '' ? calibrationLogsOnly[idx] : null);
                           }}
-                          className="border border-slate-300 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 bg-white shadow-sm focus:border-indigo-500 outline-none"
+                          className="border border-slate-300 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 bg-white shadow-sm focus:border-indigo-500 outline-none w-full"
                         >
                           <option value="">-- Seleccionar Sesión Guardada --</option>
                           {calibrationLogsOnly.map((item, idx) => (
                             <option key={idx} value={idx}>
-                              {new Date(item.fechaRegistro || item.fecha || Date.now()).toLocaleDateString('es-ES')} ({item.horaNado || '12:00'}) - {BEACHES[item.playa]?.name.split(',')[0] || item.playa || 'Misericordia'}
+                              {new Date(item.fechaRegistro || item.fecha || Date.now()).toLocaleDateString('es-ES')} ({item.horaNado || '12:00'}) - {BEACHES[item.playa]?.name.split(',')[0] || item.playa || 'Misericordia'} {item.sensaciones ? `[${String(item.sensaciones).substring(0, 30)}...]` : ''}
                             </option>
                           ))}
                         </select>
@@ -3818,7 +3843,7 @@ export default function App() {
               ) : (
                 <>
                   {/* PESTAÑAS NAVEGACIÓN ADMIN */}
-                  <div className="flex border-b border-slate-200 mb-5 bg-slate-100/80 p-1 rounded-2xl">
+                  <div className="flex border-b border-slate-200 mb-5 bg-slate-100/80 p-1 rounded-2xl gap-1">
                     <button
                       type="button"
                       onClick={() => setAdminTab('factors')}
@@ -3828,10 +3853,17 @@ export default function App() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => setAdminTab('telemetry')}
+                      className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 ${adminTab === 'telemetry' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      📡 Auditoría Telemetría
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setAdminTab('report')}
                       className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 ${adminTab === 'report' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
                     >
-                      📝 Registrar Nado / Alerta
+                      📝 Registrar / Alerta
                     </button>
                   </div>
 
@@ -4396,6 +4428,166 @@ export default function App() {
                       </div>
                     </div>
                   )}
+
+                  {adminTab === 'telemetry' && (
+                    <div className="text-left space-y-4">
+                      <div className="flex justify-between items-center mb-1 border-b border-slate-200 pb-2">
+                        <h4 className="text-xs font-black uppercase text-indigo-700 tracking-wider flex items-center gap-1.5">
+                          <Activity size={16} className="text-cyan-500" />
+                          <span>Matriz de Auditoría de Telemetría (2 Etapas)</span>
+                        </h4>
+                        <span className="text-[9px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-700/60 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> 16 COLUMNAS BIAS/REFRACCIÓN
+                        </span>
+                      </div>
+
+                      {/* Tarjetas resumen de métricas */}
+                      {(() => {
+                        // Calcular F_sesgo medio (Boya / Satélite) desde calibrationHistory
+                        const validSesgoLogs = calibrationHistory.filter(l => {
+                          const buoyInfo = getBuoyReadingForLog(l);
+                          const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
+                          const satH = parseFloat((l.modelEcmwfOlas || l.appOlas || "").toString().replace(",", "."));
+                          return !isNaN(bH) && bH > 0 && !isNaN(satH) && satH > 0;
+                        });
+
+                        let avgFSesgo = 1.0;
+                        if (validSesgoLogs.length > 0) {
+                          const sumSesgo = validSesgoLogs.reduce((acc, l) => {
+                            const buoyInfo = getBuoyReadingForLog(l);
+                            const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
+                            const satH = parseFloat((l.modelEcmwfOlas || l.appOlas || "").toString().replace(",", "."));
+                            return acc + (bH / satH);
+                          }, 0);
+                          avgFSesgo = (sumSesgo / validSesgoLogs.length).toFixed(2);
+                        }
+
+                        // Calcular F_refraccion medio (Orilla / Boya) desde calibrationHistory
+                        const validRefracLogs = calibrationHistory.filter(l => {
+                          const buoyInfo = getBuoyReadingForLog(l);
+                          const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
+                          const swimmerRealM = swimmerScaleToMeters(l.realOlas);
+                          return !isNaN(bH) && bH > 0 && swimmerRealM > 0;
+                        });
+
+                        let avgFRefrac = 0.50;
+                        if (validRefracLogs.length > 0) {
+                          const sumRefrac = validRefracLogs.reduce((acc, l) => {
+                            const buoyInfo = getBuoyReadingForLog(l);
+                            const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
+                            const swimmerRealM = swimmerScaleToMeters(l.realOlas);
+                            return acc + (swimmerRealM / bH);
+                          }, 0);
+                          avgFRefrac = (sumRefrac / validRefracLogs.length).toFixed(2);
+                        }
+
+                        const avgFCombinado = (parseFloat(avgFSesgo) * parseFloat(avgFRefrac)).toFixed(2);
+
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="bg-gradient-to-br from-indigo-50 to-slate-50 p-3.5 rounded-2xl border border-indigo-100/80 shadow-sm space-y-1">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase block">Etapa 1: Sesgo Satélite (F_sesgo)</span>
+                              <strong className="text-xl font-black text-indigo-700 block">{avgFSesgo}x</strong>
+                              <span className="text-[9px] text-slate-500 block">Relación Boya Real / Satélite (D-1) ({validSesgoLogs.length} muestras)</span>
+                            </div>
+
+                            <div className="bg-gradient-to-br from-cyan-50 to-slate-50 p-3.5 rounded-2xl border border-cyan-100/80 shadow-sm space-y-1">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase block">Etapa 2: Refracción Orilla (F_refraccion)</span>
+                              <strong className="text-xl font-black text-cyan-700 block">{avgFRefrac}x</strong>
+                              <span className="text-[9px] text-slate-500 block">Atenuación Batimétrica Orilla / Boya ({validRefracLogs.length} reportes)</span>
+                            </div>
+
+                            <div className="bg-gradient-to-br from-emerald-50 to-slate-50 p-3.5 rounded-2xl border border-emerald-100/80 shadow-sm space-y-1">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase block">Factor Combinado (F_combinado)</span>
+                              <strong className="text-xl font-black text-emerald-700 block">{avgFCombinado}x</strong>
+                              <span className="text-[9px] text-slate-500 block">Multiplicador global Orilla = Satélite × F_combinado</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Tabla de auditoría por sectores */}
+                      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                        <div className="bg-slate-900 text-white px-4 py-2.5 flex justify-between items-center text-xs font-bold">
+                          <span>Desglose de Telemetría por Sectores de Oleaje</span>
+                          <span className="text-[10px] text-slate-400">Misericordia, Malagueta, Pedregalejo</span>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-slate-100 text-slate-600 text-[10px] uppercase border-b border-slate-200">
+                              <tr>
+                                <th className="p-2.5 font-extrabold">Playa / Sector</th>
+                                <th className="p-2.5 text-center font-extrabold">Satélite D-1</th>
+                                <th className="p-2.5 text-center font-extrabold">Boya Real</th>
+                                <th className="p-2.5 text-center font-extrabold text-indigo-700">F_sesgo</th>
+                                <th className="p-2.5 text-center font-extrabold">Orilla Real</th>
+                                <th className="p-2.5 text-center font-extrabold text-cyan-700">F_refraccion</th>
+                                <th className="p-2.5 text-center font-extrabold text-emerald-700">F_combinado</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-semibold text-slate-700 text-[11px]">
+                              {Object.entries(BEACHES).map(([bKey, bObj]) => {
+                                return [
+                                  { secKey: 'poniente', name: `${bObj.name.split(',')[0]} (Poniente / SUR)`, isLevante: false },
+                                  { secKey: 'levante', name: `${bObj.name.split(',')[0]} (Levante / ESE)`, isLevante: true }
+                                ].map(sec => {
+                                  const secLogs = calibrationHistory.filter(l => {
+                                    if (l.playa !== bKey) return false;
+                                    const buoyInfo = getBuoyReadingForLog(l);
+                                    const dir = Number(buoyInfo.dir || l.boyaDireccion || 110);
+                                    const isL = dir >= 45 && dir <= 165;
+                                    return isL === sec.isLevante;
+                                  });
+
+                                  let secSesgoSum = 0, secSesgoCnt = 0;
+                                  let secRefracSum = 0, secRefracCnt = 0;
+                                  let lastSat = null, lastBuoy = null, lastOrilla = null;
+
+                                  secLogs.forEach(l => {
+                                    const buoyInfo = getBuoyReadingForLog(l);
+                                    const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
+                                    const satH = parseFloat((l.modelEcmwfOlas || l.appOlas || "").toString().replace(",", "."));
+                                    const swimmerRealM = swimmerScaleToMeters(l.realOlas);
+
+                                    if (!isNaN(satH) && satH > 0 && !isNaN(bH) && bH > 0) {
+                                      secSesgoSum += (bH / satH);
+                                      secSesgoCnt++;
+                                      lastSat = satH;
+                                      lastBuoy = bH;
+                                    }
+
+                                    if (!isNaN(bH) && bH > 0 && swimmerRealM > 0) {
+                                      secRefracSum += (swimmerRealM / bH);
+                                      secRefracCnt++;
+                                      lastOrilla = swimmerRealM;
+                                    }
+                                  });
+
+                                  const fSesgoSec = secSesgoCnt > 0 ? (secSesgoSum / secSesgoCnt).toFixed(2) : "1.00";
+                                  const fRefracSec = secRefracCnt > 0 ? (secRefracSum / secRefracCnt).toFixed(2) : "0.50";
+                                  const fCombSec = (parseFloat(fSesgoSec) * parseFloat(fRefracSec)).toFixed(2);
+
+                                  return (
+                                    <tr key={`${bKey}_${sec.secKey}`} className="hover:bg-slate-50/80 transition-colors">
+                                      <td className="p-2.5 font-bold text-slate-800">{sec.name}</td>
+                                      <td className="p-2.5 text-center font-bold text-indigo-600">{lastSat ? `${lastSat.toFixed(2)}m` : '—'}</td>
+                                      <td className="p-2.5 text-center font-bold text-cyan-600">{lastBuoy ? `${lastBuoy.toFixed(2)}m` : '—'}</td>
+                                      <td className="p-2.5 text-center font-black text-indigo-700 bg-indigo-50/50">{fSesgoSec}x</td>
+                                      <td className="p-2.5 text-center font-bold text-emerald-600">{lastOrilla ? `${lastOrilla.toFixed(2)}m` : '—'}</td>
+                                      <td className="p-2.5 text-center font-black text-cyan-700 bg-cyan-50/50">{fRefracSec}x</td>
+                                      <td className="p-2.5 text-center font-black text-emerald-700 bg-emerald-50/50">{fCombSec}x</td>
+                                    </tr>
+                                  );
+                                });
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                 </>
               )}
             )}
