@@ -1020,6 +1020,49 @@ export default function App() {
             } else {
               tideState = "Marea Parada (Estacionaria) ⏸️";
             }
+
+            // Sincronización automática de telemetría de boya (06:00 a 21:00)
+            if (currentSystemHour >= 6 && currentSystemHour <= 21) {
+              const syncKey = `openwater_telem_synced_${currentSystemHour}_${selectedBeach}`;
+              if (typeof window !== 'undefined' && !sessionStorage.getItem(syncKey)) {
+                sessionStorage.setItem(syncKey, 'true');
+                const curMarineI = marineBaseIndex + currentSystemHour;
+                const curSatH = marineJson?.hourly?.wave_height_marine_best_match?.[curMarineI] ?? marineJson?.hourly?.wave_height?.[curMarineI];
+                const curSatDir = marineJson?.hourly?.wave_direction?.[curMarineI];
+                const curWindSpd = weatherJson?.hourly?.wind_speed_10m?.[weatherBaseIndex + currentSystemHour];
+                const curWindDir = weatherJson?.hourly?.wind_direction_10m?.[weatherBaseIndex + currentSystemHour];
+                const bH = latestBuoyHeight ? parseFloat(latestBuoyHeight) : null;
+                
+                if (curSatH && bH) {
+                  const fSesgoVal = (bH / curSatH).toFixed(2);
+                  const telemPayload = {
+                    action: 'registrar_telemetria',
+                    fechaHora: new Date().toLocaleString('es-ES'),
+                    playaSector: `${selectedBeach}_${(curSatDir >= 45 && curSatDir <= 165) ? 'levante' : 'poniente'}`,
+                    prevOlaSat: curSatH,
+                    prevDirOlaSat: curSatDir || '',
+                    prevVientoKnots: curWindSpd ? Math.round(curWindSpd / 1.852) : '',
+                    prevVientoDir: curWindDir || '',
+                    boyaOlaReal: bH,
+                    boyaDirOlaReal: latestBuoyDir || '',
+                    boyaVientoKnots: '',
+                    boyaVientoDir: '',
+                    orillaOlaNadador: '',
+                    fSesgo: fSesgoVal,
+                    fRefraccion: '',
+                    fCombinado: ''
+                  };
+                  try {
+                    fetch(WEBHOOK_URL, {
+                      method: 'POST',
+                      mode: 'no-cors',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(telemPayload)
+                    }).catch(() => {});
+                  } catch(e) {}
+                }
+              }
+            }
           }
           
           const dailyMaxSeaLevel = Math.max(...dayTides.map(t => t.height));
@@ -4063,9 +4106,25 @@ export default function App() {
                             return 0.3;
                           }
 
-                          function saveFactorChangeToCloud(bKey, secKey, fixedVal, nowTs, bName) {
+                          function saveFactorChangeToCloud(bKey, secKey, fixedVal, nowTs, bName, extraTelem = {}) {
                             const storageKey = `${bKey}_${secKey}`;
+                            const nowStr = new Date().toLocaleString('es-ES');
                             const payload = {
+                              action: 'registrar_telemetria',
+                              fechaHora: nowStr,
+                              playaSector: storageKey,
+                              prevOlaSat: extraTelem.prevOlaSat !== undefined ? extraTelem.prevOlaSat : '',
+                              prevDirOlaSat: extraTelem.prevDirOlaSat !== undefined ? extraTelem.prevDirOlaSat : '',
+                              prevVientoKnots: extraTelem.prevVientoKnots !== undefined ? extraTelem.prevVientoKnots : '',
+                              prevVientoDir: extraTelem.prevVientoDir !== undefined ? extraTelem.prevVientoDir : '',
+                              boyaOlaReal: extraTelem.boyaOlaReal !== undefined ? extraTelem.boyaOlaReal : '',
+                              boyaDirOlaReal: extraTelem.boyaDirOlaReal !== undefined ? extraTelem.boyaDirOlaReal : '',
+                              boyaVientoKnots: extraTelem.boyaVientoKnots !== undefined ? extraTelem.boyaVientoKnots : '',
+                              boyaVientoDir: extraTelem.boyaVientoDir !== undefined ? extraTelem.boyaVientoDir : '',
+                              orillaOlaNadador: extraTelem.orillaOlaNadador !== undefined ? extraTelem.orillaOlaNadador : '',
+                              fSesgo: extraTelem.fSesgo !== undefined ? extraTelem.fSesgo : '',
+                              fRefraccion: extraTelem.fRefraccion !== undefined ? extraTelem.fRefraccion : '',
+                              fCombinado: fixedVal !== null ? fixedVal : '',
                               origenDato: 'Admin: Factor',
                               playa: bKey,
                               horaNado: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
