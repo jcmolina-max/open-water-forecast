@@ -587,15 +587,25 @@ export default function App() {
     const now = Date.now();
 
     if (!lastSync || (now - parseInt(lastSync, 10) > THROTTLE_MS)) {
-      fetch('https://portus.puertos.es/portussvr/api/ubicaciones/35218?locale=es')
+      fetch('https://portus.puertos.es/portussvr/api/lastData/station/1070084?locale=es', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(["O","M"])
+      })
         .then(res => res.ok ? res.json() : null)
         .then(data => {
-          if (data) {
+          if (data && data.datos && data.datos.length > 0) {
             localStorage.setItem(LAST_SYNC_KEY, now.toString());
-            if (data.Hs !== undefined) setLatestBuoyHeight(parseFloat(data.Hs).toFixed(2));
-            if (data.Tp !== undefined) setLatestBuoyPeriod(parseFloat(data.Tp).toFixed(1));
-            if (data.Dir !== undefined) setLatestBuoyDir(parseFloat(data.Dir));
-            if (data.WaterTemp !== undefined) setLatestBuoyTemp(parseFloat(data.WaterTemp).toFixed(1));
+            const hsItem = data.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Altura'));
+            const tpItem = data.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Periodo'));
+            const dirItem = data.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Direccion'));
+            const tempItem = data.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Temperatura'));
+
+            if (hsItem && hsItem.valor) setLatestBuoyHeight(parseFloat(hsItem.valor).toFixed(2));
+            if (tpItem && tpItem.valor) setLatestBuoyPeriod(parseFloat(tpItem.valor).toFixed(1));
+            if (dirItem && dirItem.valor) setLatestBuoyDir(parseFloat(dirItem.valor));
+            if (tempItem && tempItem.valor) setLatestBuoyTemp(parseFloat(tempItem.valor).toFixed(1));
+
             setLatestBuoyDate(new Date());
             setLatestBuoySource('Puertos del Estado (Estación 2056 - Málaga)');
           }
