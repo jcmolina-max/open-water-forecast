@@ -1,4 +1,6 @@
 // api/buoy-cron.js
+// Extractor Autónomo Vercel Cron (24/7) - Puertos del Estado Málaga (Estación 2056 / Widget 35218)
+
 export default async function handler(req, res) {
   try {
     const GOOGLE_WEBHOOK_URL = process.env.GOOGLE_SCRIPT_WEBHOOK_URL || "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec";
@@ -13,6 +15,7 @@ export default async function handler(req, res) {
 
     let buoyRealData = null;
 
+    // 1. Intento lectura en vivo de Puertos del Estado (Estación 2056 - Málaga)
     try {
       const response = await fetch(portusUrl, { headers });
       if (response.ok) {
@@ -33,6 +36,7 @@ export default async function handler(req, res) {
       console.warn("Fallo conexión Puertos:", e);
     }
 
+    // 2. Si Puertos no responde, consulta Open-Meteo Respaldo
     if (!buoyRealData || buoyRealData.altura === null) {
       const openMeteoUrl = "https://marine-api.open-meteo.com/v1/marine?latitude=36.695&longitude=-4.435&current=wave_height,wave_direction,wave_period&timezone=Europe%2FBerlin";
       const omRes = await fetch(openMeteoUrl);
@@ -51,6 +55,7 @@ export default async function handler(req, res) {
       }
     }
 
+    // 3. Enviar a Google Sheets (Telemetria_Sectores)
     const sheetPayload = {
       origenDato: "Boya: " + (buoyRealData ? buoyRealData.fuente : "Sin Conexión"),
       playa: "misericordia",
