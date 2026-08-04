@@ -414,9 +414,16 @@ function formatFriendlyDate(dateString) {
     
     const timeStr = regDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     
-    return 'Hace poco';
+    if (isToday) return `Hoy, ${timeStr}`;
+    if (isYesterday) return `Ayer, ${timeStr}`;
+    
+    const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
+    const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+    return `${capitalizedDay}, ${regDate.getDate()} ${regDate.toLocaleString('es-ES', { month: 'short' })}`;
+  } catch (e) {
+    return dateString || "";
   }
-};
+}
 
 function formatSwimFriendly(dateVal, swimHour) {
   if (!dateVal) return swimHour || '—';
