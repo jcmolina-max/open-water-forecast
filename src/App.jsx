@@ -2799,10 +2799,8 @@ export default function App() {
                       const calibrationLogsOnly = [...calibrationHistory]
                         .filter(item => {
                           const type = getRecordType(item);
-                          const sensStr = String(item.sensaciones || "");
-                          const noteStr = String(item.notasCalibracion || "");
-                          return (type === 'swimmer_report' || type === 'admin_report' || type === 'swimmer_msg' || type === 'admin_note') &&
-                                 (item.realOlas != null || sensStr !== "" || noteStr !== "");
+                          const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
+                          return (type === 'swimmer_report' || type === 'admin_report') && hasOlas;
                         })
                         .sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
                       return (
