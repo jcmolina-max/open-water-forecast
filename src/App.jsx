@@ -1613,7 +1613,8 @@ export default function App() {
       const isArr = Array.isArray(json);
       if (isArr || json.status === 'success' || json.status === 'empty') {
         const fetchedLogs = isArr ? json : (json.data || []);
-        setCalibrationHistory(fetchedLogs);
+        const sortedLogs = [...fetchedLogs].sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
+        setCalibrationHistory(sortedLogs);
         if (!isArr && json.visitasTotales !== undefined) {
           setTotalVisits(Number(json.visitasTotales));
         }
