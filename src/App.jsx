@@ -543,6 +543,7 @@ export default function App() {
   const [latestBuoyDir, setLatestBuoyDir] = useState(null);
   const [latestBuoyTemp, setLatestBuoyTemp] = useState(null);
   const [latestBuoyDate, setLatestBuoyDate] = useState(null);
+  const [showPuertosIframe, setShowPuertosIframe] = useState(false);
 
   useEffect(() => {
     // Ordenar explícitamente por timestamp descendente (los más recientes de hoy PRIMERO)
@@ -2211,55 +2212,73 @@ export default function App() {
                       <Anchor size={16} className="text-cyan-400" />
                       <span>Boya Real de Málaga</span>
                     </h3>
-                    <span className="text-[9px] font-black text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> EN VIVO
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowPuertosIframe(!showPuertosIframe)}
+                        className="text-[9px] font-extrabold text-cyan-300 hover:text-white bg-cyan-950/80 border border-cyan-800/60 px-2 py-0.5 rounded-md transition-all flex items-center gap-1 shadow-sm"
+                      >
+                        {showPuertosIframe ? '📊 Ver Ficha' : '🏛️ Widget Oficial'}
+                      </button>
+                      <span className="text-[9px] font-black text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> EN VIVO
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2.5 pt-0.5 text-left">
-                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hs)</span>
-                      <strong className="text-lg font-black text-cyan-300 block mt-0.5">
-                        {latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—'}
-                      </strong>
+                  {showPuertosIframe ? (
+                    <div className="w-full h-[290px] rounded-xl overflow-hidden border border-slate-700/60 shadow-inner bg-slate-950">
+                      <iframe
+                        src="https://portus.puertos.es/#/locationsWidget?code=35218&theme=dark&locale=es"
+                        className="w-full h-full border-none"
+                        title="Puertos del Estado - La Misericordia"
+                      ></iframe>
                     </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2.5 pt-0.5 text-left">
+                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hs)</span>
+                        <strong className="text-lg font-black text-cyan-300 block mt-0.5">
+                          {latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—'}
+                        </strong>
+                      </div>
 
-                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp)</span>
-                      <strong className="text-lg font-black text-indigo-300 block mt-0.5">
-                        {latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—'}
-                      </strong>
-                    </div>
+                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp)</span>
+                        <strong className="text-lg font-black text-indigo-300 block mt-0.5">
+                          {latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—'}
+                        </strong>
+                      </div>
 
-                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
-                      <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
-                        {(() => {
-                          let activeDir = null;
-                          if (latestBuoyDir && Number(latestBuoyDir) !== 110) {
-                            activeDir = Number(latestBuoyDir);
-                          } else if (currentDayData && currentDayData.hourly && currentDayData.hourly.length > 0) {
-                            const nowH = new Date().getHours();
-                            const hourRec = currentDayData.hourly.find(h => parseInt((h.time || "").split(':')[0], 10) === nowH) || currentDayData.hourly[0];
-                            if (hourRec && hourRec.swellDir != null && !isNaN(Number(hourRec.swellDir))) {
-                              activeDir = Number(hourRec.swellDir);
+                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
+                        <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
+                          {(() => {
+                            let activeDir = null;
+                            if (latestBuoyDir && Number(latestBuoyDir) !== 110) {
+                              activeDir = Number(latestBuoyDir);
+                            } else if (currentDayData && currentDayData.hourly && currentDayData.hourly.length > 0) {
+                              const nowH = new Date().getHours();
+                              const hourRec = currentDayData.hourly.find(h => parseInt((h.time || "").split(':')[0], 10) === nowH) || currentDayData.hourly[0];
+                              if (hourRec && hourRec.swellDir != null && !isNaN(Number(hourRec.swellDir))) {
+                                activeDir = Number(hourRec.swellDir);
+                              }
                             }
-                          }
-                          return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}º)` : '—';
-                        })()}
-                      </strong>
-                    </div>
+                            return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}º)` : '—';
+                          })()}
+                        </strong>
+                      </div>
 
-                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
-                      <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
-                        {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '—'}
-                      </strong>
+                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
+                        <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
+                          {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '—'}
+                        </strong>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
-                    <span>Origen: Puertos del Estado</span>
+                    <span>Origen: Puertos del Estado (Estación 2056 - Málaga)</span>
                     <span>Última lectura: {latestBuoyDate ? formatFriendlyDate(latestBuoyDate) : 'Sin datos'}</span>
                   </div>
                 </div>
@@ -2799,10 +2818,8 @@ export default function App() {
                       const calibrationLogsOnly = [...calibrationHistory]
                         .filter(item => {
                           const type = getRecordType(item);
-                          const sensStr = String(item.sensaciones || "");
-                          const noteStr = String(item.notasCalibracion || "");
-                          return (type === 'swimmer_report' || type === 'admin_report' || type === 'swimmer_msg' || type === 'admin_note') &&
-                                 (item.realOlas != null || sensStr !== "" || noteStr !== "");
+                          const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
+                          return (type === 'swimmer_report' || type === 'admin_report') && hasOlas;
                         })
                         .sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
                       return (
