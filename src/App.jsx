@@ -465,14 +465,6 @@ function formatSwimFriendly(dateVal, swimHourRaw) {
     return dateVal || swimHour || '—';
   }
 }
-      const monthStr = regDate.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
-      const timeBrackets = swimHour ? ` (${swimHour})` : '';
-      return `${capitalizedDay}, ${dayNum} ${monthStr}${timeBrackets}`;
-    }
-  } catch (e) {
-    return swimHour || '—';
-  }
-};
 
 function formatBoyaPeriod(raw) {
   if (!raw) return '—';
