@@ -543,6 +543,7 @@ export default function App() {
   const [latestBuoyDir, setLatestBuoyDir] = useState(null);
   const [latestBuoyTemp, setLatestBuoyTemp] = useState(null);
   const [latestBuoyDate, setLatestBuoyDate] = useState(null);
+  const [latestBuoySource, setLatestBuoySource] = useState(null);
   const [showPuertosIframe, setShowPuertosIframe] = useState(false);
 
   useEffect(() => {
@@ -569,9 +570,13 @@ export default function App() {
     const tempLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaTemp, 5, 35) !== null);
     setLatestBuoyTemp(tempLog ? parseBoyaNum(tempLog.boyaTemp, 5, 35).toFixed(1) : null);
 
-    // 5. Fecha de la última lectura física de la boya
+    // 5. Fecha y Fuente de la última lectura física de la boya
     const dateLog = heightLog || tempLog || periodLog || sortedNewestFirst[0];
     setLatestBuoyDate(dateLog && dateLog.fechaRegistro ? new Date(dateLog.fechaRegistro) : null);
+    
+    const srcLog = heightLog || dateLog;
+    const srcText = srcLog ? (String(srcLog.origenDato || '') + ' ' + String(srcLog.notasCalibracion || '')) : '';
+    setLatestBuoySource(srcText);
   }, [calibrationHistory]);
   
   // Formulario del Administrador
@@ -2278,7 +2283,11 @@ export default function App() {
                   )}
 
                   <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
-                    <span>Origen: Puertos del Estado (Estación 2056 - Málaga)</span>
+                    <span>
+                      Origen: {latestBuoySource && (latestBuoySource.includes('Open-Meteo') || latestBuoySource.includes('Respaldo') || latestBuoySource.includes('Satélite'))
+                        ? '⚠️ Open-Meteo (Satélite Respaldo)'
+                        : '⚓ Puertos del Estado (Estación 2056 - Málaga)'}
+                    </span>
                     <span>Última lectura: {latestBuoyDate ? formatFriendlyDate(latestBuoyDate) : 'Sin datos'}</span>
                   </div>
                 </div>
