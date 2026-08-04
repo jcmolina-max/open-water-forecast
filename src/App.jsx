@@ -2284,9 +2284,9 @@ export default function App() {
 
                   <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
                     <span>
-                      Origen: {latestBuoySource && (latestBuoySource.includes('Open-Meteo') || latestBuoySource.includes('Respaldo') || latestBuoySource.includes('Satélite'))
-                        ? '⚠️ Open-Meteo (Satélite Respaldo)'
-                        : '⚓ Puertos del Estado (Estación 2056 - Málaga)'}
+                      Origen: {showPuertosIframe 
+                        ? '⚓ Puertos del Estado (Estación 2056 - Málaga)' 
+                        : '🌐 Open-Meteo (Modelo Marino)'}
                     </span>
                     <span>Última lectura: {latestBuoyDate ? formatFriendlyDate(latestBuoyDate) : 'Sin datos'}</span>
                   </div>
