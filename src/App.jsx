@@ -545,25 +545,31 @@ export default function App() {
   const [latestBuoyDate, setLatestBuoyDate] = useState(null);
 
   useEffect(() => {
-    const reversedHistory = [...calibrationHistory].reverse();
+    // Ordenar explícitamente por timestamp descendente (los más recientes de hoy PRIMERO)
+    const sortedNewestFirst = [...calibrationHistory].sort((a, b) => {
+      const tsA = parseLogTimestamp(a);
+      const tsB = parseLogTimestamp(b);
+      return tsB - tsA;
+    });
+
     // 1. Buscar última altura real de boya válida (0.05m a 15m)
-    const heightLog = reversedHistory.find(item => parseBoyaNum(item.boyaAltura, 0.05, 15) !== null);
+    const heightLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaAltura, 0.05, 15) !== null);
     setLatestBuoyHeight(heightLog ? parseBoyaNum(heightLog.boyaAltura, 0.05, 15).toFixed(2) : null);
 
     // 2. Buscar último periodo real de boya válido (1s a 30s)
-    const periodLog = reversedHistory.find(item => parseBoyaNum(item.boyaPeriodo, 1, 30) !== null);
+    const periodLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaPeriodo, 1, 30) !== null);
     setLatestBuoyPeriod(periodLog ? `${parseBoyaNum(periodLog.boyaPeriodo, 1, 30).toFixed(1)}` : null);
 
     // 3. Buscar última dirección real de boya válida (0º a 360º)
-    const dirLog = reversedHistory.find(item => parseBoyaNum(item.boyaDireccion, 0, 360) !== null);
+    const dirLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaDireccion, 0, 360) !== null);
     setLatestBuoyDir(dirLog ? parseBoyaNum(dirLog.boyaDireccion, 0, 360) : null);
 
     // 4. Buscar última temperatura real de agua válida (5ºC a 35ºC)
-    const tempLog = reversedHistory.find(item => parseBoyaNum(item.boyaTemp, 5, 35) !== null);
+    const tempLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaTemp, 5, 35) !== null);
     setLatestBuoyTemp(tempLog ? parseBoyaNum(tempLog.boyaTemp, 5, 35).toFixed(1) : null);
 
     // 5. Fecha de la última lectura física de la boya
-    const dateLog = heightLog || tempLog || periodLog || reversedHistory[0];
+    const dateLog = heightLog || tempLog || periodLog || sortedNewestFirst[0];
     setLatestBuoyDate(dateLog && dateLog.fechaRegistro ? new Date(dateLog.fechaRegistro) : null);
   }, [calibrationHistory]);
   
@@ -2789,13 +2795,15 @@ export default function App() {
                       <p className="text-xs text-slate-500 mt-1">Selecciona una sesión real para auditar qué falló o acertó en los modelos satelitales.</p>
                     </div>
                     {(() => {
-                      const calibrationLogsOnly = [...calibrationHistory].reverse().filter(item => {
-                        const type = getRecordType(item);
-                        const sensStr = String(item.sensaciones || "");
-                        const noteStr = String(item.notasCalibracion || "");
-                        return (type === 'swimmer_report' || type === 'admin_report' || type === 'swimmer_msg' || type === 'admin_note') &&
-                               (item.realOlas != null || sensStr !== "" || noteStr !== "");
-                      });
+                      const calibrationLogsOnly = [...calibrationHistory]
+                        .filter(item => {
+                          const type = getRecordType(item);
+                          const sensStr = String(item.sensaciones || "");
+                          const noteStr = String(item.notasCalibracion || "");
+                          return (type === 'swimmer_report' || type === 'admin_report' || type === 'swimmer_msg' || type === 'admin_note') &&
+                                 (item.realOlas != null || sensStr !== "" || noteStr !== "");
+                        })
+                        .sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
                       return (
                         <select
                           value={selectedHistoryLog ? calibrationLogsOnly.indexOf(selectedHistoryLog) : ''}
@@ -2806,11 +2814,15 @@ export default function App() {
                           className="border border-slate-300 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 bg-white shadow-sm focus:border-indigo-500 outline-none w-full"
                         >
                           <option value="">-- Seleccionar Sesión Guardada --</option>
-                          {calibrationLogsOnly.map((item, idx) => (
-                            <option key={idx} value={idx}>
-                              {new Date(item.fechaRegistro || item.fecha || Date.now()).toLocaleDateString('es-ES')} ({item.horaNado || '12:00'}) - {BEACHES[item.playa]?.name.split(',')[0] || item.playa || 'Misericordia'} {item.sensaciones ? `[${String(item.sensaciones).substring(0, 30)}...]` : ''}
-                            </option>
-                          ))}
+                          {calibrationLogsOnly.map((item, idx) => {
+                            const cleanSens = String(item.sensaciones || "").replace(/^\[.*?\]\s*/, '').trim();
+                            const sensPreview = cleanSens ? ` - "${cleanSens.substring(0, 25)}${cleanSens.length > 25 ? '...' : ''}"` : '';
+                            return (
+                              <option key={idx} value={idx}>
+                                {formatSwimFriendly(item.fechaRegistro || item.fecha, item.horaNado)} - {BEACHES[item.playa]?.name.split(',')[0] || item.playa || 'Misericordia'}{sensPreview}
+                              </option>
+                            );
+                          })}
                         </select>
                       );
                     })()}
