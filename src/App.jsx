@@ -578,6 +578,31 @@ export default function App() {
     const srcText = srcLog ? (String(srcLog.origenDato || '') + ' ' + String(srcLog.notasCalibracion || '')) : '';
     setLatestBuoySource(srcText);
   }, [calibrationHistory]);
+
+  // Sincronización Inteligente de Boya Real al abrir la App (Smart Throttle 15 min)
+  useEffect(() => {
+    const THROTTLE_MS = 15 * 60 * 1000; // 15 Minutos
+    const LAST_SYNC_KEY = 'openwater_buoy_smart_sync_ts';
+    const lastSync = localStorage.getItem(LAST_SYNC_KEY);
+    const now = Date.now();
+
+    if (!lastSync || (now - parseInt(lastSync, 10) > THROTTLE_MS)) {
+      fetch('https://portus.puertos.es/portussvr/api/ubicaciones/35218?locale=es')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data) {
+            localStorage.setItem(LAST_SYNC_KEY, now.toString());
+            if (data.Hs !== undefined) setLatestBuoyHeight(parseFloat(data.Hs).toFixed(2));
+            if (data.Tp !== undefined) setLatestBuoyPeriod(parseFloat(data.Tp).toFixed(1));
+            if (data.Dir !== undefined) setLatestBuoyDir(parseFloat(data.Dir));
+            if (data.WaterTemp !== undefined) setLatestBuoyTemp(parseFloat(data.WaterTemp).toFixed(1));
+            setLatestBuoyDate(new Date());
+            setLatestBuoySource('Puertos del Estado (Estación 2056 - Málaga)');
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
   
   // Formulario del Administrador
   const [adminPlaya, setAdminPlaya] = useState('misericordia');
