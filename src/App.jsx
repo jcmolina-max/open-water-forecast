@@ -370,7 +370,8 @@ function getWindDirectionFullName(degrees) {
   return names[cleanDir] ? `${dirStr} (${names[cleanDir]})` : dirStr;
 };
 
-function parseSwimmerSensaciones(text) {
+function parseSwimmerSensaciones(textVal) {
+  const text = textVal !== null && textVal !== undefined ? String(textVal) : '';
   if (!text) return { nombre: 'Anónimo', medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
   
   const matchNew = text.match(/^\[Nombre:\s*([^|]+)\s*\|\s*Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
@@ -408,18 +409,11 @@ function formatFriendlyDate(dateString) {
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
     
+    const isToday = regDate.toDateString() === today.toDateString();
+    const isYesterday = regDate.toDateString() === yesterday.toDateString();
+    
     const timeStr = regDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     
-    if (regDate.toDateString() === today.toDateString()) {
-      return `Hoy, ${timeStr}`;
-    } else if (regDate.toDateString() === yesterday.toDateString()) {
-      return `Ayer, ${timeStr}`;
-    } else {
-      const dayName = regDate.toLocaleDateString('es-ES', { weekday: 'long' });
-      const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-      return `${capitalizedDay}, ${regDate.getDate()} ${regDate.toLocaleString('es-ES', { month: 'short' })}`;
-    }
-  } catch (e) {
     return 'Hace poco';
   }
 };
@@ -1588,10 +1582,11 @@ export default function App() {
       const response = await fetch(WEBHOOK_URL);
       const text = await response.text();
       const json = JSON.parse(text);
-      if (json.status === 'success' || json.status === 'empty') {
-        const fetchedLogs = json.data || [];
+      const isArr = Array.isArray(json);
+      if (isArr || json.status === 'success' || json.status === 'empty') {
+        const fetchedLogs = isArr ? json : (json.data || []);
         setCalibrationHistory(fetchedLogs);
-        if (json.visitasTotales !== undefined) {
+        if (!isArr && json.visitasTotales !== undefined) {
           setTotalVisits(Number(json.visitasTotales));
         }
 
@@ -1608,9 +1603,11 @@ export default function App() {
 
         // 2. Extraer marcas de tiempo y factores guardados por el supervisor desde Google Sheets
         fetchedLogs.forEach(item => {
-          if (item.origenDato === 'Admin: Factor' || (item.sensaciones && item.sensaciones.startsWith('[FactorConfig:'))) {
+          const itemOrig = String(item.origenDato || "");
+          const itemSens = String(item.sensaciones || "");
+          if (itemOrig === 'Admin: Factor' || itemSens.startsWith('[FactorConfig:')) {
             try {
-              const match = item.sensaciones.match(/\[FactorConfig:\s*({.*?})\]/);
+              const match = itemSens.match(/\[FactorConfig:\s*({.*?})\]/);
               if (match && match[1]) {
                 const parsed = JSON.parse(match[1]);
                 if (parsed.storageKey) {
@@ -3131,7 +3128,7 @@ export default function App() {
 
                               {(() => {
                                 const isSwimmerType = recType === 'swimmer_report' || recType === 'swimmer_msg';
-                                const displayComment = isSwimmerType ? parsed.comentario : (recType === 'admin_alert' ? item.notasCalibracion.replace('[ALERTA_OFICIAL]', '').trim() : item.sensaciones);
+                                const displayComment = isSwimmerType ? parsed.comentario : (recType === 'admin_alert' ? String(item.notasCalibracion || '').replace('[ALERTA_OFICIAL]', '').trim() : String(item.sensaciones !== null && item.sensaciones !== undefined ? item.sensaciones : ''));
                                 
                                 if (displayComment && recType !== 'buoy_sync') {
                                   return (
@@ -3434,7 +3431,7 @@ export default function App() {
 
                               {(() => {
                                 const isSwimmerType = recType === 'swimmer_report' || recType === 'swimmer_msg';
-                                const displayComment = isSwimmerType ? parsed.comentario : item.sensaciones;
+                                const displayComment = isSwimmerType ? parsed.comentario : String(item.sensaciones !== null && item.sensaciones !== undefined ? item.sensaciones : '');
                                 
                                 if (displayComment && recType !== 'buoy_sync') {
                                   return (
