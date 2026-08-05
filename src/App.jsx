@@ -476,9 +476,9 @@ function formatBoyaPeriod(raw) {
 }
 
 function getRecordType(item) {
-  const orig = item.origenDato || "";
-  const notes = item.notasCalibracion || "";
-  const sens = item.sensaciones || "";
+  const orig = String(item.origenDato || "");
+  const notes = String(item.notasCalibracion || "");
+  const sens = String(item.sensaciones || "");
   const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
   
   if (orig === 'Admin: Factor' || sens.includes('[FactorConfig:')) {
@@ -489,7 +489,7 @@ function getRecordType(item) {
     return 'admin_alert';
   }
   
-  if (orig === 'Sincronización Boya' || orig === 'Boya: Sincronización') {
+  if (orig.startsWith('Boya:') || orig.includes('Sincronización') || orig.includes('Open-Meteo') || notes.includes('Vercel Cron')) {
     return 'buoy_sync';
   }
   
@@ -543,6 +543,8 @@ export default function App() {
   const [latestBuoyDir, setLatestBuoyDir] = useState(null);
   const [latestBuoyTemp, setLatestBuoyTemp] = useState(null);
   const [latestBuoyDate, setLatestBuoyDate] = useState(null);
+  const [latestBuoySource, setLatestBuoySource] = useState(null);
+  const [showPuertosIframe, setShowPuertosIframe] = useState(false);
 
   useEffect(() => {
     // Ordenar explícitamente por timestamp descendente (los más recientes de hoy PRIMERO)
@@ -568,10 +570,54 @@ export default function App() {
     const tempLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaTemp, 5, 35) !== null);
     setLatestBuoyTemp(tempLog ? parseBoyaNum(tempLog.boyaTemp, 5, 35).toFixed(1) : null);
 
-    // 5. Fecha de la última lectura física de la boya
+    // 5. Fecha y Fuente de la última lectura física de la boya
     const dateLog = heightLog || tempLog || periodLog || sortedNewestFirst[0];
     setLatestBuoyDate(dateLog && dateLog.fechaRegistro ? new Date(dateLog.fechaRegistro) : null);
+    
+    const srcLog = heightLog || dateLog;
+    const srcText = srcLog ? (String(srcLog.origenDato || '') + ' ' + String(srcLog.notasCalibracion || '')) : '';
+    setLatestBuoySource(srcText);
   }, [calibrationHistory]);
+
+  // Sincronización Inteligente de Boya Real al abrir la App (Smart Throttle 15 min)
+  useEffect(() => {
+    const THROTTLE_MS = 15 * 60 * 1000; // 15 Minutos
+    const LAST_SYNC_KEY = 'openwater_buoy_smart_sync_ts';
+    const lastSync = localStorage.getItem(LAST_SYNC_KEY);
+    const now = Date.now();
+
+    if (!lastSync || (now - parseInt(lastSync, 10) > THROTTLE_MS)) {
+      fetch('https://portus.puertos.es/portussvr/api/lastData/station/1070084?locale=es', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(["O","M"])
+      })
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && data.datos && data.datos.length > 0) {
+            localStorage.setItem(LAST_SYNC_KEY, now.toString());
+            const hsItem = data.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Altura'));
+            const tpItem = data.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Periodo'));
+            const dirItem = data.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Direccion'));
+            const tempItem = data.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Temperatura'));
+
+            const hVal = hsItem && hsItem.valor ? parseFloat(hsItem.valor).toFixed(2) : null;
+            const tVal = tpItem && tpItem.valor ? parseFloat(tpItem.valor).toFixed(1) : null;
+            const dVal = dirItem && dirItem.valor ? parseFloat(dirItem.valor) : null;
+            const tempVal = tempItem && tempItem.valor ? parseFloat(tempItem.valor).toFixed(1) : null;
+
+            if (hVal) setLatestBuoyHeight(hVal);
+            if (tVal) setLatestBuoyPeriod(tVal);
+            if (dVal) setLatestBuoyDir(dVal);
+            if (tempVal) setLatestBuoyTemp(tempVal);
+
+            setLatestBuoyDate(new Date());
+            setLatestBuoySource('Puertos del Estado (Estación 2056 - Málaga)');
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
   
   // Formulario del Administrador
   const [adminPlaya, setAdminPlaya] = useState('misericordia');
@@ -2211,55 +2257,77 @@ export default function App() {
                       <Anchor size={16} className="text-cyan-400" />
                       <span>Boya Real de Málaga</span>
                     </h3>
-                    <span className="text-[9px] font-black text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> EN VIVO
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowPuertosIframe(!showPuertosIframe)}
+                        className="text-[9px] font-extrabold text-cyan-300 hover:text-white bg-cyan-950/80 border border-cyan-800/60 px-2 py-0.5 rounded-md transition-all flex items-center gap-1 shadow-sm"
+                      >
+                        {showPuertosIframe ? '📊 Ver Ficha' : '🏛️ Widget Oficial'}
+                      </button>
+                      <span className="text-[9px] font-black text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> EN VIVO
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2.5 pt-0.5 text-left">
-                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hs)</span>
-                      <strong className="text-lg font-black text-cyan-300 block mt-0.5">
-                        {latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—'}
-                      </strong>
+                  {showPuertosIframe ? (
+                    <div className="w-full h-[290px] rounded-xl overflow-hidden border border-slate-700/60 shadow-inner bg-slate-950">
+                      <iframe
+                        src="https://portus.puertos.es/#/locationsWidget?code=35218&theme=dark&locale=es"
+                        className="w-full h-full border-none"
+                        title="Puertos del Estado - La Misericordia"
+                      ></iframe>
                     </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2.5 pt-0.5 text-left">
+                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hs)</span>
+                        <strong className="text-lg font-black text-cyan-300 block mt-0.5">
+                          {latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—'}
+                        </strong>
+                      </div>
 
-                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp)</span>
-                      <strong className="text-lg font-black text-indigo-300 block mt-0.5">
-                        {latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—'}
-                      </strong>
-                    </div>
+                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp)</span>
+                        <strong className="text-lg font-black text-indigo-300 block mt-0.5">
+                          {latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—'}
+                        </strong>
+                      </div>
 
-                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
-                      <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
-                        {(() => {
-                          let activeDir = null;
-                          if (latestBuoyDir && Number(latestBuoyDir) !== 110) {
-                            activeDir = Number(latestBuoyDir);
-                          } else if (currentDayData && currentDayData.hourly && currentDayData.hourly.length > 0) {
-                            const nowH = new Date().getHours();
-                            const hourRec = currentDayData.hourly.find(h => parseInt((h.time || "").split(':')[0], 10) === nowH) || currentDayData.hourly[0];
-                            if (hourRec && hourRec.swellDir != null && !isNaN(Number(hourRec.swellDir))) {
-                              activeDir = Number(hourRec.swellDir);
+                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
+                        <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
+                          {(() => {
+                            let activeDir = null;
+                            if (latestBuoyDir && Number(latestBuoyDir) !== 110) {
+                              activeDir = Number(latestBuoyDir);
+                            } else if (currentDayData && currentDayData.hourly && currentDayData.hourly.length > 0) {
+                              const nowH = new Date().getHours();
+                              const hourRec = currentDayData.hourly.find(h => parseInt((h.time || "").split(':')[0], 10) === nowH) || currentDayData.hourly[0];
+                              if (hourRec && hourRec.swellDir != null && !isNaN(Number(hourRec.swellDir))) {
+                                activeDir = Number(hourRec.swellDir);
+                              }
                             }
-                          }
-                          return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}º)` : '—';
-                        })()}
-                      </strong>
-                    </div>
+                            return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}º)` : '—';
+                          })()}
+                        </strong>
+                      </div>
 
-                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
-                      <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
-                        {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '—'}
-                      </strong>
+                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
+                        <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
+                          {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '—'}
+                        </strong>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
-                    <span>Origen: Puertos del Estado</span>
+                    <span>
+                      Origen: {showPuertosIframe 
+                        ? '⚓ Puertos del Estado (Estación 2056 - Málaga)' 
+                        : '🌐 Open-Meteo (Modelo Marino)'}
+                    </span>
                     <span>Última lectura: {latestBuoyDate ? formatFriendlyDate(latestBuoyDate) : 'Sin datos'}</span>
                   </div>
                 </div>
@@ -3031,7 +3099,7 @@ export default function App() {
                       ) : (
                         calibrationHistory.map((item, idx) => {
                           const recType = getRecordType(item);
-                          if (recType === 'system_factor') return null;
+                          if (recType === 'system_factor' || recType === 'buoy_sync') return null;
                           const parsed = parseSwimmerSensaciones(item.sensaciones);
                           let bgClass = "bg-slate-50 hover:bg-slate-100/80 border-slate-200/60";
                           let typeBadge = null;
