@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/buoy-cron",
-      "schedule": "0 6-21 * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }
