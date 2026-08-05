@@ -476,9 +476,9 @@ function formatBoyaPeriod(raw) {
 }
 
 function getRecordType(item) {
-  const orig = item.origenDato || "";
-  const notes = item.notasCalibracion || "";
-  const sens = item.sensaciones || "";
+  const orig = String(item.origenDato || "");
+  const notes = String(item.notasCalibracion || "");
+  const sens = String(item.sensaciones || "");
   const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
   
   if (orig === 'Admin: Factor' || sens.includes('[FactorConfig:')) {
@@ -489,7 +489,7 @@ function getRecordType(item) {
     return 'admin_alert';
   }
   
-  if (orig === 'Sincronización Boya' || orig === 'Boya: Sincronización') {
+  if (orig.startsWith('Boya:') || orig.includes('Sincronización') || orig.includes('Open-Meteo') || notes.includes('Vercel Cron')) {
     return 'buoy_sync';
   }
   
@@ -601,10 +601,15 @@ export default function App() {
             const dirItem = data.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Direccion'));
             const tempItem = data.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Temperatura'));
 
-            if (hsItem && hsItem.valor) setLatestBuoyHeight(parseFloat(hsItem.valor).toFixed(2));
-            if (tpItem && tpItem.valor) setLatestBuoyPeriod(parseFloat(tpItem.valor).toFixed(1));
-            if (dirItem && dirItem.valor) setLatestBuoyDir(parseFloat(dirItem.valor));
-            if (tempItem && tempItem.valor) setLatestBuoyTemp(parseFloat(tempItem.valor).toFixed(1));
+            const hVal = hsItem && hsItem.valor ? parseFloat(hsItem.valor).toFixed(2) : null;
+            const tVal = tpItem && tpItem.valor ? parseFloat(tpItem.valor).toFixed(1) : null;
+            const dVal = dirItem && dirItem.valor ? parseFloat(dirItem.valor) : null;
+            const tempVal = tempItem && tempItem.valor ? parseFloat(tempItem.valor).toFixed(1) : null;
+
+            if (hVal) setLatestBuoyHeight(hVal);
+            if (tVal) setLatestBuoyPeriod(tVal);
+            if (dVal) setLatestBuoyDir(dVal);
+            if (tempVal) setLatestBuoyTemp(tempVal);
 
             setLatestBuoyDate(new Date());
             setLatestBuoySource('Puertos del Estado (Estación 2056 - Málaga)');
@@ -3094,7 +3099,7 @@ export default function App() {
                       ) : (
                         calibrationHistory.map((item, idx) => {
                           const recType = getRecordType(item);
-                          if (recType === 'system_factor') return null;
+                          if (recType === 'system_factor' || recType === 'buoy_sync') return null;
                           const parsed = parseSwimmerSensaciones(item.sensaciones);
                           let bgClass = "bg-slate-50 hover:bg-slate-100/80 border-slate-200/60";
                           let typeBadge = null;
