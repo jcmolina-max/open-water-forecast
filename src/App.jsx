@@ -1553,7 +1553,7 @@ export default function App() {
             name: beach.name,
             score: avgScore,
             temps: { 
-                air: localClimateDown ? "-" : Math.round(weatherJson?.hourly?.temperature_2m?.[noonIndex] || 15), 
+                air: localClimateDown ? "-" : Math.round(weatherJson?.hourly?.temperature_2m?.[noonIndex] || (new Date().getMonth() >= 4 && new Date().getMonth() <= 8 ? 29 : 18)), 
                 water: waterTemp
             },
             hourly: translatedHourlyData,
