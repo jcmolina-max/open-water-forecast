@@ -4407,53 +4407,65 @@ export default function App() {
                                         </div>
                                       </div>
 
-                                      {/* BOTONES DE ACCIÓN */}
-                                      <div className="flex items-center justify-between gap-1.5 pt-1 flex-wrap">
-                                        {suggestedRecentFactor !== null && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const fixedVal = parseFloat(suggestedRecentFactor.toFixed(2));
-                                              const nowTs = Date.now();
-                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
-                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
-                                              setAdminManualScaleFactors(updated);
-                                              setAdminFactorApprovalTimes(updatedTimes);
-                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                              saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
-                                              setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🟢 ¡Aprobado Factor Reciente (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
-                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
-                                            }}
-                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm flex-1 min-w-[120px] text-center"
-                                          >
-                                            {countRecent >= 5 ? `🟢 Aprobar Consolidado (${suggestedRecentFactor.toFixed(2)}x)` : `⚡ Aprobar Reciente (${suggestedRecentFactor.toFixed(2)}x)`}
-                                          </button>
-                                        )}
+                                      {/* BOTONES DE ACCION PERMANENTES (4 SIEMPRE VISIBLES EN GRID 2x2) */}
+                                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                        <button
+                                          type="button"
+                                          disabled={suggestedRecentFactor === null}
+                                          onClick={() => {
+                                            if (suggestedRecentFactor === null) return;
+                                            const fixedVal = parseFloat(suggestedRecentFactor.toFixed(2));
+                                            const nowTs = Date.now();
+                                            const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                            const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                            setAdminManualScaleFactors(updated);
+                                            setAdminFactorApprovalTimes(updatedTimes);
+                                            localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                            localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                            saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
+                                            setDataRefreshKey(k => k + 1);
+                                            setFactorFeedbackMsg(`🟢 ¡Aprobado Factor Reciente (${fixedVal}x) para ${bName}! Sincronizado.`);
+                                            setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                          }}
+                                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm text-center flex items-center justify-center gap-1 ${
+                                            suggestedRecentFactor !== null
+                                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
+                                              : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                                          }`}
+                                        >
+                                          {suggestedRecentFactor !== null 
+                                            ? (countRecent >= 5 ? `🟢 Aprobar Consolidado (${suggestedRecentFactor.toFixed(2)}x)` : `⚡ Aprobar Reciente (${suggestedRecentFactor.toFixed(2)}x)`)
+                                            : '⚡ Aprobar Reciente'}
+                                        </button>
 
-                                        {suggestedGlobalFactor !== null && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const fixedVal = parseFloat(suggestedGlobalFactor.toFixed(2));
-                                              const nowTs = Date.now();
-                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
-                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
-                                              setAdminManualScaleFactors(updated);
-                                              setAdminFactorApprovalTimes(updatedTimes);
-                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                              saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
-                                              setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🔵 ¡Aprobada Sugerencia Global (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
-                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
-                                            }}
-                                            className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm flex-1 min-w-[120px] text-center"
-                                          >
-                                            🔵 Aprobar Global ({suggestedGlobalFactor.toFixed(2)}x)
-                                          </button>
-                                        )}
+                                        <button
+                                          type="button"
+                                          disabled={suggestedGlobalFactor === null}
+                                          onClick={() => {
+                                            if (suggestedGlobalFactor === null) return;
+                                            const fixedVal = parseFloat(suggestedGlobalFactor.toFixed(2));
+                                            const nowTs = Date.now();
+                                            const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                            const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                            setAdminManualScaleFactors(updated);
+                                            setAdminFactorApprovalTimes(updatedTimes);
+                                            localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                            localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                            saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
+                                            setDataRefreshKey(k => k + 1);
+                                            setFactorFeedbackMsg(`🔵 ¡Aprobada Sugerencia Global (${fixedVal}x) para ${bName}! Sincronizado.`);
+                                            setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                          }}
+                                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm text-center flex items-center justify-center gap-1 ${
+                                            suggestedGlobalFactor !== null
+                                              ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                                              : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                                          }`}
+                                        >
+                                          {suggestedGlobalFactor !== null 
+                                            ? `🔵 Aprobar Global (${suggestedGlobalFactor.toFixed(2)}x)`
+                                            : '📜 Aprobar Global'}
+                                        </button>
 
                                         <button
                                           type="button"
@@ -4472,7 +4484,7 @@ export default function App() {
                                             setFactorFeedbackMsg(`🔄 ¡Reset a Fábrica (${sec.defaultFactor.toFixed(2)}x) para ${bName}! Sincronizado.`);
                                             setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                           }}
-                                          className="bg-rose-50 text-rose-700 hover:bg-rose-100 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold border border-rose-200 transition-all flex-1 min-w-[90px] text-center"
+                                          className="bg-rose-50 text-rose-700 hover:bg-rose-100 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold border border-rose-200 transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
                                         >
                                           🔄 Reset ({sec.defaultFactor.toFixed(2)}x)
                                         </button>
@@ -4480,23 +4492,28 @@ export default function App() {
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            const val = prompt(`Factor manual para ${bName} (${sec.key.toUpperCase()}):`, activeFactor);
-                                            if (val !== null && !isNaN(parseFloat(val))) {
-                                              const fixedVal = parseFloat(parseFloat(val).toFixed(2));
-                                              const nowTs = Date.now();
-                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
-                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
-                                              setAdminManualScaleFactors(updated);
-                                              setAdminFactorApprovalTimes(updatedTimes);
-                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                              saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
-                                              setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`✏️ ¡Factor manual para ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x! Sincronizado en la nube.`);
-                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                            const current = activeFactor;
+                                            const input = prompt(`✏️ Introduce el factor manual exacto para ${bName} (${sec.title}):`, current.toString());
+                                            if (input !== null && input.trim() !== "") {
+                                              const parsed = parseFloat(input.replace(",", "."));
+                                              if (!isNaN(parsed) && parsed > 0 && parsed <= 3.0) {
+                                                const nowTs = Date.now();
+                                                const updated = { ...adminManualScaleFactors, [storageKey]: parsed };
+                                                const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                                setAdminManualScaleFactors(updated);
+                                                setAdminFactorApprovalTimes(updatedTimes);
+                                                localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                                localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                                saveFactorChangeToCloud(bKey, sec.key, parsed, nowTs, bName);
+                                                setDataRefreshKey(k => k + 1);
+                                                setFactorFeedbackMsg(`✏️ ¡Factor Manual fijado en ${parsed}x para ${bName}!`);
+                                                setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                              } else {
+                                                alert("Por favor, introduce un número válido entre 0.1 y 3.0");
+                                              }
                                             }
                                           }}
-                                          className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-indigo-200 transition-colors ml-auto"
+                                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
                                         >
                                           ✏️ Manual
                                         </button>
