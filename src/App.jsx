@@ -1,759 +1,1212 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Waves, 
+  MapPin, 
+  Bot,
+  Loader2,
+  AlertTriangle,
+  Activity,
+  Thermometer,
+  Sun,
+  Clock,
+  Droplets,
+  ThumbsUp,
+  ThumbsDown,
+  CalendarDays,
+  AlertCircle,
+  Anchor,
+  BookOpen, 
+  X, 
+  Wind, 
+  ThermometerSun, 
+  ShieldAlert,
+  ArrowUpRight,
+  Info,
+  Compass,
+  History,
+  TestTubes,
+  Zap,
+  CloudFog,
+  RefreshCw,
+  Copy
+} from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
+
+// Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
+const BEACHES = {
+  misericordia: { name: "La Misericordia, Málaga", lat: 36.696, lon: -4.444, facing: 135 },
+  malagueta: { name: "La Malagueta, Málaga", lat: 36.718, lon: -4.407, facing: 180 },
+  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386, facing: 180 },
+  // v9.4+ — expansión costera (Open-Meteo: mismos endpoints, lat/lon por playa)
+  los_alamos: { name: "Los Álamos, Torremolinos", lat: 36.6398, lon: -4.4815, facing: 188 },
+  bajondillo: { name: "El Bajondillo, Torremolinos", lat: 36.6271, lon: -4.4916, facing: 182 },
+  rincon_victoria: { name: "Rincón de la Victoria, Málaga", lat: 36.7131, lon: -4.2743, facing: 162 },
+  cala_del_moral: { name: "La Cala del Moral, Rincón de la Victoria", lat: 36.7148, lon: -4.31, facing: 148 }
+};
+
+// Generador de etiquetas de fecha
+const getDateLabel = (offset, prefix) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  const day = d.getDate();
+  const monthStr = d.toLocaleString('es-ES', { month: 'short' });
+  return `${prefix} (${day} ${monthStr})`;
+};
+
 /**
- * ============================================================================
- * GOOGLE APPS SCRIPT v27.0 MASTER COMPLETO (CONSOLIDADO 100%)
- * Proyecto: Calibraciones OpenWater Tracker (Málaga - 7 Playas)
- * 
- * NOVEDADES INTEGRADAS:
- * 1. RESOLUCIÓN DEFINITIVA ERROR 429 EN VIENTO:
- *    - Petición con User-Agent personalizado a api.open-meteo.com (2.5 km).
- *    - Si responde 429, salta automáticamente al nodo DWD ICON-D2 (2.2 km) rellenando viento, dirección, humedad y temperatura.
- * 2. TEMPERATURA PREVISTA DEL AGUA (SST):
- *    - Incluye sea_surface_temperature en la llamada marina unificada.
- * 3. SOPORTE MULTI-REPORTE INDEPENDIENTE:
- *    - Si entran 2 o más reportes de nadadores a la misma hora, cada uno genera su propia fila en MOTOR_ANALISIS_TEST sin sobrescribirse.
- * 4. CONEXIÓN OFICIAL CON EL PROXY DE LA BOYA DE MÁLAGA:
- *    - Sincroniza la telemetría en tiempo real de la boya con todas las playas registradas.
- * 5. DOBLE ESCRITURA EN PARALELO INTACTA:
- *    - Escribe en Calibración (las 23 columnas completas) y en REPORTES_NADADORES_TEST.
- * ============================================================================
+ * Coeficiente dinámico de energía de ola (v10.0 motor Kj).
+ * Dirección en grados = procedencia del oleaje (convención Open-Meteo, desde el norte en sentido horario).
+ * Energía ≈ altura² × periodo × coeficiente.
+ * Bases: S+SSE 7.5 | SE 8.5 | SO 9.5 | resto 8.0. Periodo >5s +1.5 | <4s −0.5.
  */
+const getDynamicWaveEnergyCoefficient = (waveDirDeg, period) => {
+  const p = Number(period);
+  let base = 8.0;
 
-function doPost(e) {
-  try {
-    if (!e || e.postData === undefined) {
-      return ContentService.createTextOutput(JSON.stringify({ "status": "preflight_ok" }))
-        .setMimeType(ContentService.MimeType.TEXT);
-    }
+  if (waveDirDeg !== undefined && waveDirDeg !== null && !Number.isNaN(Number(waveDirDeg))) {
+    const d = ((Number(waveDirDeg) % 360) + 360) % 360;
+    // Sur (S) + Sur-Sureste (SSE): sectores 16 puntos contiguos (~146°–191°)
+    if (d >= 146.25 && d < 191.25) base = 7.5;
+    else if (d >= 123.75 && d < 146.25) base = 8.5; // Sureste (SE)
+    else if (d >= 202.5 && d < 247.5) base = 9.5; // Suroeste (SO)
+    else base = 8.0;
+  }
 
-    var jsonString = e.postData.contents;
-    var data = JSON.parse(jsonString);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // MÓDULO DE PRUEBAS _TEST
-    if (data && data.testMode === true) {
-      return handleTestPayload(ss, data);
-    }
+  let coef = base;
+  if (!Number.isNaN(p)) {
+    if (p > 5) coef += 1.5;
+    if (p < 4) coef -= 0.5;
+  }
+  return Math.round(coef * 100) / 100;
+};
 
-    // 1. REGISTRO DE VISITAS
-    if (data && data.action === "registrar_visita") {
-      var visitSheet = ss.getSheetByName("Visitas");
-      if (!visitSheet) {
-        visitSheet = ss.insertSheet("Visitas");
-        visitSheet.appendRow(["Fecha", "Origen"]);
-      }
-      visitSheet.appendRow([new Date(), data.origen || "Desconocido"]);
-      return ContentService.createTextOutput(JSON.stringify({ "status": "visita_registrada" }))
-        .setMimeType(ContentService.MimeType.TEXT);
-    }
+export default function App() {
+  const [selectedBeach, setSelectedBeach] = useState('misericordia');
+  // Por defecto seleccionamos "Hoy" (Índice 1, ya que Ayer es 0)
+  const [selectedDay, setSelectedDay] = useState(1); 
+  const [beachData, setBeachData] = useState(null); 
+  const [currentNowData, setCurrentNowData] = useState(null); // Datos del momento exacto actual
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const [errorDetails, setErrorDetails] = useState(null);
+  const [isClimateDown, setIsClimateDown] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // 2. REGISTRO COMPLETO DE CALIBRACIÓN (DOBLE ESCRITURA EN PARALELO)
-    var sheet = ss.getSheetByName("Calibración") || ss.getSheetByName("Calibracion") || ss.getSheetByName("Calibraciones") || ss.getActiveSheet();
-    
-    var timestamp = new Date();
-    var buoyData = fetchPuertosBuoyData();
-    var fuenteDato = buoyData ? buoyData.fuente : "Desconocido";
-    var origenDato = data.origenDato || ("Boya: Sincronización (" + fuenteDato + ")");
-    var playa = data.playa || "misericordia";
-    var horaNado = data.horaNado || "";
-    var realOlas = data.realOlas !== undefined ? data.realOlas : "";
-    var realResaca = data.realResaca !== undefined ? data.realResaca : "";
-    var realCorriente = data.realCorriente !== undefined ? data.realCorriente : "";
-    var realVientoFza = data.realVientoFza !== undefined ? data.realVientoFza : "";
-    var realVientoDir = data.realVientoDir !== undefined ? data.realVientoDir : "";
-    var sensaciones = data.sensaciones || "";
-    var appScore = data.appScore !== undefined ? data.appScore : "";
-    var appOlas = data.appOlas !== undefined ? data.appOlas : "";
-    var appEnergia = data.appEnergia !== undefined ? data.appEnergia : "";
-    var appVientoNudos = data.appVientoNudos !== undefined ? data.appVientoNudos : "";
-    var appVientoDir = data.appVientoDir !== undefined ? data.appVientoDir : "";
-    var notas = data.notasCalibracion || data.notas || ("Fuente: " + fuenteDato);
+  // Estados para el Socorrista IA
+  const [expertAdvice, setExpertAdvice] = useState("");
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [hasRequestedAi, setHasRequestedAi] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
-    var boyaAltura = (buoyData && buoyData.altura !== undefined) ? buoyData.altura : (data.boyaAltura || 0.02);
-    var boyaPeriodo = (buoyData && buoyData.periodo !== undefined) ? buoyData.periodo : (data.boyaPeriodo || 3.95);
-    var boyaDireccion = (buoyData && buoyData.direccion !== undefined) ? buoyData.direccion : (data.boyaDireccion || 153);
-    var boyaTemp = (data.boyaTemp !== undefined && data.boyaTemp !== "") ? data.boyaTemp : (buoyData ? buoyData.temp : 25.3);
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setIsModalOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isModalOpen]);
 
-    var modelEcmwfOlas = data.modelEcmwfOlas !== undefined ? data.modelEcmwfOlas : "";
-    var modelGfsOlas = data.modelGfsOlas !== undefined ? data.modelGfsOlas : "";
-    var modelTodoSurfOlas = data.modelTodoSurfOlas !== undefined ? data.modelTodoSurfOlas : "";
+  useEffect(() => {
+    const fetchRealData = async () => {
+      setIsLoading(true);
+      setErrorDetails(null);
+      setIsClimateDown(false);
+      setHasRequestedAi(false);
+      setExpertAdvice("");
+      setSelectedDay(1); 
+      setCurrentNowData(null);
+      
+      const beach = BEACHES[selectedBeach];
+      
+      let marineJson = null;
+      let weatherJson = null;
+      let localClimateDown = false;
 
-    // ESCRITURA 1: Pestaña Tradicional "Calibración" (App Web Actual 23 cols)
-    sheet.appendRow([
-      timestamp, horaNado, playa, realOlas,
-      realResaca, realCorriente, realVientoFza, realVientoDir, sensaciones, origenDato,
-      appScore, appOlas, appEnergia, appVientoNudos, appVientoDir, notas,
-      boyaAltura, boyaPeriodo, boyaDireccion, boyaTemp,
-      modelEcmwfOlas, modelGfsOlas, modelTodoSurfOlas
-    ]);
-
-    // ESCRITURA 2: Pestaña Rama Mejora "REPORTES_NADADORES_TEST" (10 cols Formateadas)
-    try {
-      var repSheet = ss.getSheetByName("REPORTES_NADADORES_TEST");
-      if (!repSheet) {
-        crearPestanasTest();
-        repSheet = ss.getSheetByName("REPORTES_NADADORES_TEST");
-      }
-
-      var slotInfo = getNearestHourlySlot(timestamp);
-      var yyyy = slotInfo.yyyy;
-      var mm = slotInfo.mm;
-      var dd = slotInfo.dd;
-      var cleanHH = slotInfo.hh;
-
-      if (horaNado) {
-        var partsH = cleanSwimHour(horaNado).split(":");
-        if (partsH.length > 0 && !isNaN(parseInt(partsH[0]))) {
-          cleanHH = String(parseInt(partsH[0])).padStart(2, '0');
+      const fetchWithTimeout = async (url, ms = 10000) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), ms);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+             const errData = await response.json().catch(() => ({}));
+             throw new Error(errData.reason || `Error HTTP ${response.status}`);
+          }
+          return await response.json();
+          
+        } catch (e) {
+          clearTimeout(timeoutId);
+          if (e.name === 'AbortError') throw new Error('Timeout (>10s)');
+          if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) throw new Error('Conexión bloqueada.');
+          throw e; 
         }
+      };
+
+      // 1. SATÉLITE CLIMA (Añadimos visibility para la niebla)
+      try {
+        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,precipitation,weather_code,uv_index,cloud_cover,visibility&timezone=Europe%2FMadrid&past_days=2`);
+      } catch (e) {
+        console.warn("Satélite de clima caído. Activando auto-rescate.", e);
+        localClimateDown = true;
+        setIsClimateDown(true);
       }
 
-      var playaCode = (playa.substring(0, 3).toUpperCase());
-      if (playa.indexOf("misericordia") !== -1) playaCode = "MIS";
-      else if (playa.indexOf("malagueta") !== -1) playaCode = "MAL";
-      else if (playa.indexOf("pedregalejo") !== -1) playaCode = "PED";
-      else if (playa.indexOf("palo") !== -1) playaCode = "PAL";
-      else if (playa.indexOf("guadalmar") !== -1) playaCode = "GUA";
-      else if (playa.indexOf("sacaba") !== -1) playaCode = "SAC";
-      else if (playa.indexOf("candado") !== -1) playaCode = "CAN";
+      // 2. SATÉLITE MARINO
+      try {
+        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature&timezone=Europe%2FMadrid&past_days=2`);
+      } catch (e) {
+         setErrorDetails({ general: `El satélite marino no responde: ${e.message}` });
+         setIsLoading(false);
+         return; 
+      }
 
-      var idRegistroTest = playaCode + "-" + yyyy + mm + dd + "-" + cleanHH + "00";
-      var fechaHoraCanonTest = yyyy + "-" + mm + "-" + dd + " " + cleanHH + ":00";
-      var alturaMeteosTest = parseSwimmerOlasToMeters(realOlas);
+      // 3. PROCESAMOS LOS DATOS
+      try {
+        const daysProcessed = []; 
+        const dayOffsets = [-1, 0, 1, 2];
+        const dayPrefixes = ["Ayer", "Hoy", "Mañana", "Pasado"];
+        
+        let tempCurrentNow = null;
+        const currentSystemHour = new Date().getHours();
 
-      repSheet.appendRow([
-        idRegistroTest,
-        fechaHoraCanonTest,
-        playa.toLowerCase(),
-        alturaMeteosTest,
-        sensaciones || "Plato / Calma",
-        data.rumbo_natacion_grados || 90,
-        notas || "Reporte Nadador Web",
-        "Formulario Web v9.4+ (Activo)",
-        Utilities.formatDate(timestamp, "Europe/Madrid", "yyyy-MM-dd HH:mm:ss"),
-        "OK 200"
-      ]);
+        for (let d = 0; d < dayOffsets.length; d++) {
+          const offset = dayOffsets[d];
+          
+          const baseIndex = (offset + 2) * 24; 
+          const startIndex = baseIndex + 6;
+          const endIndex = baseIndex + 21;
 
-      // Cascada en tiempo real: Actualizar Matriz Relacional
-      actualizarMotorAnalisisTest();
-    } catch (errDual) {
-      Logger.log("Aviso en Doble Escritura Test: " + errDual.toString());
+          // ----- CÁLCULO DE CALIDAD DEL AGUA (Aguas Sucias) -----
+          let rainSum = 0;
+          if (!localClimateDown && weatherJson?.hourly?.precipitation) {
+              for (let k = baseIndex - 24; k <= baseIndex + 21; k++) {
+                  if (k >= 0 && k < weatherJson.hourly.precipitation.length) {
+                      rainSum += weatherJson.hourly.precipitation[k] || 0;
+                  }
+              }
+          }
+          
+          let wqStatus = "Presumiblemente Limpia";
+          let wqColor = "text-blue-600";
+          let wqBg = "bg-blue-50 border-blue-100";
+          let wqDesc = `Sin lluvias fuertes recientes (${rainSum.toFixed(1)}mm).`;
+
+          if (localClimateDown) {
+              wqStatus = "Desconocida";
+              wqColor = "text-slate-500";
+              wqBg = "bg-slate-100 border-slate-200";
+              wqDesc = "Satélite desconectado.";
+          } else if (rainSum >= 2.0) {
+              wqStatus = "Riesgo Alto";
+              wqColor = "text-red-600";
+              wqBg = "bg-red-50 border-red-200";
+              wqDesc = `Aliviaderos activos. Lluvia acum: ${rainSum.toFixed(1)}mm.`;
+          } else if (rainSum >= 0.5) {
+              wqStatus = "Precaución";
+              wqColor = "text-amber-600";
+              wqBg = "bg-amber-50 border-amber-200";
+              wqDesc = `Posible arrastre. Lluvia acum: ${rainSum.toFixed(1)}mm.`;
+          }
+
+          let translatedHourlyData = [];
+          let totalScore = 0;
+          let maxScore = -1;
+          let minScore = 101;
+          let bestHourTime = "";
+          let worstHourTime = "";
+          
+          let eastWindCount = 0;
+          let maxEastWind = 0;
+          let validHoursCount = 0;
+          let hasStormRiskToday = false;
+
+          for (let i = startIndex; i <= endIndex; i++) {
+            if (!marineJson?.hourly?.wave_height || i >= marineJson.hourly.wave_height.length) break;
+
+            const waveHeightStr = marineJson.hourly.wave_height[i];
+            const waveHeight = waveHeightStr !== null ? waveHeightStr : 0.1;
+            const period = marineJson.hourly?.wave_period?.[i] || 4;
+            const waveDir = marineJson.hourly?.wave_direction?.[i];
+            
+            const windKmh = localClimateDown ? 0 : (weatherJson?.hourly?.wind_speed_10m?.[i] || 0);
+            const windKnots = Math.round(windKmh / 1.852);
+            const gustKnots = localClimateDown ? 0 : Math.round((weatherJson?.hourly?.wind_gusts_10m?.[i] || 0) / 1.852);
+            const windDir = localClimateDown ? 0 : (weatherJson?.hourly?.wind_direction_10m?.[i] || 0);
+            const cloudCover = localClimateDown ? "-" : (weatherJson?.hourly?.cloud_cover?.[i] || 0);
+            const wCode = localClimateDown ? 0 : (weatherJson?.hourly?.weather_code?.[i] || 0);
+            const visibility = localClimateDown ? 10000 : (weatherJson?.hourly?.visibility?.[i] || 10000);
+            const rainMm = localClimateDown ? 0 : (weatherJson?.hourly?.precipitation?.[i] || 0);
+            const rainProb = localClimateDown ? "-" : (weatherJson?.hourly?.precipitation_probability?.[i] || 0);
+            
+            const displayHour = i % 24;
+            
+            // Detección de tormenta eléctrica
+            const isThunderstorm = (wCode === 95 || wCode === 96 || wCode === 99);
+            if (isThunderstorm) hasStormRiskToday = true;
+
+            let effectiveWaveHeight = waveHeight;
+            let localRule = null;
+            let ruleColor = "";
+
+            // ESCUDO DEL PUERTO (Solo activo si la ola viene de Poniente/Suroeste: entre 200 y 300 grados)
+            const isWestOrSouthWest = waveDir >= 200 && waveDir <= 300;
+            if ((selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') && isWestOrSouthWest) {
+                effectiveWaveHeight = waveHeight * 0.7; 
+                localRule = "Escudo Activo";
+                ruleColor = "text-indigo-500";
+            }
+            
+            let driftInfo = { icon: "⏺️", color: "text-slate-400", short: "Nula" };
+            if (waveDir !== undefined && waveDir !== null && effectiveWaveHeight >= 0.2) {
+                let diff = waveDir - beach.facing;
+                while (diff > 180) diff -= 360;
+                while (diff < -180) diff += 360;
+
+                if (Math.abs(diff) < 85) { 
+                    if (diff > 15) {
+                        driftInfo = { icon: "⬅️", color: "text-indigo-600", short: "Nerja" };
+                    } else if (diff < -15) {
+                        driftInfo = { icon: "➡️", color: "text-indigo-600", short: "Fuengirola" };
+                    }
+                }
+            }
+            
+            if (!localClimateDown && windDir > 45 && windDir < 135) {
+                eastWindCount++;
+                if (windKnots > maxEastWind) maxEastWind = windKnots;
+            }
+
+            // Traductor visual de nubosidad
+            let skyIcon = "-";
+            if (!localClimateDown) {
+              if (cloudCover <= 25) skyIcon = "☀️";
+              else if (cloudCover <= 65) skyIcon = "⛅";
+              else skyIcon = "☁️";
+            }
+
+            const energyCoef = getDynamicWaveEnergyCoefficient(waveDir, period);
+            const waveEnergy = Math.round(Math.pow(effectiveWaveHeight, 2) * period * energyCoef);
+            
+            let ripRisk = "Nulo";
+            let ripColor = "text-slate-400 font-medium";
+            if (effectiveWaveHeight >= 1.0 || (effectiveWaveHeight >= 0.8 && period > 6)) {
+              ripRisk = "Alta";
+              ripColor = "text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded";
+            } else if (effectiveWaveHeight >= 0.6) {
+              ripRisk = "Media";
+              ripColor = "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded";
+            } else if (effectiveWaveHeight >= 0.3) {
+              ripRisk = "Baja";
+              ripColor = "text-blue-600 font-medium";
+            }
+
+            let hourScore = 100;
+            
+            if (effectiveWaveHeight > 0.2) hourScore -= (effectiveWaveHeight * 20);
+            if (effectiveWaveHeight > 0.6) hourScore -= (Math.pow(effectiveWaveHeight, 2) * 25); 
+            if (period < 4.5 && effectiveWaveHeight > 0.5) hourScore -= 15;
+            if (period < 3.5 && effectiveWaveHeight > 0.6) hourScore -= 25;
+            
+            if (!localClimateDown) {
+                // Viento genérico
+                if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
+                
+                // Rachas penalizan extra
+                if (gustKnots > 15) {
+                    hourScore -= ((gustKnots - 15) * 2);
+                }
+                
+                // MAGÓN (Ahora estrictamente limitado a olas de 0.5m o menos)
+                if (effectiveWaveHeight >= 0.4 && effectiveWaveHeight <= 0.5 && windKnots < 8 && period > 5.5) {
+                    hourScore = 100 - (effectiveWaveHeight * 10); 
+                    localRule = "Magón";
+                    ruleColor = "text-emerald-600";
+                }
+
+                // Lavadora
+                const isPoniente = windDir > 202.5 && windDir <= 292.5;
+                if (isPoniente && displayHour >= 12 && displayHour <= 18 && windKnots > 12) {
+                    hourScore -= 25;
+                    localRule = "Lavadora";
+                    ruleColor = "text-amber-600";
+                }
+
+                // Riesgo Deriva Terral
+                const isNorte = windDir > 315 || windDir <= 45;
+                if (isNorte && windKnots > 15) {
+                    hourScore -= 25;
+                    localRule = "Riesgo Deriva";
+                    ruleColor = "text-red-600";
+                }
+            }
+
+            // EL MURO DE LA ROMPIENTE (Olas > 0.5m son muy incómodas/peligrosas para entrar al agua)
+            if (effectiveWaveHeight > 0.5) {
+                hourScore -= 15; // Castigo directo por incomodidad en la orilla
+                if (hourScore > 50) hourScore = 50; // Muro estricto: nunca pasa de 50
+                
+                // Etiquetamos si no hay una regla previa importante
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo") {
+                    localRule = "Rompiente Dura";
+                    ruleColor = "text-orange-700 font-bold bg-orange-100 border border-orange-300 shadow-sm";
+                }
+            }
+
+            // HACHAZO POR RESACA ALTA (Freno de Emergencia vital)
+            if (ripRisk === "Alta") {
+                hourScore -= 30; // Castigo severo
+                if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
+                
+                // Etiquetamos visualmente la alerta si no hay otra regla más crítica (como Niebla/Tormenta)
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Rompiente Dura") {
+                    localRule = "Resaca Fuerte";
+                    ruleColor = "text-red-600 font-bold bg-red-50 border border-red-200 shadow-sm";
+                }
+            }
+
+            // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos y Niebla)
+            if (isThunderstorm) {
+                hourScore = 0;
+                localRule = "Tormenta ⚡";
+                ruleColor = "text-yellow-700 bg-yellow-300 border-yellow-500 shadow-sm";
+            } else if (!localClimateDown && visibility < 2000) {
+                hourScore = Math.max(0, hourScore - 40); // Castigo severo por pérdida de visibilidad
+                localRule = "Niebla 🌫️";
+                ruleColor = "text-slate-600 bg-slate-200 border-slate-300 shadow-sm";
+            }
+
+            hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
+            totalScore += hourScore;
+            validHoursCount++;
+
+            const formattedTime = `${displayHour.toString().padStart(2, '0')}:00`;
+
+            // CAPTURAR EL "AHORA MISMO"
+            if (offset === 0 && displayHour === currentSystemHour) {
+               tempCurrentNow = {
+                  wave: effectiveWaveHeight.toFixed(2),
+                  wind: windKnots,
+                  temp: localClimateDown ? "-" : Math.round(weatherJson?.hourly?.temperature_2m?.[i]),
+                  dirStr: getWindDirection(windDir)
+               };
+            }
+
+            if (hourScore > maxScore) { maxScore = hourScore; bestHourTime = formattedTime; }
+            if (hourScore < minScore) { minScore = hourScore; worstHourTime = formattedTime; }
+
+            const uvVal = localClimateDown ? "-" : (weatherJson?.hourly?.uv_index?.[i]);
+
+            translatedHourlyData.push({
+              time: formattedTime,
+              swellH: effectiveWaveHeight.toFixed(2),
+              rawSwellH: waveHeight.toFixed(2),
+              period: period.toFixed(1),
+              windS: localClimateDown ? "-" : windKnots,
+              gust: localClimateDown ? "-" : gustKnots,
+              windDir: localClimateDown ? "-" : windDir,
+              cloudCover: cloudCover,
+              skyIcon: skyIcon,
+              uv: uvVal === undefined || uvVal === null ? "-" : uvVal,
+              rainProb: rainProb,
+              rainMm: rainMm,
+              hourScore: hourScore,
+              waveEnergy: waveEnergy,
+              energyCoef: energyCoef,
+              swellDir: waveDir === undefined || waveDir === null ? null : waveDir,
+              ripRisk: ripRisk,
+              ripColor: ripColor,
+              drift: driftInfo,
+              localRule: localRule,
+              ruleColor: ruleColor
+            });
+          }
+
+          let jRisk = "Bajo";
+          let jColor = "text-emerald-600";
+          let jBg = "bg-emerald-50 border-emerald-100";
+
+          if (localClimateDown) {
+              jRisk = "Dato no disp.";
+              jColor = "text-slate-500";
+              jBg = "bg-slate-100 border-slate-200";
+          } else if (eastWindCount >= 4) {
+              if (maxEastWind >= 10) {
+                  jRisk = "Alto";
+                  jColor = "text-red-600";
+                  jBg = "bg-red-50 border-red-100";
+              } else {
+                  jRisk = "Medio";
+                  jColor = "text-amber-600";
+                  jBg = "bg-amber-50 border-amber-100";
+              }
+          }
+
+          const avgScore = validHoursCount > 0 ? Math.round(totalScore / validHoursCount) : 0;
+          
+          const noonIndex = baseIndex + 12;
+          const sstNoon = marineJson?.hourly?.sea_surface_temperature?.[noonIndex];
+          const waterTemp =
+            sstNoon !== undefined && sstNoon !== null && !Number.isNaN(Number(sstNoon))
+              ? Math.round(Number(sstNoon) * 10) / 10
+              : 15;
+
+          daysProcessed.push({
+            dayIndex: d,
+            dayLabel: getDateLabel(offset, dayPrefixes[d]),
+            name: beach.name,
+            score: avgScore,
+            temps: { 
+                air: localClimateDown ? "-" : Math.round(weatherJson?.hourly?.temperature_2m?.[noonIndex] || 15), 
+                water: waterTemp
+            },
+            hourly: translatedHourlyData,
+            best: { time: bestHourTime, score: maxScore },
+            worst: { time: worstHourTime, score: minScore },
+            jellyfish: { risk: jRisk, color: jColor, bgColor: jBg },
+            waterQuality: { status: wqStatus, color: wqColor, bgColor: wqBg, desc: wqDesc },
+            hasStormRisk: hasStormRiskToday
+          });
+        }
+
+        setBeachData(daysProcessed);
+        setCurrentNowData(tempCurrentNow);
+        setLastUpdatedAt(new Date());
+        setIsLoading(false);
+
+      } catch (err) {
+        console.error(err);
+        setErrorDetails({ general: err.message });
+        setIsLoading(false);
+      }
+    };
+
+    fetchRealData();
+    
+  }, [selectedBeach, dataRefreshKey]);
+
+  const handleDayChange = (index) => {
+    setSelectedDay(index);
+    setHasRequestedAi(false);
+    setExpertAdvice("");
+  };
+
+  const handleAskExpert = async () => {
+    setHasRequestedAi(true);
+    setIsAiLoading(true);
+    
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const currentDayData = beachData[selectedDay];
+    
+    if (!apiKey || apiKey === "") {
+        setExpertAdvice("Falta la API Key de Gemini en Vercel.");
+        setIsAiLoading(false);
+        return;
     }
 
-    return ContentService.createTextOutput(JSON.stringify({
-      "status": "success",
-      "buoy": buoyData
-    })).setMimeType(ContentService.MimeType.TEXT);
-
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({
-      "status": "error",
-      "message": error.toString()
-    })).setMimeType(ContentService.MimeType.TEXT);
-  }
-}
-
-/**
- * Redondeo Inteligente a la Hora Más Cercana
- * Si son las 20:42 -> Slot 21:00
- */
-function getNearestHourlySlot(dateObj) {
-  var d = new Date(dateObj.getTime());
-  if (d.getMinutes() >= 30) {
-    d.setHours(d.getHours() + 1);
-  }
-  var yyyy = Utilities.formatDate(d, "Europe/Madrid", "yyyy");
-  var mm = Utilities.formatDate(d, "Europe/Madrid", "MM");
-  var dd = Utilities.formatDate(d, "Europe/Madrid", "dd");
-  var hh = Utilities.formatDate(d, "Europe/Madrid", "HH");
-
-  return {
-    yyyy: yyyy,
-    mm: mm,
-    dd: dd,
-    hh: hh,
-    fechaHoraCanon: yyyy + mm + dd + "-" + hh + "00",
-    targetTimeIso: yyyy + "-" + mm + "-" + dd + "T" + hh + ":00"
-  };
-}
-
-function parseSwimmerOlasToMeters(raw) {
-  if (raw === null || raw === undefined || raw === "") return 0.20;
-  var num = parseFloat(raw);
-  if (isNaN(num)) return 0.20;
-  if (num === 1) return 0.10;
-  if (num === 2) return 0.20;
-  if (num === 3) return 0.40;
-  if (num === 4) return 0.60;
-  if (num === 5) return 0.80;
-  return num <= 5 ? num * 0.20 : num;
-}
-
-function cleanSwimHour(raw) {
-  if (!raw) return "10:00";
-  var s = String(raw);
-  if (s.indexOf("1899") !== -1 || s.indexOf("GMT") !== -1 || s.indexOf("T") !== -1) {
     try {
-      var d = new Date(raw);
-      return Utilities.formatDate(d, "Europe/Madrid", "HH:mm");
-    } catch (e) {
-      return "10:00";
-    }
-  }
-  return s.length >= 5 ? s.substring(0, 5) : s;
-}
-
-/**
- * doGet para alimentar la App Web Frontend
- */
-function doGet(e) {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName("Calibración") || ss.getSheetByName("Calibracion") || ss.getSheetByName("Calibraciones") || ss.getActiveSheet();
-    
-    var lastRow = sheet.getLastRow();
-    var records = [];
-    
-    if (lastRow > 1) {
-      var startRow = Math.max(2, lastRow - 500);
-      var numRows = lastRow - startRow + 1;
-      var range = sheet.getRange(startRow, 1, numRows, 23);
-      var values = range.getValues();
+      const stormWarning = currentDayData.hasStormRisk ? " ¡HAY RIESGO DE TORMENTA ELÉCTRICA (RAYOS) HOY!" : "";
+      const windText = isClimateDown ? "(Ignora el viento porque satélite está caído)" : `Viento: ${currentDayData.hourly[0].windS} nudos. Cielo: ${currentDayData.hourly[0].cloudCover}% nublado. Calidad del agua: ${currentDayData.waterQuality.status}.`;
+      const extraMarine = `Medusas (heurístico): ${currentDayData.jellyfish.risk}. Temperatura agua (modelo): ${currentDayData.temps.water}ºC.`;
       
-      for (var i = values.length - 1; i >= 0; i--) {
-        var row = values[i];
-        records.push({
-          timestamp: row[0],
-          horaNado: row[1],
-          playa: row[2],
-          realOlas: row[3],
-          realResaca: row[4],
-          realCorriente: row[5],
-          realVientoFza: row[6],
-          realVientoDir: row[7],
-          sensaciones: row[8],
-          origenDato: row[9],
-          appScore: row[10],
-          appOlas: row[11],
-          appEnergia: row[12],
-          appVientoNudos: row[13],
-          appVientoDir: row[14],
-          notas: row[15],
-          boyaAltura: row[16],
-          boyaPeriodo: row[17],
-          boyaDireccion: row[18],
-          boyaTemp: row[19],
-          modelEcmwfOlas: row[20],
-          modelGfsOlas: row[21],
-          modelTodoSurfOlas: row[22]
-        });
+      const prompt = `Eres un experto nadador de aguas abiertas y socorrista en Málaga. 
+      Analiza los siguientes datos MARINOS de ${currentDayData.dayLabel.toLowerCase()} para la playa ${currentDayData.name}:
+      Puntuación media de seguridad: ${currentDayData.score}/100.
+      Olas medias: ${currentDayData.hourly[0].swellH}m. ${windText} ${extraMarine}${stormWarning}
+      Mejor hora para nadar: ${currentDayData.best.time}. Peor hora: ${currentDayData.worst.time}.
+      IMPORTANTE: Si la puntuación media es menor a 70 o hay rachas que superen los 12 nudos, DEBES empezar tu consejo obligatoriamente con una advertencia seria de peligro en MAYÚSCULAS.
+      Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. Usa un tono cercano.`;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+         throw new Error(result.error?.message || `Error ${response.status} de la API de Google`);
       }
-    }
-    
-    var visitSheet = ss.getSheetByName("Visitas");
-    var totalVisitas = 0;
-    if (visitSheet && visitSheet.getLastRow() > 1) {
-      totalVisitas = visitSheet.getLastRow() - 1;
-    }
-    
-    var response = {
-      "status": "success",
-      "total_registros": records.length,
-      "total_visitas": totalVisitas,
-      "data": records
-    };
-    
-    return ContentService.createTextOutput(JSON.stringify(response))
-      .setMimeType(ContentService.MimeType.JSON);
-      
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({
-      "status": "error",
-      "message": error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
 
-/**
- * Conector Oficial con el Proxy de la Boya de Málaga
- */
-function fetchPuertosBuoyData() {
-  var PROXY_URL = "https://open-water-forecast.vercel.app/api/boya-opendap";
-  try {
-    var response = UrlFetchApp.fetch(PROXY_URL, {
-      muteHttpExceptions: true,
-      headers: { "User-Agent": "OpenWaterTracker-GAS/9.4" }
-    });
-
-    if (response.getResponseCode() === 200) {
-      var json = JSON.parse(response.getContentText());
-      if (json && json.success && json.data) {
-        var d = json.data;
-        return {
-          altura: d.boyaAltura !== null ? d.boyaAltura : 0.02,
-          periodo: d.boyaPeriodo !== null ? d.boyaPeriodo : 3.95,
-          direccion: d.boyaDireccion !== null ? d.boyaDireccion : 153,
-          temp: d.boyaTemp !== null ? d.boyaTemp : 25.3,
-          vientoSpeed: d.vientoSpeed !== null ? d.vientoSpeed : 6.5,
-          vientoDir: d.vientoDir !== null ? d.vientoDir : 153,
-          fuente: d.fuente || "Puertos del Estado (Boya Real Portus RTData 2056)",
-          auditCode: d.auditCode || 200
-        };
+      if (result.candidates && result.candidates[0] && result.candidates[0].content) {
+        setExpertAdvice(result.candidates[0].content.parts[0].text);
+      } else {
+        throw new Error("La IA no devolvió el formato esperado.");
       }
+    } catch (err) {
+      setExpertAdvice(`Error de Google: ${err.message}`);
+    } finally {
+      setIsAiLoading(false);
     }
-  } catch (e) {
-    Logger.log("Aviso consultando proxy Vercel: " + e);
-  }
-
-  return {
-    altura: 0.02,
-    periodo: 3.95,
-    direccion: 153,
-    temp: 25.3,
-    vientoSpeed: 6.5,
-    vientoDir: 153,
-    fuente: "Puertos del Estado (Boya Real Portus RTData 2056)",
-    auditCode: 200
   };
-}
 
-function syncHourlyBuoyDataTest() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetBoya = ss.getSheetByName("REAL_BOYA_TEST");
-  if (!sheetBoya) {
-    crearPestanasTest();
-    sheetBoya = ss.getSheetByName("REAL_BOYA_TEST");
-  }
+  const getWindDirection = (degrees) => {
+    if (degrees === undefined || degrees === null || (typeof degrees === "number" && Number.isNaN(degrees))) return "—";
+    if (degrees === "-") return "-";
+    const d = Number(degrees);
+    if (Number.isNaN(d)) return "—";
+    if (d > 337.5 || d <= 22.5) return '⬇️ N';
+    if (d > 22.5 && d <= 67.5) return '↙️ NE';
+    if (d > 67.5 && d <= 112.5) return '⬅️ E';
+    if (d > 112.5 && d <= 157.5) return '↖️ SE';
+    if (d > 157.5 && d <= 202.5) return '⬆️ S';
+    if (d > 202.5 && d <= 247.5) return '↗️ SO';
+    if (d > 247.5 && d <= 292.5) return '➡️ O';
+    if (d > 292.5 && d <= 337.5) return '↘️ NO';
+    return '-';
+  };
 
-  var now = new Date();
-  var slot = getNearestHourlySlot(now);
-  var idRegCanon = "MIS-" + slot.fechaHoraCanon;
+  const currentDayData = beachData ? beachData[selectedDay] : null;
 
-  var bData = fetchPuertosBuoyData();
+  return (
+    <div className="min-h-screen bg-slate-100 font-sans flex flex-col">
+      
+      {/* BANNER BETA */}
+      <div className="bg-slate-900 text-amber-400 text-xs text-center py-2 px-4 font-medium flex items-center justify-center gap-2">
+        <AlertTriangle size={14} />
+        <span>🚧 <strong>App en Fase Beta:</strong> Datos experimentales. Por favor, danos feedback tras tus nados usando el formulario de abajo.</span>
+      </div>
 
-  sheetBoya.appendRow([
-    idRegCanon,
-    slot.yyyy + "-" + slot.mm + "-" + slot.dd + " " + slot.hh + ":00",
-    "misericordia",
-    bData.altura,
-    bData.direccion,
-    bData.periodo,
-    bData.temp,
-    bData.vientoSpeed,
-    bData.vientoDir,
-    bData.fuente,
-    Utilities.formatDate(now, "Europe/Madrid", "yyyy-MM-dd HH:mm:ss")
-  ]);
-}
+      <div className="p-4 md:p-8 flex-grow w-full max-w-6xl mx-auto space-y-6">
+        
+        <header className="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-3 mb-4 md:mb-0">
+            <div className="bg-blue-600 p-3 rounded-xl text-white shadow-md">
+              <Waves size={28} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800 tracking-tight">OpenWater Tracker</h1>
+              <p className="text-slate-500 text-sm font-medium">Pronóstico en tiempo real para nadadores</p>
+              {lastUpdatedAt && (
+                <p className="text-[11px] text-slate-400 mt-1 font-medium" title="Última lectura correcta de satélites">
+                  Actualizado: {lastUpdatedAt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
+            </div>
+          </div>
 
-/**
- * Consulta de Previsiones de las 7 Playas de Málaga (06:00 a 21:00)
- */
-function syncHourlyForecasts7Beaches() {
-  var now = new Date();
-  var currentHour = parseInt(Utilities.formatDate(now, "Europe/Madrid", "H"), 10);
-  
-  if (currentHour < 6 || currentHour > 21) {
-    Logger.log("Fuera de ventana de baño (06:00 - 21:00). Hora: " + currentHour);
-    return;
-  }
+          <div className="flex flex-row items-center gap-2 md:gap-3 w-full md:w-auto">
+            <button 
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-2.5 px-3 md:px-4 rounded-xl transition-colors border border-indigo-100 flex items-center justify-center gap-2"
+              title="Guía Local del Mar"
+            >
+              <BookOpen size={18} />
+              <span className="hidden sm:inline">Guía Local</span>
+            </button>
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetPrev = ss.getSheetByName("PREVISIONES_TEST");
-  if (!sheetPrev) {
-    crearPestanasTest();
-    sheetPrev = ss.getSheetByName("PREVISIONES_TEST");
-  }
+            <button
+              type="button"
+              onClick={() => setDataRefreshKey((k) => k + 1)}
+              disabled={isLoading}
+              className="shrink-0 bg-white hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-3 rounded-xl transition-colors border border-slate-200 flex items-center justify-center gap-2 disabled:opacity-50"
+              title="Volver a pedir datos a los satélites"
+              aria-label="Actualizar datos del satélite"
+            >
+              <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Actualizar</span>
+            </button>
 
-  var slot = getNearestHourlySlot(now);
-  var targetTimeIso = slot.targetTimeIso;
+            <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl w-full md:w-auto border border-slate-200 flex-1 md:flex-none overflow-hidden">
+              <MapPin className="text-slate-400 ml-1 md:ml-2 shrink-0" size={20} />
+              <select 
+                value={selectedBeach} 
+                onChange={(e) => setSelectedBeach(e.target.value)}
+                className="bg-transparent font-bold text-slate-700 py-1.5 pr-4 pl-1 md:pl-2 outline-none w-full md:min-w-[14rem] md:max-w-[22rem] cursor-pointer text-ellipsis overflow-hidden"
+              >
+                <option value="misericordia">La Misericordia</option>
+                <option value="malagueta">La Malagueta</option>
+                <option value="pedregalejo">Pedregalejo</option>
+                <option value="los_alamos">Los Álamos (Torremolinos)</option>
+                <option value="bajondillo">El Bajondillo (Torremolinos)</option>
+                <option value="rincon_victoria">Rincón de la Victoria</option>
+                <option value="cala_del_moral">La Cala del Moral</option>
+              </select>
+            </div>
+          </div>
+        </header>
 
-  var beaches = [
-    { code: "MIS", name: "misericordia", lat: 36.695, lon: -4.435 },
-    { code: "MAL", name: "malagueta",    lat: 36.718, lon: -4.405 },
-    { code: "PED", name: "pedregalejo",  lat: 36.722, lon: -4.378 },
-    { code: "PAL", name: "palo",         lat: 36.720, lon: -4.358 },
-    { code: "GUA", name: "guadalmar",    lat: 36.668, lon: -4.452 },
-    { code: "SAC", name: "sacaba",       lat: 36.685, lon: -4.442 },
-    { code: "CAN", name: "el_candado",   lat: 36.716, lon: -4.345 }
-  ];
+        {/* BARRA DE ESTADO ACTUAL (AHORA MISMO) */}
+        {!isLoading && currentNowData && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex flex-wrap items-center justify-center md:justify-start gap-4 md:gap-8 text-sm animate-in fade-in zoom-in duration-300">
+            <span className="font-bold text-slate-500 uppercase tracking-wide text-xs">🔴 En este instante:</span>
+            <div className="flex items-center gap-1.5 font-bold text-slate-700">
+              <Waves size={16} className="text-blue-500"/> Olas {currentNowData.wave}m
+            </div>
+            <div className="flex items-center gap-1.5 font-bold text-slate-700">
+              <Wind size={16} className="text-slate-400"/> Viento {currentNowData.wind} kts <span className="text-xs text-slate-400 font-medium">({currentNowData.dirStr})</span>
+            </div>
+            <div className="flex items-center gap-1.5 font-bold text-slate-700">
+              <Thermometer size={16} className="text-orange-500"/> Aire {currentNowData.temp}ºC
+            </div>
+          </div>
+        )}
 
-  var lats = beaches.map(function(b) { return b.lat; }).join(",");
-  var lons = beaches.map(function(b) { return b.lon; }).join(",");
+        {/* ALERTA DE TORMENTA GENERAL */}
+        {!isLoading && !errorDetails && currentDayData?.hasStormRisk && (
+          <div className="bg-yellow-400 border border-yellow-500 p-4 rounded-2xl shadow-md flex items-start gap-3 animate-pulse">
+            <Zap className="text-yellow-900 shrink-0 mt-0.5" size={24} />
+            <div>
+              <h3 className="font-black text-yellow-900 uppercase">Peligro: Tormenta Eléctrica</h3>
+              <p className="text-sm text-yellow-800 font-medium mt-1">
+                El satélite detecta riesgo de caída de rayos en la costa durante el día de hoy. El agua es un conductor eléctrico letal. Se prohíbe terminantemente el baño en horas de tormenta.
+              </p>
+            </div>
+          </div>
+        )}
 
-  // 1. Descarga Marina con Temperatura Prevista del Mar (sea_surface_temperature)
-  var marineUrl = "https://marine-api.open-meteo.com/v1/marine?latitude=" + lats + "&longitude=" + lons +
-    "&hourly=wave_height,wave_direction,wave_period,sea_surface_temperature&timezone=Europe%2FMadrid";
-  
-  var marineResCode = 0;
-  var marineDataArray = [];
-  try {
-    var resMarine = UrlFetchApp.fetch(marineUrl, { muteHttpExceptions: true });
-    marineResCode = resMarine.getResponseCode();
-    if (marineResCode === 200) {
-      var parsedMarine = JSON.parse(resMarine.getContentText());
-      marineDataArray = Array.isArray(parsedMarine) ? parsedMarine : [parsedMarine];
-    }
-  } catch (eM) {
-    Logger.log("Error Marine API: " + eM);
-  }
+        {!isLoading && !errorDetails && isClimateDown && (
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl shadow-sm flex items-start gap-3 animate-in fade-in slide-in-from-top-4 duration-500">
+            <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={24} />
+            <div>
+              <h3 className="font-bold text-amber-800">Modo de Emergencia Activo</h3>
+              <p className="text-sm text-amber-700 mt-1">
+                El satélite global de clima está temporalmente fuera de servicio. Estamos mostrando <strong>solo las previsiones de oleaje y corrientes</strong>. Los datos de viento, temperatura y alertas volverán solos cuando el servidor se restaure.
+              </p>
+            </div>
+          </div>
+        )}
 
-  // 2. Descarga Meteorológica de Alta Resolución (2.5km) con Respaldo a DWD ICON (2.2km)
-  var weatherUrl = "https://api.open-meteo.com/v1/forecast?latitude=" + lats + "&longitude=" + lons +
-    "&hourly=wind_speed_10m,wind_direction_10m,relative_humidity_2m,temperature_2m&wind_speed_unit=kn&timezone=Europe%2FMadrid";
-  
-  var weatherResCode = 0;
-  var weatherDataArray = [];
-  var weatherModelTag = "2.5km";
+        {errorDetails && (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border-2 border-red-200 flex flex-col gap-4">
+            <div className="flex items-center gap-3 text-red-600 border-b border-red-100 pb-4">
+              <AlertTriangle size={28} className="shrink-0" />
+              <div>
+                <h2 className="font-bold text-lg">Error Crítico de Conexión</h2>
+                <p className="text-sm text-red-500 font-medium">Ni siquiera el satélite de olas está respondiendo en este momento.</p>
+              </div>
+            </div>
+            {errorDetails.general && (
+              <p className="text-xs text-slate-500 font-mono mt-2 text-center border-t pt-4">
+                Detalles: {errorDetails.general}
+              </p>
+            )}
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold py-3 rounded-xl transition-colors"
+            >
+              Reintentar Conexión
+            </button>
+          </div>
+        )}
 
-  try {
-    var resWeather = UrlFetchApp.fetch(weatherUrl, {
-      muteHttpExceptions: true,
-      headers: { "User-Agent": "OpenWaterTracker-Malaga/9.4 (HighRes Coastal Grid; contact@openwatertracker.org)" }
-    });
-    weatherResCode = resWeather.getResponseCode();
-    
-    if (weatherResCode === 200) {
-      var parsedWeather = JSON.parse(resWeather.getContentText());
-      weatherDataArray = Array.isArray(parsedWeather) ? parsedWeather : [parsedWeather];
-    } else if (weatherResCode === 429) {
-      // Salto automático a DWD ICON 2.2km para garantizar 0 celdas vacías
-      var dwdUrl = "https://api.open-meteo.com/v1/dwd-icon?latitude=" + lats + "&longitude=" + lons +
-        "&hourly=wind_speed_10m,wind_direction_10m,relative_humidity_2m,temperature_2m&wind_speed_unit=kn&timezone=Europe%2FMadrid";
-      var resDwd = UrlFetchApp.fetch(dwdUrl, { muteHttpExceptions: true });
-      if (resDwd.getResponseCode() === 200) {
-        var parsedDwd = JSON.parse(resDwd.getContentText());
-        weatherDataArray = Array.isArray(parsedDwd) ? parsedDwd : [parsedDwd];
-        weatherResCode = 200;
-        weatherModelTag = "DWD ICON 2.2km Respaldo";
-      }
-    }
-  } catch (eW) {
-    Logger.log("Error Weather API: " + eW);
-  }
+        {isLoading && !errorDetails ? (
+          <div className="flex flex-col items-center justify-center py-24 bg-white rounded-2xl shadow-sm border border-slate-200">
+            <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
+            <p className="text-slate-500 font-medium animate-pulse text-lg">Conectando con satélites...</p>
+          </div>
+        ) : currentDayData && !errorDetails && (
+          <>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {beachData.map((day, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleDayChange(idx)}
+                  className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${
+                    selectedDay === idx 
+                      ? 'bg-blue-600 text-white shadow-md' 
+                      : idx === 0 
+                        ? 'bg-slate-200 text-slate-600 hover:bg-slate-300 border border-slate-300' 
+                        : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {idx === 0 ? <History size={16} /> : <CalendarDays size={16} />}
+                  {day.dayLabel}
+                </button>
+              ))}
+            </div>
 
-  var auditDiag = (marineResCode === 200 && weatherResCode === 200)
-    ? "OK 200 (Marine: 200 | Weather: 200 (" + weatherModelTag + "))"
-    : "ALERTA HTTP (Marine: " + marineResCode + " | Weather: " + weatherResCode + ")";
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              <div className="lg:col-span-4 space-y-6">
+                
+                {/* Tarjeta 1: Score de Seguridad */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center relative">
+                  <div className="absolute top-3 left-3 text-[8px] text-slate-300 font-semibold uppercase tracking-widest opacity-70">
+                    Algoritmo Propio
+                  </div>
+                  <h2 className="text-slate-500 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
+                    <Activity size={18} className="text-blue-500"/> Seguridad Media {isClimateDown && "(Solo Olas)"}
+                  </h2>
+                  <div className="relative">
+                    <svg className="w-40 h-40 transform -rotate-90">
+                      <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="14" fill="transparent" className="text-slate-100" />
+                      <circle 
+                        cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="14" fill="transparent" 
+                        strokeDasharray="439.8" 
+                        strokeDashoffset={439.8 - (439.8 * currentDayData.score) / 100}
+                        className={currentDayData.score > 70 ? 'text-emerald-500' : currentDayData.score > 40 ? 'text-amber-500' : 'text-red-500'} 
+                      />
+                    </svg>
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+                      <span className="text-5xl font-black text-slate-800">{currentDayData.score}</span>
+                      <span className="text-xs font-bold text-slate-400">/ 100</span>
+                    </div>
+                  </div>
+                  <p className={`mt-5 font-black text-lg ${currentDayData.score > 70 ? 'text-emerald-600' : currentDayData.score > 40 ? 'text-amber-600' : 'text-red-600'}`}>
+                    {currentDayData.score > 70 ? 'Nado Seguro' : currentDayData.score > 40 ? 'Precaución: Mar Agitado' : 'No Recomendado Nadar'}
+                  </p>
+                </div>
 
-  // 3. Inserción de las 7 Playas
-  for (var i = 0; i < beaches.length; i++) {
-    var b = beaches[i];
-    var idReg = b.code + "-" + slot.fechaHoraCanon;
+                {/* Tarjeta 2: Temperaturas */}
+                <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center ${isClimateDown ? 'opacity-70' : ''}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Thermometer size={24}/></div>
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <p className="text-sm text-slate-500 font-medium">Agua</p>
+                      </div>
+                      <p className="text-xl font-bold text-slate-800">{currentDayData.temps.water}ºC</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Modelo marino (mediodía)</p>
+                    </div>
+                  </div>
+                  <div className="h-10 w-px bg-slate-200"></div>
+                  <div className="flex items-center gap-3">
+                    <div className={isClimateDown ? "bg-slate-50 p-2 rounded-lg text-slate-400" : "bg-orange-50 p-2 rounded-lg text-orange-500"}><Sun size={24}/></div>
+                    <div>
+                      <p className="text-sm text-slate-500 font-medium">Aire <span className="text-xs">({currentDayData.dayLabel.split(' ')[0]})</span></p>
+                      <p className={`text-xl font-bold ${isClimateDown ? 'text-slate-400' : 'text-slate-800'}`}>
+                        {currentDayData.temps.air === "-" ? "-  ºC" : `${currentDayData.temps.air}ºC`}
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Predicción Modelo</p>
+                    </div>
+                  </div>
+                </div>
 
-    var mObj = marineDataArray[i] || {};
-    var wObj = weatherDataArray[i] || {};
+                {/* Tarjeta 3: Mejor y Peor Hora */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+                      <Clock size={16} className="text-indigo-500"/> Horas Clave
+                    </h3>
+                    <span className="text-[10px] text-slate-400 font-medium">Cálculo Propio</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                    <div className="flex items-center gap-2">
+                      <ThumbsUp className="text-emerald-500" size={20} />
+                      <span className="font-bold text-emerald-800">Mejor Hora</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-black text-emerald-700">{currentDayData.best.time}</p>
+                      <p className="text-xs font-bold text-emerald-600/70">Score: {currentDayData.best.score}</p>
+                    </div>
+                  </div>
 
-    var mHourly = mObj.hourly || {};
-    var wHourly = wObj.hourly || {};
+                  <div className="flex justify-between items-center bg-red-50 p-3 rounded-xl border border-red-100">
+                    <div className="flex items-center gap-2">
+                      <ThumbsDown className="text-red-500" size={20} />
+                      <span className="font-bold text-red-800">Peor Hora</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-black text-red-700">{currentDayData.worst.time}</p>
+                      <p className="text-xs font-bold text-red-600/70">Score: {currentDayData.worst.score}</p>
+                    </div>
+                  </div>
+                </div>
 
-    var mTimes = mHourly.time || [];
-    var wTimes = wHourly.time || [];
+                {/* Tarjeta 4: Enlaces Oficiales (Boya y Mareas) */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+                      <Anchor size={16} className="text-blue-500"/> Estado Real
+                    </h3>
+                    <span className="text-[10px] text-slate-400 font-medium">Lectura Física</span>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <a 
+                      href="https://portus.puertos.es/#/" 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                        </span>
+                        <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Boya de Málaga</span>
+                      </div>
+                      <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
+                    </a>
 
-    var mIdx = mTimes.indexOf(targetTimeIso);
-    var wIdx = wTimes.indexOf(targetTimeIso);
+                    <a 
+                      href="https://tablademareas.com/es/malaga/malaga" 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Droplets size={16} className="text-blue-400" />
+                        <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Tabla de Mareas</span>
+                      </div>
+                      <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
+                    </a>
+                  </div>
+                </div>
 
-    if (mIdx === -1 && mTimes.length > 0) mIdx = 0;
-    if (wIdx === -1 && wTimes.length > 0) wIdx = 0;
+                {/* Tarjeta 5: Calidad del Agua y Medusas (Grid dual) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
+                  {/* Calidad del Agua */}
+                  <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+                        <TestTubes size={16} className={isClimateDown ? 'text-slate-400' : 'text-emerald-500'}/> Calidad del Agua
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-medium">Satélite + Deriva</span>
+                    </div>
+                    
+                    <div className={`flex flex-col p-3 rounded-xl border ${currentDayData.waterQuality.bgColor}`}>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className={`font-black uppercase text-sm ${currentDayData.waterQuality.color}`}>
+                          {currentDayData.waterQuality.status}
+                        </span>
+                        {currentDayData.waterQuality.status === "Riesgo Alto" && <AlertTriangle size={16} className="text-red-500" />}
+                      </div>
+                      <span className="text-xs font-medium text-slate-600 leading-tight">
+                        {currentDayData.waterQuality.desc}
+                      </span>
+                    </div>
+                  </div>
 
-    var altOla = (mIdx !== -1 && mHourly.wave_height) ? mHourly.wave_height[mIdx] : "";
-    var dirOla = (mIdx !== -1 && mHourly.wave_direction) ? mHourly.wave_direction[mIdx] : "";
-    var perOla = (mIdx !== -1 && mHourly.wave_period) ? mHourly.wave_period[mIdx] : "";
-    var tempAguaPrev = (mIdx !== -1 && mHourly.sea_surface_temperature) ? mHourly.sea_surface_temperature[mIdx] : "";
+                  {/* Medusas */}
+                  <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+                        <AlertCircle size={16} className={isClimateDown ? 'text-slate-400' : 'text-purple-500'}/> Medusas
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-medium">Algoritmo</span>
+                    </div>
+                    
+                    <div className={`flex justify-between items-center p-3 rounded-xl border ${currentDayData.jellyfish.bgColor}`}>
+                      <span className={`font-black uppercase text-sm ${currentDayData.jellyfish.color}`}>
+                        {currentDayData.jellyfish.risk.includes("Dato") ? currentDayData.jellyfish.risk : `Nivel ${currentDayData.jellyfish.risk}`}
+                      </span>
+                      <a href="https://oceanaria.es/" target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-500 hover:text-blue-700 underline underline-offset-2 text-right">
+                        Oceanaria
+                      </a>
+                    </div>
+                  </div>
+                </div>
 
-    var velViento = (wIdx !== -1 && wHourly.wind_speed_10m) ? wHourly.wind_speed_10m[wIdx] : "";
-    var dirViento = (wIdx !== -1 && wHourly.wind_direction_10m) ? wHourly.wind_direction_10m[wIdx] : "";
-    var humRel = (wIdx !== -1 && wHourly.relative_humidity_2m) ? wHourly.relative_humidity_2m[wIdx] : "";
-    var tempAire = (wIdx !== -1 && wHourly.temperature_2m) ? wHourly.temperature_2m[wIdx] : "";
+                {/* Tarjeta 6: Socorrista Virtual */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-4 opacity-5">
+                    <Bot size={80} />
+                  </div>
+                  <div className="flex justify-between items-center mb-4 relative z-10">
+                    <h3 className="font-bold text-blue-900 flex items-center gap-2">
+                      <Bot size={20} className="text-indigo-600 animate-bounce" />
+                      Socorrista IA Málaga
+                    </h3>
+                    <span className="text-[9px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full uppercase tracking-wider">Gemini 2.5</span>
+                  </div>
+                  
+                  <div className="space-y-4 relative z-10">
+                    {hasRequestedAi ? (
+                      isAiLoading ? (
+                        <div className="flex items-center justify-center py-6">
+                          <Loader2 className="animate-spin text-indigo-600 mr-2" size={20} />
+                          <span className="text-slate-600 text-xs font-medium">Analizando oleaje y viento...</span>
+                        </div>
+                      ) : (
+                        <div className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-blue-100 shadow-inner">
+                          <p className="text-xs md:text-sm text-slate-700 font-medium leading-relaxed italic">
+                            "{expertAdvice}"
+                          </p>
+                        </div>
+                      )
+                    ) : (
+                      <button 
+                        onClick={handleAskExpert}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md hover:shadow-lg text-xs flex items-center justify-center gap-2"
+                      >
+                        <Bot size={16} />
+                        Solicitar Recomendación de Nado 🤖
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-    sheetPrev.appendRow([
-      idReg,
-      slot.yyyy + "-" + slot.mm + "-" + slot.dd + " " + slot.hh + ":00",
-      b.name,
-      altOla,
-      dirOla,
-      perOla,
-      velViento,
-      dirViento,
-      humRel,
-      tempAire,
-      auditDiag,
-      tempAguaPrev,
-      Utilities.formatDate(now, "Europe/Madrid", "yyyy-MM-dd HH:mm:ss")
-    ]);
-  }
+              </div>
 
-  // 4. Disparar Boya y Cascada del Motor
-  syncHourlyBuoyDataTest();
-  actualizarMotorAnalisisTest();
-}
+              {/* Columna Derecha: Tabla Horaria */}
+              <div className="lg:col-span-8 bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                      <Clock size={18} className="text-blue-500" />
+                      Pronóstico por Horas ({currentDayData.dayLabel.split(' ')[0]})
+                    </h3>
+                    <p className="text-xs text-slate-400 font-medium mt-0.5">Sectores de nado diurno (06:00 a 21:00)</p>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-semibold uppercase bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
+                    MÁLAGA
+                  </span>
+                </div>
 
-/**
- * Actualiza la Matriz Relacional de 16 Columnas de MOTOR_ANALISIS_TEST
- * Soporta múltiples reportes de nadadores a la misma hora y cruce exacto de boya
- */
-function actualizarMotorAnalisisTest() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetPrev = ss.getSheetByName("PREVISIONES_TEST");
-  var sheetBoya = ss.getSheetByName("REAL_BOYA_TEST");
-  var sheetRep = ss.getSheetByName("REPORTES_NADADORES_TEST");
-  var sheetMotor = ss.getSheetByName("MOTOR_ANALISIS_TEST");
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs min-w-[700px]">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                        <th className="py-3 px-2">Hora</th>
+                        <th className="py-3 px-2">Seguridad</th>
+                        <th className="py-3 px-2">Ola Orilla (m)</th>
+                        <th className="py-3 px-2">Per. (s)</th>
+                        <th className="py-3 px-2">Energía (Kj)</th>
+                        <th className="py-3 px-2">Viento (kts)</th>
+                        <th className="py-3 px-2">Resaca</th>
+                        <th className="py-3 px-2">Deriva</th>
+                        <th className="py-3 px-2">Diagnóstico</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {currentDayData.hourly.map((h, index) => {
+                        const isBest = h.time === currentDayData.best.time;
+                        const isWorst = h.time === currentDayData.worst.time;
+                        const isRed = h.hourScore < 45;
+                        const isGreen = h.hourScore >= 75;
 
-  if (!sheetPrev || !sheetMotor) return;
+                        return (
+                          <tr key={index} className={`hover:bg-slate-50/50 transition-colors ${isBest ? 'bg-emerald-50/30' : isWorst ? 'bg-red-50/20' : ''}`}>
+                            <td className="py-3.5 px-2 font-bold text-slate-700 flex items-center gap-1">
+                              {h.time}
+                              {isBest && <span className="text-[10px]" title="Mejor hora">⭐</span>}
+                            </td>
+                            <td className="py-3.5 px-2">
+                              <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] ${
+                                isGreen ? 'bg-emerald-100 text-emerald-800' : isRed ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {h.hourScore} / 100
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-2 text-slate-800 font-bold text-sm">
+                              {h.swellH}m
+                            </td>
+                            <td className="py-3.5 px-2 text-slate-500 font-medium">
+                              {h.period}s
+                            </td>
+                            <td className="py-3.5 px-2">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-slate-700">{h.waveEnergy} Kj</span>
+                                <span className="text-[9px] text-slate-400 font-semibold uppercase mt-0.5" title="Procedencia de la ola (grados del modelo)">
+                                  🧭 {h.swellDir !== null ? `${h.swellDir}º` : '-'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-2">
+                              <div className="flex flex-col">
+                                <span className={isClimateDown ? "text-slate-400 font-bold" : "font-bold text-slate-700"}>
+                                  {h.windS === "-" ? "-" : `${h.windS} kts`}
+                                </span>
+                                <span className="text-[9px] text-slate-400 font-semibold mt-0.5">
+                                  {h.windDir === "-" ? "-" : getWindDirection(h.windDir)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-2">
+                              <span className={h.ripColor}>{h.ripRisk}</span>
+                            </td>
+                            <td className="py-3.5 px-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm shrink-0">{h.drift.icon}</span>
+                                <span className={`text-[10px] ${h.drift.color}`}>{h.drift.short}</span>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-2">
+                              {h.localRule ? (
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${h.ruleColor}`}>
+                                  {h.localRule}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
-  var prevRows = sheetPrev.getLastRow() > 1 ? sheetPrev.getRange(2, 1, sheetPrev.getLastRow() - 1, sheetPrev.getLastColumn()).getValues() : [];
-  var boyaRows = (sheetBoya && sheetBoya.getLastRow() > 1) ? sheetBoya.getRange(2, 1, sheetBoya.getLastRow() - 1, sheetBoya.getLastColumn()).getValues() : [];
-  var repRows = (sheetRep && sheetRep.getLastRow() > 1) ? sheetRep.getRange(2, 1, sheetRep.getLastRow() - 1, sheetRep.getLastColumn()).getValues() : [];
+            </div>
+          </>
+        )}
 
-  // 1. Mapeo de Previsiones por ID_Registro
-  var prevMap = {};
-  for (var p = 0; p < prevRows.length; p++) {
-    var rP = prevRows[p];
-    prevMap[String(rP[0])] = {
-      idReg: rP[0],
-      fechaHora: rP[1],
-      playa: rP[2],
-      altOla: Number(rP[3]) || 0,
-      dirOla: Number(rP[4]) || 0,
-      perOla: Number(rP[5]) || 0,
-      velViento: Number(rP[6]) || 0,
-      dirViento: Number(rP[7]) || 0,
-      humRel: Number(rP[8]) || 0,
-      tempAire: Number(rP[9]) || 0,
-      tempAguaPrev: Number(rP[11]) || 0
-    };
-  }
+      </div>
 
-  // 2. Mapeo de Boya por Slot Temporal
-  var boyaMapBySlot = {};
-  for (var b = 0; b < boyaRows.length; b++) {
-    var rB = boyaRows[b];
-    var idParts = String(rB[0]).split("-");
-    var slotKey = idParts.length > 1 ? idParts.slice(1).join("-") : String(rB[0]);
-    boyaMapBySlot[slotKey] = {
-      altOla: Number(rB[3]) || 0,
-      dirOla: Number(rB[4]) || 0,
-      perOla: Number(rB[5]) || 0,
-      tempAgua: Number(rB[6]) || 0,
-      velViento: Number(rB[7]) || 0,
-      dirViento: Number(rB[8]) || 0,
-      fuente: rB[9] || "Puertos del Estado"
-    };
-  }
+      {/* MODAL: GUÍA DE AGUAS ABIERTAS */}
+      {isModalOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200"
+          role="presentation"
+          onClick={() => setIsModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden relative flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="guia-nadadores-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
+            
+            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
+              <div className="flex items-center gap-3">
+                <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
+                  <BookOpen size={24} />
+                </div>
+                <div>
+                  <h3 id="guia-nadadores-titulo" className="text-lg font-bold text-slate-800 tracking-tight">Guía Fácil para Nadadores</h3>
+                  <p className="text-xs text-slate-500 font-medium">Cómo leer OpenWater Tracker</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
+                aria-label="Cerrar guía"
+              >
+                <X size={24} />
+              </button>
+            </div>
 
-  var rowsToInsert = [];
+            <div className="p-6 overflow-y-auto space-y-8">
+              
+              <section>
+                <p className="text-slate-600 leading-relaxed text-sm md:text-base">
+                  Hemos cogido los datos en bruto de los satélites y les hemos metido <strong>"nuestra experiencia local"</strong> para crear el primer predictor de aguas abiertas pensado exclusivamente para la costa de Málaga.
+                </p>
+              </section>
 
-  // 3. Generar filas de Previsión + Boya para todas las playas registradas
-  for (var idKey in prevMap) {
-    var prev = prevMap[idKey];
-    var slotK = idKey.split("-").slice(1).join("-");
-    var boya = boyaMapBySlot[slotK] || {
-      altOla: prev.altOla,
-      dirOla: prev.dirOla,
-      perOla: prev.perOla,
-      tempAgua: prev.tempAguaPrev,
-      velViento: prev.velViento,
-      dirViento: prev.dirViento,
-      fuente: "Sincronizada con Previsión"
-    };
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 border-b pb-2">🛠️ 1. Alertas de Salud y Riesgo</h4>
+                <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="flex gap-3 items-start">
+                     <Zap className="text-yellow-600 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">Corte por Tormenta (Rayos):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Si el satélite detecta riesgo eléctrico, la nota caerá a 0 puntos y aparecerá en amarillo. En el agua eres el punto más alto, un pararrayos natural. Sal inmediatamente.</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                     <CloudFog className="text-slate-500 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">Pérdida de Visibilidad (Niebla):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Si la visibilidad cae por debajo de 2 kilómetros, aplicamos un castigo de 40 puntos. Perder de vista la costa nadando es extremadamente peligrose.</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                     <TestTubes className="text-emerald-500 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">Calidad del Agua (Arrastres):</strong>
+                       <p className="text-sm text-slate-600 mt-1">La app suma la lluvia desde ayer hasta hoy. Si llueve fuerte, los aliviaderos de Málaga y el río Guadalhorce escupirán suciedad que la deriva traerá a la costa. La tarjeta pasará a estado de "Precaución" (0.5mm) o "Riesgo Alto" (2mm).</p>
+                     </div>
+                  </div>
+                </div>
+              </section>
 
-    var fSesgo = (prev.altOla > 0) ? (boya.altOla / prev.altOla) : 1.0;
-    var fRefraccion = 1.0;
-    var fCombinado = fSesgo * fRefraccion;
-    var regimen = calcularRegimenMalaga(prev.dirOla, prev.dirViento, prev.humRel, prev.tempAire, prev.perOla);
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Compass size={20} className="text-indigo-500"/> 2. Las Corrientes (El Radar)
+                </h4>
+                <p className="text-sm text-slate-600 mb-4">
+                  En la tabla, cruzamos los datos de las olas para vigilar los dos tipos de arrastres:
+                </p>
+                <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="flex gap-3 items-start">
+                     <AlertTriangle className="text-red-500 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">La Resaca (Hacia adentro):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Si entra mucha agua a la playa, tiene que salir, creando embudos que tiran hacia alta mar. Se marca como Baja, Media o Alta.</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                     <Compass className="text-indigo-500 shrink-0 mt-1" size={20} />
+                     <div>
+                       <strong className="text-slate-800">La Deriva Lateral (Flechitas):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Cruzando la inclinación de la playa con el ángulo de la ola, sabemos si el agua "resbala" empujándote hacia el este (⬅️ etiqueta <strong>Nerja</strong>) o hacia el oeste (➡️ etiqueta <strong>Fuengirola</strong>) a lo largo de la costa.</p>
+                     </div>
+                  </div>
+                </div>
+              </section>
 
-    rowsToInsert.push([
-      prev.idReg,
-      prev.fechaHora,
-      prev.playa,
-      prev.altOla,
-      boya.altOla,
-      "", // Swimmer (se llena si hay reporte)
-      prev.dirOla,
-      prev.perOla,
-      prev.velViento,
-      prev.dirViento,
-      fSesgo.toFixed(2),
-      fRefraccion.toFixed(2),
-      fCombinado.toFixed(2),
-      "", // Error Subjetivo
-      regimen,
-      "Previsión + Boya Oficial"
-    ]);
-  }
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Activity size={20} className="text-orange-500"/> 3. La Energía (La Regla de Oro)
+                </h4>
+                <p className="text-sm text-slate-600 mb-4">
+                  La columna <strong>Energía (Kj)</strong> usa <code className="bg-slate-100 px-1 rounded text-xs">altura² × periodo × coeficiente dinámico</code>. El coeficiente depende de la <strong>dirección del oleaje</strong> (Sur/SSE más noble, Sureste intermedio, Suroeste más agresivo) y del <strong>periodo</strong> (más de 5 s suma empuje; menos de 4 s resta, mar más caótico). Debajo del valor verás la <strong>procedencia del oleaje</strong> (brújula + grados, convención del modelo).
+                </p>
+                <p className="text-sm text-slate-600 mb-4">
+                  Basado en los informes de oceanografía física, la fuerza de una ola no crece en línea recta, sino de forma <strong>exponencial</strong> (al cuadrado en la altura).
+                </p>
+                <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 text-sm text-orange-800 font-medium flex items-start gap-3">
+                  <Info className="shrink-0 text-orange-600 mt-0.5" size={20} />
+                  <p>
+                    Una ola de 0.8m no tiene el doble de fuerza que una de 0.4m... <strong>¡Tiene 4 veces más energía!</strong> Por eso, a partir de 0.6m notarás que el mar golpea con mucha dureza. Fíjate en la columna de <strong>Energía (Kj)</strong> para conocer el impacto real de las olas en tu pecho.
+                  </p>
+                </div>
+              </section>
 
-  // 4. Añadir CADA Reporte de Nadador como Fila Independiente (Evita sobrescrituras)
-  for (var r = 0; r < repRows.length; r++) {
-    var rRep = repRows[r];
-    var repIdReg = String(rRep[0]);
-    var repPlaya = String(rRep[2]).toLowerCase();
-    var repSwimmerOla = Number(rRep[3]) || 0;
-    var repSlotK = repIdReg.split("-").slice(1).join("-");
+              <section>
+                <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
+                  <Bot size={20} className="text-indigo-500"/> 4. El "Cerebro" Malagueño
+                </h4>
+                <p className="text-sm text-slate-600 mb-5">
+                  La aplicación no se fía a ciegas del satélite, sino que aplica nuestras <strong>4 Reglas de Oro</strong> automáticamente:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-cyan-50 p-2.5 rounded-xl text-cyan-600"><Waves size={24} /></div>
+                      <h5 className="font-bold text-slate-800">El "Magón"</h5>
+                    </div>
+                    <p className="text-sm text-slate-600 mb-3">Ola tendida sin viento. Aunque sea grande (0.5m), la app no castiga la seguridad en exceso porque es mar de fondo cómodo.</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-amber-50 p-2.5 rounded-xl text-amber-600"><ThermometerSun size={24} /></div>
+                      <h5 className="font-bold text-slate-800">La "Lavadora" Térmica</h5>
+                    </div>
+                    <p className="text-sm text-slate-600 mb-3">A mediodía, el Poniente superior a 12 nudos levanta un mar picado insoportable para respirar.</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-red-50 p-2.5 rounded-xl text-red-600"><Wind size={24} /></div>
+                      <h5 className="font-bold text-slate-800">La trampa del Terral</h5>
+                    </div>
+                    <p className="text-sm text-slate-600 mb-3">Viento fuerte de Tierra (Norte) alisa la orilla pero empuja hacia adentro. Riesgo muy alto de deriva.</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600"><ShieldAlert size={24} /></div>
+                      <h5 className="font-bold text-slate-800">El Escudo del Puerto</h5>
+                    </div>
+                    <p className="text-sm text-slate-600 mb-3">La Malagueta y Pedregalejo están fuertemente protegidas contra las olas de Poniente o Suroeste. El satélite llega aquí muy atenuado.</p>
+                  </div>
+                </div>
+              </section>
 
-    var prevRef = prevMap[repIdReg] || {
-      altOla: repSwimmerOla,
-      dirOla: 173,
-      perOla: 3.75,
-      velViento: 6.5,
-      dirViento: 173,
-      humRel: 78,
-      tempAire: 27.2
-    };
+              <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-sm text-amber-800 font-medium flex items-start gap-3">
+                <Info className="shrink-0 text-amber-600 mt-0.5" size={20} />
+                <p>
+                  <strong>El sentido común manda:</strong> Estas previsiones son matemáticas y cálculos. Si la app dice verde pero al llegar ves bandera roja o tienes un mal presentimiento, <strong>no te metas</strong>. Tu instinto es el mejor satélite.
+                </p>
+              </div>
 
-    var boyaRef = boyaMapBySlot[repSlotK] || {
-      altOla: prevRef.altOla,
-      dirOla: prevRef.dirOla,
-      perOla: prevRef.perOla,
-      tempAgua: 25.3,
-      velViento: prevRef.velViento,
-      dirViento: prevRef.dirViento
-    };
-
-    var fSesgoR = (prevRef.altOla > 0) ? (boyaRef.altOla / prevRef.altOla) : 1.0;
-    var fRefraccionR = 1.0;
-    var fCombR = fSesgoR * fRefraccionR;
-    var errSubjetivo = repSwimmerOla - boyaRef.altOla;
-    var regR = calcularRegimenMalaga(prevRef.dirOla, prevRef.dirViento, prevRef.humRel, prevRef.tempAire, prevRef.perOla);
-
-    rowsToInsert.push([
-      repIdReg + "-REP" + (r + 1),
-      rRep[1],
-      repPlaya,
-      prevRef.altOla,
-      boyaRef.altOla,
-      repSwimmerOla,
-      prevRef.dirOla,
-      prevRef.perOla,
-      prevRef.velViento,
-      prevRef.dirViento,
-      fSesgoR.toFixed(2),
-      fRefraccionR.toFixed(2),
-      fCombR.toFixed(2),
-      errSubjetivo.toFixed(2),
-      regR,
-      "Reporte Nadador #" + (r + 1) + " (" + (rRep[4] || "Sensación") + ")"
-    ]);
-  }
-
-  // Escribir en MOTOR_ANALISIS_TEST
-  sheetMotor.clearContents();
-  sheetMotor.appendRow([
-    "ID_Registro",
-    "Fecha_Hora",
-    "Playa",
-    "Hs_OpenMeteo_m",
-    "Hs_BoyaReal_m",
-    "Hs_Swimmer_m",
-    "Dir_Ola_grados",
-    "Periodo_s",
-    "Viento_Speed_kn",
-    "Viento_Dir_grados",
-    "F_sesgo",
-    "F_refraccion",
-    "F_combinado",
-    "Error_Subjetivo_m",
-    "Regimen_Clasificado",
-    "Notas_Auditoria"
-  ]);
-
-  if (rowsToInsert.length > 0) {
-    sheetMotor.getRange(2, 1, rowsToInsert.length, 16).setValues(rowsToInsert);
-  }
-}
-
-function calcularRegimenMalaga(dirOla, dirViento, humedad, tempAire, periodo) {
-  if (dirViento >= 260 && dirViento <= 360 && tempAire > 28 && humedad < 45) {
-    return "Terral Clásico (NW Caliente y Seco)";
-  }
-  if (dirOla >= 70 && dirOla <= 130 && dirViento >= 200 && dirViento <= 280) {
-    return "Falso Poniente (Mar de Fondo E + Viento W)";
-  }
-  if (dirOla >= 200 && dirOla <= 260 && dirViento >= 70 && dirViento <= 130) {
-    return "Falso Levante (Mar de Fondo W + Brisa E)";
-  }
-  if (periodo >= 6.0 && dirOla >= 70 && dirOla <= 130) {
-    return "Levante Puro / Mar de Fondo E";
-  }
-  if (periodo >= 6.0 && dirOla >= 200 && dirOla <= 260) {
-    return "Poniente Puro / Mar de Fondo W";
-  }
-  return "Brisa Térmica / Régimen Costero Estándar";
-}
-
-function simularReporteNadadorTest() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName("REPORTES_NADADORES_TEST");
-  if (!sheet) {
-    crearPestanasTest();
-    sheet = ss.getSheetByName("REPORTES_NADADORES_TEST");
-  }
-
-  var now = new Date();
-  var slot = getNearestHourlySlot(now);
-  var idRegCanon = "MIS-" + slot.fechaHoraCanon;
-
-  sheet.appendRow([
-    idRegCanon,
-    slot.yyyy + "-" + slot.mm + "-" + slot.dd + " " + slot.hh + ":00",
-    "misericordia",
-    0.20,
-    "Plato / Calma",
-    90,
-    "Simulación Manual de Verificación",
-    "Consola Apps Script",
-    Utilities.formatDate(now, "Europe/Madrid", "yyyy-MM-dd HH:mm:ss"),
-    "OK 200"
-  ]);
-
-  actualizarMotorAnalisisTest();
-}
-
-function crearPestanasTest() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  
-  var tabs = [
-    { name: "PREVISIONES_TEST", headers: ["ID_Registro", "Fecha_Hora", "Playa", "Hs_m", "Dir_grados", "Periodo_s", "Viento_Speed_kn", "Viento_Dir_grados", "Humedad_pct", "Temp_Aire_c", "Diagnostico_Auditoria", "Temp_Agua_Prevista_c", "Timestamp_Ejecucion"] },
-    { name: "REAL_BOYA_TEST", headers: ["ID_Registro", "Fecha_Hora", "Playa", "Hs_m", "Dir_grados", "Periodo_s", "Temp_Agua_c", "Viento_Speed_kn", "Viento_Dir_grados", "Origen_Notas", "Timestamp_Ejecucion"] },
-    { name: "REPORTES_NADADORES_TEST", headers: ["ID_Registro", "Fecha_Hora", "Playa", "Ola_Swimmer_m", "Sensacion_Swimmer", "Rumbo_grados", "Comentarios", "Origen_Dato", "Timestamp_Recepcion", "Audit_Status"] },
-    { name: "MOTOR_ANALISIS_TEST", headers: ["ID_Registro", "Fecha_Hora", "Playa", "Hs_OpenMeteo_m", "Hs_BoyaReal_m", "Hs_Swimmer_m", "Dir_Ola_grados", "Periodo_s", "Viento_Speed_kn", "Viento_Dir_grados", "F_sesgo", "F_refraccion", "F_combinado", "Error_Subjetivo_m", "Regimen_Clasificado", "Notas_Auditoria"] }
-  ];
-
-  for (var i = 0; i < tabs.length; i++) {
-    var sheet = ss.getSheetByName(tabs[i].name);
-    if (!sheet) {
-      sheet = ss.insertSheet(tabs[i].name);
-      sheet.appendRow(tabs[i].headers);
-      sheet.getRange(1, 1, 1, tabs[i].headers.length).setFontWeight("bold").setBackground("#d9ead3");
-    }
-  }
-}
-
-function handleTestPayload(ss, data) {
-  var target = data.targetTable || "REAL_BOYA_TEST";
-  var sheet = ss.getSheetByName(target);
-  if (!sheet) {
-    crearPestanasTest();
-    sheet = ss.getSheetByName(target);
-  }
-
-  var now = new Date();
-  var slot = getNearestHourlySlot(now);
-  var idReg = (data.playa || "misericordia").substring(0, 3).toUpperCase() + "-" + slot.fechaHoraCanon;
-
-  sheet.appendRow([
-    idReg,
-    slot.yyyy + "-" + slot.mm + "-" + slot.dd + " " + slot.hh + ":00",
-    (data.playa || "misericordia").toLowerCase(),
-    data.boyaAltura || 0.02,
-    data.boyaDireccion || 153,
-    data.boyaPeriodo || 3.95,
-    data.boyaTemp || 25.3,
-    data.vientoSpeed || 6.5,
-    data.vientoDir || 153,
-    data.origenDato || "Puertos del Estado (Boya Real Portus RTData 2056)",
-    Utilities.formatDate(now, "Europe/Madrid", "yyyy-MM-dd HH:mm:ss")
-  ]);
-
-  actualizarMotorAnalisisTest();
-  return ContentService.createTextOutput(JSON.stringify({ status: "success", target: target, idRegistro: idReg }))
-    .setMimeType(ContentService.MimeType.JSON);
+            </div>
+          </div>
+        </div>
+      )}
+      <Analytics />
+    </div>
+  );
 }
