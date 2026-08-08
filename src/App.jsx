@@ -4455,28 +4455,27 @@ export default function App() {
                                           </button>
                                         )}
 
-                                        {isOverridden && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const nowTs = Date.now();
-                                              const updated = { ...adminManualScaleFactors };
-                                              delete updated[storageKey];
-                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
-                                              setAdminManualScaleFactors(updated);
-                                              setAdminFactorApprovalTimes(updatedTimes);
-                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                              saveFactorChangeToCloud(bKey, sec.key, null, nowTs, bName);
-                                              setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🔄 Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}). Sincronizado en la nube.`);
-                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
-                                            }}
-                                            className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
-                                          >
-                                            ↩ Reset ({sec.defaultFactor.toFixed(2)}x)
-                                          </button>
-                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nowTs = Date.now();
+                                            const updated = { ...adminManualScaleFactors };
+                                            delete updated[storageKey];
+                                            const updatedTimes = { ...adminFactorApprovalTimes };
+                                            delete updatedTimes[storageKey];
+                                            setAdminManualScaleFactors(updated);
+                                            setAdminFactorApprovalTimes(updatedTimes);
+                                            localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                            localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                            saveFactorChangeToCloud(bKey, sec.key, null, nowTs, bName);
+                                            setDataRefreshKey(k => k + 1);
+                                            setFactorFeedbackMsg(`🔄 ¡Reset a Fábrica (${sec.defaultFactor.toFixed(2)}x) para ${bName}! Sincronizado.`);
+                                            setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                          }}
+                                          className="bg-rose-50 text-rose-700 hover:bg-rose-100 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold border border-rose-200 transition-all flex-1 min-w-[90px] text-center"
+                                        >
+                                          🔄 Reset ({sec.defaultFactor.toFixed(2)}x)
+                                        </button>
 
                                         <button
                                           type="button"
