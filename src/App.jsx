@@ -36,16 +36,16 @@ import {
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
-// Coordenadas reales de las playas y su orientaci�n (grados respecto al Norte mirando al mar)
+// Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
 const BEACHES = {
-  misericordia: { name: "La Misericordia, M�laga", lat: 36.696, lon: -4.444, facing: 135 },
-  malagueta: { name: "La Malagueta, M�laga", lat: 36.718, lon: -4.407, facing: 180 },
-  pedregalejo: { name: "Pedregalejo, M�laga", lat: 36.721, lon: -4.386, facing: 180 },
-  // v9.4+ � expansi�n costera (Open-Meteo: mismos endpoints, lat/lon por playa)
-  los_alamos: { name: "Los �lamos, Torremolinos", lat: 36.6398, lon: -4.4815, facing: 188 },
+  misericordia: { name: "La Misericordia, Málaga", lat: 36.696, lon: -4.444, facing: 135 },
+  malagueta: { name: "La Malagueta, Málaga", lat: 36.718, lon: -4.407, facing: 180 },
+  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386, facing: 180 },
+  // v9.4+ — expansión costera (Open-Meteo: mismos endpoints, lat/lon por playa)
+  los_alamos: { name: "Los Álamos, Torremolinos", lat: 36.6398, lon: -4.4815, facing: 188 },
   bajondillo: { name: "El Bajondillo, Torremolinos", lat: 36.6271, lon: -4.4916, facing: 182 },
-  rincon_victoria: { name: "Rinc�n de la Victoria, M�laga", lat: 36.7131, lon: -4.2743, facing: 162 },
-  cala_del_moral: { name: "La Cala del Moral, Rinc�n de la Victoria", lat: 36.7148, lon: -4.31, facing: 148 }
+  rincon_victoria: { name: "Rincón de la Victoria, Málaga", lat: 36.7131, lon: -4.2743, facing: 162 },
+  cala_del_moral: { name: "La Cala del Moral, Rincón de la Victoria", lat: 36.7148, lon: -4.31, facing: 148 }
 };
 
 // Generador de etiquetas de fecha
@@ -58,10 +58,10 @@ function getDateLabel(offset, prefix) {
 };
 
 /**
- * Coeficiente din�mico de energ�a de ola (v10.0 motor Kj).
- * Direcci�n en grados = procedencia del oleaje (convenci�n Open-Meteo, desde el norte en sentido horario).
- * Energ�a � altura� � periodo � coeficiente.
- * Bases: S+SSE 7.5 | SE 8.5 | SO 9.5 | resto 8.0. Periodo >5s +1.5 | <4s -0.5.
+ * Coeficiente dinámico de energía de ola (v10.0 motor Kj).
+ * Dirección en grados = procedencia del oleaje (convención Open-Meteo, desde el norte en sentido horario).
+ * Energía ≈ altura² × periodo × coeficiente.
+ * Bases: S+SSE 7.5 | SE 8.5 | SO 9.5 | resto 8.0. Periodo >5s +1.5 | <4s −0.5.
  */
 function getDynamicWaveEnergyCoefficient(waveDirDeg, period) {
   const p = Number(period);
@@ -69,7 +69,7 @@ function getDynamicWaveEnergyCoefficient(waveDirDeg, period) {
 
   if (waveDirDeg !== undefined && waveDirDeg !== null && !Number.isNaN(Number(waveDirDeg))) {
     const d = ((Number(waveDirDeg) % 360) + 360) % 360;
-    // Sur (S) + Sur-Sureste (SSE): sectores 16 puntos contiguos (~146��191�)
+    // Sur (S) + Sur-Sureste (SSE): sectores 16 puntos contiguos (~146°–191°)
     if (d >= 146.25 && d < 191.25) base = 7.5;
     else if (d >= 123.75 && d < 146.25) base = 8.5; // Sureste (SE)
     else if (d >= 202.5 && d < 247.5) base = 9.5; // Suroeste (SO)
@@ -148,11 +148,11 @@ function HourlySvgChart({ hourlyData }) {
         <div className="flex gap-4">
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 bg-blue-500 rounded-full inline-block"></span>
-            Oleaje (m�x: {maxSwell.toFixed(2)}m)
+            Oleaje (máx: {maxSwell.toFixed(2)}m)
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-0.5 bg-orange-500 border-t border-orange-500 border-dashed inline-block"></span>
-            Viento (m�x: {maxWind.toFixed(1)}kt)
+            Viento (máx: {maxWind.toFixed(1)}kt)
           </span>
         </div>
         <span className="text-slate-400">Desliza para ver detalle</span>
@@ -293,20 +293,20 @@ function HourlySvgChart({ hourlyData }) {
             <span className="text-sm font-black text-white">{hoveredData.time}</span>
           </div>
           <div>
-            <span className="block text-[8px] font-bold text-blue-400 uppercase">?? Ola</span>
+            <span className="block text-[8px] font-bold text-blue-400 uppercase">🌊 Ola</span>
             <span className="text-xs font-black">{hoveredData.swellH}m</span>
           </div>
           <div>
-            <span className="block text-[8px] font-bold text-orange-400 uppercase">?? Viento</span>
+            <span className="block text-[8px] font-bold text-orange-400 uppercase">💨 Viento</span>
             <span className="text-xs font-black">{hoveredData.windS}kt</span>
           </div>
           <div>
-            <span className="block text-[8px] font-bold text-emerald-400 uppercase">?? Score</span>
+            <span className="block text-[8px] font-bold text-emerald-400 uppercase">🎯 Score</span>
             <span className="text-xs font-black">{hoveredData.hourScore}</span>
           </div>
           {hoveredData.taroRisk && hoveredData.taroRisk !== 'Ninguno' && (
             <div className="border-l border-slate-700 pl-2">
-              <span className="block text-[8px] font-bold text-slate-400 uppercase">??? Tar�</span>
+              <span className="block text-[8px] font-bold text-slate-400 uppercase">🌫️ Taró</span>
               <span className={`text-[10px] font-black uppercase ${hoveredData.taroRisk === 'Alto' ? 'text-red-400' : 'text-slate-300'}`}>
                 {hoveredData.taroRisk}
               </span>
@@ -333,29 +333,29 @@ function parseBoyaTemp(val) {
 
 function formatBoyaTemp(val) {
   const parsed = parseBoyaTemp(val);
-  if (parsed === null) return '�';
+  if (parsed === null) return '—';
   return `${parsed.toFixed(1)}`;
 };
 
 function getWindDirection(degrees) {
-  if (degrees === undefined || degrees === null || (typeof degrees === "number" && Number.isNaN(degrees))) return "�";
+  if (degrees === undefined || degrees === null || (typeof degrees === "number" && Number.isNaN(degrees))) return "—";
   if (degrees === "-") return "-";
   const d = Number(degrees);
-  if (Number.isNaN(d)) return "�";
-  if (d > 337.5 || d <= 22.5) return '?? N';
-  if (d > 22.5 && d <= 67.5) return '?? NE';
-  if (d > 67.5 && d <= 112.5) return '?? E';
-  if (d > 112.5 && d <= 157.5) return '?? SE';
-  if (d > 157.5 && d <= 202.5) return '?? S';
-  if (d > 202.5 && d <= 247.5) return '?? SO';
-  if (d > 247.5 && d <= 292.5) return '?? O';
-  if (d > 292.5 && d <= 337.5) return '?? NO';
+  if (Number.isNaN(d)) return "—";
+  if (d > 337.5 || d <= 22.5) return '⬇️ N';
+  if (d > 22.5 && d <= 67.5) return '↙️ NE';
+  if (d > 67.5 && d <= 112.5) return '⬅️ E';
+  if (d > 112.5 && d <= 157.5) return '↖️ SE';
+  if (d > 157.5 && d <= 202.5) return '⬆️ S';
+  if (d > 202.5 && d <= 247.5) return '↗️ SO';
+  if (d > 247.5 && d <= 292.5) return '➡️ O';
+  if (d > 292.5 && d <= 337.5) return '↘️ NO';
   return '-';
 };
 
 function getWindDirectionFullName(degrees) {
   const dirStr = getWindDirection(degrees);
-  if (dirStr === "�" || dirStr === "-" || !dirStr) return dirStr;
+  if (dirStr === "—" || dirStr === "-" || !dirStr) return dirStr;
   const cleanDir = dirStr.replace(/[^A-Z]/g, '').trim();
   const names = {
     'N': 'Norte',
@@ -372,7 +372,7 @@ function getWindDirectionFullName(degrees) {
 
 function parseSwimmerSensaciones(textVal) {
   const text = textVal !== null && textVal !== undefined ? String(textVal) : '';
-  if (!text) return { nombre: 'An�nimo', medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
+  if (!text) return { nombre: 'Anónimo', medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
   
   const matchNew = text.match(/^\[Nombre:\s*([^|]+)\s*\|\s*Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
   if (matchNew) {
@@ -387,7 +387,7 @@ function parseSwimmerSensaciones(textVal) {
   const matchOld = text.match(/^\[Medusas:\s*([^|]+)\s*\|\s*Agua:\s*([^\]]+)\]\s*(.*)/i);
   if (matchOld) {
     return {
-      nombre: 'An�nimo',
+      nombre: 'Anónimo',
       medusas: matchOld[1].trim(),
       agua: matchOld[2].trim(),
       comentario: matchOld[3].trim()
@@ -395,7 +395,7 @@ function parseSwimmerSensaciones(textVal) {
   }
   
   return {
-    nombre: 'An�nimo',
+    nombre: 'Anónimo',
     medusas: 'Ninguna',
     agua: 'Limpia',
     comentario: text
@@ -441,7 +441,7 @@ function cleanHourString(raw) {
 
 function formatSwimFriendly(dateVal, swimHourRaw) {
   const swimHour = cleanHourString(swimHourRaw);
-  if (!dateVal) return swimHour || '�';
+  if (!dateVal) return swimHour || '—';
   try {
     const regDate = new Date(dateVal);
     const today = new Date();
@@ -462,16 +462,16 @@ function formatSwimFriendly(dateVal, swimHourRaw) {
       return `${capitalizedDay} ${dayNum} ${monthName}${hourSuffix}`;
     }
   } catch (e) {
-    return dateVal || swimHour || '�';
+    return dateVal || swimHour || '—';
   }
 }
 
 function formatBoyaPeriod(raw) {
-  if (!raw) return '�';
+  if (!raw) return '—';
   const str = String(raw).trim();
-  if (str.includes('T') || str.includes('Z') || str.length > 10) return '�';
+  if (str.includes('T') || str.includes('Z') || str.length > 10) return '—';
   const num = parseFloat(str.replace(',', '.'));
-  if (isNaN(num) || num <= 0 || num > 30) return '�';
+  if (isNaN(num) || num <= 0 || num > 30) return '—';
   return `${num.toFixed(1)}s`;
 }
 
@@ -489,7 +489,7 @@ function getRecordType(item) {
     return 'admin_alert';
   }
   
-  if (orig.startsWith('Boya:') || orig.includes('Sincronizaci�n') || orig.includes('Open-Meteo') || notes.includes('Vercel Cron')) {
+  if (orig.startsWith('Boya:') || orig.includes('Sincronización') || orig.includes('Open-Meteo') || notes.includes('Vercel Cron')) {
     return 'buoy_sync';
   }
   
@@ -497,7 +497,7 @@ function getRecordType(item) {
     return 'swimmer_msg';
   }
   
-  if (orig === 'Admin: Calibraci�n' || (orig === 'Web Admin' && hasOlas)) {
+  if (orig === 'Admin: Calibración' || (orig === 'Web Admin' && hasOlas)) {
     return 'admin_report';
   }
   
@@ -520,14 +520,14 @@ function swimmerScaleToMeters(v) {
 
 export default function App() {
   const [selectedBeach, setSelectedBeach] = useState('misericordia');
-  // Por defecto seleccionamos "Hoy" (�ndice 1, ya que Ayer es 0)
+  // Por defecto seleccionamos "Hoy" (Índice 1, ya que Ayer es 0)
   const [selectedDay, setSelectedDay] = useState(1); 
   const [beachData, setBeachData] = useState(null); 
   const [rawMarineData, setRawMarineData] = useState(null);
   const [currentNowData, setCurrentNowData] = useState(null); // Datos del momento exacto actual
   const [isLoading, setIsLoading] = useState(true);
   
-  // Estados de calibraci�n y administraci�n (Fase 2)
+  // Estados de calibración y administración (Fase 2)
   const [activeTab, setActiveTab] = useState('forecast'); // 'forecast' | 'comparison'
   const [expandedHourIdx, setExpandedHourIdx] = useState(null);
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'chart'
@@ -547,30 +547,30 @@ export default function App() {
   const [showPuertosIframe, setShowPuertosIframe] = useState(false);
 
   useEffect(() => {
-    // Ordenar expl�citamente por timestamp descendente (los m�s recientes de hoy PRIMERO)
+    // Ordenar explícitamente por timestamp descendente (los más recientes de hoy PRIMERO)
     const sortedNewestFirst = [...calibrationHistory].sort((a, b) => {
       const tsA = parseLogTimestamp(a);
       const tsB = parseLogTimestamp(b);
       return tsB - tsA;
     });
 
-    // 1. Buscar �ltima altura real de boya v�lida (0.05m a 15m)
+    // 1. Buscar última altura real de boya válida (0.05m a 15m)
     const heightLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaAltura, 0.05, 15) !== null);
     setLatestBuoyHeight(heightLog ? parseBoyaNum(heightLog.boyaAltura, 0.05, 15).toFixed(2) : null);
 
-    // 2. Buscar �ltimo periodo real de boya v�lido (1s a 30s)
+    // 2. Buscar último periodo real de boya válido (1s a 30s)
     const periodLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaPeriodo, 1, 30) !== null);
     setLatestBuoyPeriod(periodLog ? `${parseBoyaNum(periodLog.boyaPeriodo, 1, 30).toFixed(1)}` : null);
 
-    // 3. Buscar �ltima direcci�n real de boya v�lida (0� a 360�)
+    // 3. Buscar última dirección real de boya válida (0º a 360º)
     const dirLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaDireccion, 0, 360) !== null);
     setLatestBuoyDir(dirLog ? parseBoyaNum(dirLog.boyaDireccion, 0, 360) : null);
 
-    // 4. Buscar �ltima temperatura real de agua v�lida (5�C a 35�C)
+    // 4. Buscar última temperatura real de agua válida (5ºC a 35ºC)
     const tempLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaTemp, 5, 35) !== null);
     setLatestBuoyTemp(tempLog ? parseBoyaNum(tempLog.boyaTemp, 5, 35).toFixed(1) : null);
 
-    // 5. Fecha y Fuente de la �ltima lectura f�sica de la boya
+    // 5. Fecha y Fuente de la última lectura física de la boya
     const dateLog = heightLog || tempLog || periodLog || sortedNewestFirst[0];
     setLatestBuoyDate(dateLog && dateLog.fechaRegistro ? new Date(dateLog.fechaRegistro) : null);
     
@@ -579,7 +579,7 @@ export default function App() {
     setLatestBuoySource(srcText);
   }, [calibrationHistory]);
 
-  // Sincronizaci�n Inteligente de Boya Real al abrir la App (Smart Throttle 15 min)
+  // Sincronización Inteligente de Boya Real al abrir la App (Smart Throttle 15 min)
   useEffect(() => {
     const THROTTLE_MS = 15 * 60 * 1000; // 15 Minutos
     const LAST_SYNC_KEY = 'openwater_buoy_smart_sync_ts';
@@ -612,7 +612,7 @@ export default function App() {
             if (tempVal) setLatestBuoyTemp(tempVal);
 
             setLatestBuoyDate(new Date());
-            setLatestBuoySource('Puertos del Estado (Estaci�n 2056 - M�laga)');
+            setLatestBuoySource('Puertos del Estado (Estación 2056 - Málaga)');
           }
         })
         .catch(() => {});
@@ -632,14 +632,14 @@ export default function App() {
   const [isSendingReport, setIsSendingReport] = useState(false);
   const [reportStatus, setReportStatus] = useState(null);
 
-  // Estados del selector hist�rico y diagn�stico (Fase 4)
+  // Estados del selector histórico y diagnóstico (Fase 4)
   const [selectedHistoryLog, setSelectedHistoryLog] = useState(null);
   const [adminBoyaAltura, setAdminBoyaAltura] = useState('');
   const [adminBoyaPeriodo, setAdminBoyaPeriodo] = useState('');
   const [adminBoyaDireccion, setAdminBoyaDireccion] = useState('');
   const [adminBoyaTemp, setAdminBoyaTemp] = useState('');
 
-  // Estados para el reporte p�blico de nadadores (Comunidad)
+  // Estados para el reporte público de nadadores (Comunidad)
   const [isSwimmerModalOpen, setIsSwimmerModalOpen] = useState(false);
   const [swimmerPlaya, setSwimmerPlaya] = useState('misericordia');
   const [swimmerHoraNado, setSwimmerHoraNado] = useState('11:00');
@@ -672,7 +672,7 @@ export default function App() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
-  // Estado para las pesta�as del Modal Admin ('factors' o 'report')
+  // Estado para las pestañas del Modal Admin ('factors' o 'report')
   const [adminTab, setAdminTab] = useState('factors');
   const [factorFeedbackMsg, setFactorFeedbackMsg] = useState(null);
 
@@ -686,7 +686,7 @@ export default function App() {
     }
   });
 
-  // Estado para las marcas de tiempo de aprobaci�n/ajuste de factores
+  // Estado para las marcas de tiempo de aprobación/ajuste de factores
   const [adminFactorApprovalTimes, setAdminFactorApprovalTimes] = useState(() => {
     try {
       const saved = localStorage.getItem('openwater_admin_approval_times');
@@ -696,7 +696,7 @@ export default function App() {
     }
   });
 
-  // Estado para los Factores de Sesgo del Sat�lite (F_sesgo) ajustados manualmente por el Administrador
+  // Estado para los Factores de Sesgo del Satélite (F_sesgo) ajustados manualmente por el Administrador
   const [adminManualSesgoFactors, setAdminManualSesgoFactors] = useState(() => {
     try {
       const saved = localStorage.getItem('openwater_admin_sesgo_factors');
@@ -731,14 +731,14 @@ export default function App() {
     return 0;
   }
 
-  // Helper para rescatar la lectura f�sica real de la boya en la fecha y HORA EXACTA DEL NADO
+  // Helper para rescatar la lectura física real de la boya en la fecha y HORA EXACTA DEL NADO
   function getBuoyReadingForLog(log) {
     if (!log) return { height: null, period: null, dir: null };
 
-    // 1. Resolver direcci�n de oleaje hist�rica por la fecha y hora exacta del nado (Idea 3)
+    // 1. Resolver dirección de oleaje histórica por la fecha y hora exacta del nado (Idea 3)
     let historicalSwellDir = null;
 
-    // 1. PASO 1 (Prioridad M�xima): Buscar en el mapa satelital marino hist�rico (rawMarineData) por la fecha y hora exacta del nado
+    // 1. PASO 1 (Prioridad Máxima): Buscar en el mapa satelital marino histórico (rawMarineData) por la fecha y hora exacta del nado
     if (rawMarineData && rawMarineData.hourly && rawMarineData.hourly.time) {
       const logTs = parseLogTimestamp(log);
       if (logTs > 0) {
@@ -755,7 +755,7 @@ export default function App() {
       }
     }
 
-    // 2. PASO 2: Si el sat�lite marino no tuviera dato para esa fecha, consultar la direcci�n de viento del formulario (realVientoDir)
+    // 2. PASO 2: Si el satélite marino no tuviera dato para esa fecha, consultar la dirección de viento del formulario (realVientoDir)
     if (!historicalSwellDir && log.realVientoDir && log.realVientoDir !== "") {
       const vUpper = String(log.realVientoDir).toUpperCase().trim();
       if (vUpper === "E" || vUpper === "LEVANTE") historicalSwellDir = 90;
@@ -769,7 +769,7 @@ export default function App() {
       else if (vUpper === "N" || vUpper === "NORTE") historicalSwellDir = 0;
     }
 
-    // 3. PASO 3: Fallback de seguridad para nados anteriores a agosto sin boya ni sat�lite ni viento: 110� (Levante)
+    // 3. PASO 3: Fallback de seguridad para nados anteriores a agosto sin boya ni satélite ni viento: 110º (Levante)
     if (!historicalSwellDir) {
       const logTs = parseLogTimestamp(log);
       const isBeforeAug3 = logTs > 0 && logTs < new Date("2026-08-03T00:00:00").getTime();
@@ -783,7 +783,7 @@ export default function App() {
       return num;
     }
 
-    // 1. Buscar en calibrationHistory un registro de 'Boya: Sincronizaci�n' del MISMO D�A y a la HORA M�S CERCANA del nado
+    // 1. Buscar en calibrationHistory un registro de 'Boya: Sincronización' del MISMO DÍA y a la HORA MÁS CERCANA del nado
     const logDateTs = parseLogTimestamp(log);
 
     let closestBuoyLog = null;
@@ -816,7 +816,7 @@ export default function App() {
       };
     }
 
-    // 2. Si el propio registro ya tiene guardada una altura de boya v�lida (> 0) distinta de appOlas
+    // 2. Si el propio registro ya tiene guardada una altura de boya válida (> 0) distinta de appOlas
     const rawH = (log.boyaAltura || "").toString().replace(",", ".");
     const appH = (log.appOlas || "").toString().replace(",", ".");
     if (rawH && rawH !== appH && !isNaN(parseFloat(rawH)) && parseFloat(rawH) > 0) {
@@ -827,7 +827,7 @@ export default function App() {
       };
     }
 
-    // 3. Fallback: modelo sat�lite ECMWF de esa hora
+    // 3. Fallback: modelo satélite ECMWF de esa hora
     return {
       height: log.modelEcmwfOlas ? parseFloat(log.modelEcmwfOlas.toString().replace(",", ".")).toFixed(2) : null,
       period: formatBoyaPeriod(log.boyaPeriodo),
@@ -835,7 +835,7 @@ export default function App() {
     };
   }
 
-  // Helper para filtrar lecturas an�malas (outliers) utilizando filtro de banda �1.5s
+  // Helper para filtrar lecturas anómalas (outliers) utilizando filtro de banda ±1.5σ
   function filterOutliers(ratios) {
     if (!ratios || ratios.length === 0) return [];
     const valid = ratios.filter(r => typeof r === "number" && !isNaN(r) && isFinite(r) && r > 0);
@@ -848,45 +848,35 @@ export default function App() {
     return filtered.length > 0 ? filtered : valid;
   }
 
-  // Dynamic Buoy Scale Factor por Sector (Levante ?? vs Poniente ??)
-  function getBoyaScaleFactor(beachKey, windSpd, windDir, waveDir, tempAire, currentDirection) {
-      const wDir = (windDir !== undefined && windDir !== null) ? Number(windDir) : (currentDirection || 120);
-      const wSpd = (windSpd !== undefined && windSpd !== null) ? Number(windSpd) : 6.5;
-      const temp = (tempAire !== undefined && tempAire !== null) ? Number(tempAire) : 25;
+  // Dynamic Buoy Scale Factor por Sector (Levante 🌅 vs Poniente 🌇)
+  function getBoyaScaleFactor(beachKey, currentDirection) {
+    const dir = currentDirection || 110; // Default Levante si no se proporciona dirección
+    const isLevante = dir >= 45 && dir <= 165;
+    const sectorKey = isLevante ? 'levante' : 'poniente';
+    const storageKey = `${beachKey}_${sectorKey}`;
 
-      let sectorKey = 'levante_suave';
-      if ((wDir >= 285 && wDir <= 360) || (wDir >= 0 && wDir <= 35) || (temp >= 27.5 && wDir >= 270)) {
-        sectorKey = 'terral';
-      } else if (wDir >= 45 && wDir <= 155) {
-        sectorKey = wSpd >= 10.0 ? 'levante_fuerte' : 'levante_suave';
-      } else if (wDir >= 175 && wDir <= 284) {
-        sectorKey = wSpd >= 10.0 ? 'poniente_fuerte' : 'poniente_suave';
-      }
-
-      const storageKey = `${beachKey}_${sectorKey}`;
-
-      if (adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null) {
-        return parseFloat(adminManualScaleFactors[storageKey]);
-      }
-      if (adminManualScaleFactors && adminManualScaleFactors[beachKey] !== undefined && adminManualScaleFactors[beachKey] !== null) {
-        return parseFloat(adminManualScaleFactors[beachKey]);
-      }
-
-      const defaultFactoryMap = {
-        misericordia:   { levante_fuerte: 0.85, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.35, terral: 0.15 },
-        malagueta:      { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.30, terral: 0.15 },
-        pedregalejo:    { levante_fuerte: 0.65, levante_suave: 0.50, poniente_fuerte: 0.40, poniente_suave: 0.30, terral: 0.15 },
-        los_alamos:     { levante_fuerte: 0.90, levante_suave: 0.85, poniente_fuerte: 0.90, poniente_suave: 0.75, terral: 0.20 },
-        bajondillo:     { levante_fuerte: 0.80, levante_suave: 0.70, poniente_fuerte: 0.70, poniente_suave: 0.60, terral: 0.20 },
-        cala_del_moral: { levante_fuerte: 0.75, levante_suave: 0.65, poniente_fuerte: 0.70, poniente_suave: 0.45, terral: 0.15 },
-        rincon_victoria:{ levante_fuerte: 0.85, levante_suave: 0.80, poniente_fuerte: 0.70, poniente_suave: 0.50, terral: 0.15 }
-      };
-
-      const bMap = defaultFactoryMap[beachKey] || { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.50, poniente_suave: 0.35, terral: 0.15 };
-      return bMap[sectorKey] !== undefined ? bMap[sectorKey] : 0.60;
+    // 1. Si el Administrador fijó un factor manual o aprobó uno específico para este sector
+    if (adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null) {
+      return parseFloat(adminManualScaleFactors[storageKey]);
+    }
+    // Compatibilidad por si hay fijado un factor general sin sector
+    if (adminManualScaleFactors && adminManualScaleFactors[beachKey] !== undefined && adminManualScaleFactors[beachKey] !== null) {
+      return parseFloat(adminManualScaleFactors[beachKey]);
     }
 
-  // Dynamic Sector Satellite Bias Factor (F_sesgo = Boya Real / Sat�lite Promedio)
+    // Factor por defecto de fábrica según playa y sector de viento
+    let defaultFactor = 1.0;
+    if (beachKey === 'misericordia') {
+      defaultFactor = isLevante ? 0.60 : 0.50;
+    } else if (beachKey === 'malagueta' || beachKey === 'pedregalejo') {
+      defaultFactor = isLevante ? 1.00 : 0.70;
+    }
+
+    // La web pública aplica el factor por defecto de fábrica hasta que el Administrador apruebe explícitamente una sugerencia
+    return defaultFactor;
+  }
+
+  // Dynamic Sector Satellite Bias Factor (F_sesgo = Boya Real / Satélite Promedio)
   function getSectorSesgoFactor(beachKey, isLevante) {
     const sectorKey = isLevante ? 'levante' : 'poniente';
     const storageKey = `${beachKey}_${sectorKey}`;
@@ -949,26 +939,26 @@ export default function App() {
         } catch (e) {
           clearTimeout(timeoutId);
           if (e.name === 'AbortError') throw new Error('Timeout (>10s)');
-          if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) throw new Error('Conexi�n bloqueada.');
+          if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) throw new Error('Conexión bloqueada.');
           throw e; 
         }
       };
 
-      // 1. SAT�LITE CLIMA (A�adimos visibility y dew_point_2m)
+      // 1. SATÉLITE CLIMA (Añadimos visibility y dew_point_2m)
       try {
         weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,dew_point_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,precipitation,weather_code,uv_index,cloud_cover,visibility&timezone=Europe%2FMadrid&past_days=2`);
       } catch (e) {
-        console.warn("Sat�lite de clima ca�do. Activando auto-rescate.", e);
+        console.warn("Satélite de clima caído. Activando auto-rescate.", e);
         localClimateDown = true;
         setIsClimateDown(true);
       }
 
-      // 2. SAT�LITE MARINO
+      // 2. SATÉLITE MARINO
       try {
         marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,sea_level_height_msl&models=best_match&timezone=Europe%2FMadrid&past_days=14`);
         setRawMarineData(marineJson);
       } catch (e) {
-         setErrorDetails({ general: `El sat�lite marino no responde: ${e.message}` });
+         setErrorDetails({ general: `El satélite marino no responde: ${e.message}` });
          setIsLoading(false);
          return; 
       }
@@ -977,15 +967,15 @@ export default function App() {
       try {
         const daysProcessed = []; 
         const dayOffsets = [-1, 0, 1, 2];
-        const dayPrefixes = ["Ayer", "Hoy", "Ma�ana", "Pasado"];
+        const dayPrefixes = ["Ayer", "Hoy", "Mañana", "Pasado"];
         
         let tempCurrentNow = null;
         const currentSystemHour = new Date().getHours();
 
-        // 3.1 C�LCULO DE INERCIA DE PONIENTE (Afloramiento de Bolsas de Agua Fr�a a 200m)
+        // 3.1 CÁLCULO DE INERCIA DE PONIENTE (Afloramiento de Bolsas de Agua Fría a 200m)
         let recentPonienteHours = 0;
         if (!localClimateDown && weatherJson?.hourly?.wind_direction_10m) {
-          // Analizar las 48 horas de hist�rico previo en la consulta (�ndices 0 a 47)
+          // Analizar las 48 horas de histórico previo en la consulta (índices 0 a 47)
           for (let k = 0; k < 48; k++) {
             const wDir = weatherJson.hourly.wind_direction_10m[k];
             const wSpd = weatherJson.hourly.wind_speed_10m[k] || 0;
@@ -995,14 +985,14 @@ export default function App() {
           }
         }
         const hasUpwellingMemory = recentPonienteHours >= 6; // 6+ horas de poniente reciente
-        const upwellingOffset = hasUpwellingMemory ? 3.5 : 0; // Descuento de 3.5�C por bolsas fr�as de afloramiento, o 0�C en d�as de mar calmo/templado sin poniente
+        const upwellingOffset = hasUpwellingMemory ? 3.5 : 0; // Descuento de 3.5°C por bolsas frías de afloramiento, o 0°C en días de mar calmo/templado sin poniente
 
-        // Comprobar si alg�n nadador o admin report� agua fr�a recientemente en la comunidad
+        // Comprobar si algún nadador o admin reportó agua fría recientemente en la comunidad
         const recentColdWaterReport = calibrationHistory.find(log => {
           if (!log.sensaciones && !log.notasCalibracion) return false;
           const textSens = (log.sensaciones || "").toLowerCase();
           const textNotes = (log.notasCalibracion || "").toLowerCase();
-          return textSens.includes('fr�a') || textSens.includes('fria') || textNotes.includes('fr�a') || textNotes.includes('fria');
+          return textSens.includes('fría') || textSens.includes('fria') || textNotes.includes('fría') || textNotes.includes('fria');
         });
 
         for (let d = 0; d < dayOffsets.length; d++) {
@@ -1013,7 +1003,7 @@ export default function App() {
           const startIndex = weatherBaseIndex + 6;
           const endIndex = weatherBaseIndex + 21;
 
-          // ----- C�LCULO DE TEMPERATURA DEL AGUA (Predicci�n + Boya Real) -----
+          // ----- CÁLCULO DE TEMPERATURA DEL AGUA (Predicción + Boya Real) -----
           const noonIndex = marineBaseIndex + 12;
           const sstNoon = marineJson?.hourly?.sea_surface_temperature?.[noonIndex];
           const predictedWaterTemp =
@@ -1023,7 +1013,7 @@ export default function App() {
 
           let waterTemp = predictedWaterTemp;
 
-          // ----- C�LCULO DE CALIDAD DEL AGUA (Aguas Sucias) -----
+          // ----- CÁLCULO DE CALIDAD DEL AGUA (Aguas Sucias) -----
           let rainSum = 0;
           if (!localClimateDown && weatherJson?.hourly?.precipitation) {
               for (let k = weatherBaseIndex - 24; k <= weatherBaseIndex + 21; k++) {
@@ -1042,14 +1032,14 @@ export default function App() {
               wqStatus = "Desconocida";
               wqColor = "text-slate-500";
               wqBg = "bg-slate-100 border-slate-200";
-              wqDesc = "Sat�lite desconectado.";
+              wqDesc = "Satélite desconectado.";
           } else if (rainSum >= 2.0) {
               wqStatus = "Riesgo Alto";
               wqColor = "text-red-600";
               wqBg = "bg-red-50 border-red-200";
               wqDesc = `Aliviaderos activos. Lluvia acum: ${rainSum.toFixed(1)}mm.`;
           } else if (rainSum >= 0.5) {
-              wqStatus = "Precauci�n";
+              wqStatus = "Precaución";
               wqColor = "text-amber-600";
               wqBg = "bg-amber-50 border-amber-200";
               wqDesc = `Posible arrastre. Lluvia acum: ${rainSum.toFixed(1)}mm.`;
@@ -1086,20 +1076,20 @@ export default function App() {
             }
           }
 
-          let tideState = "Marea Parada (Estacionaria) ??";
+          let tideState = "Marea Parada (Estacionaria) ⏸️";
           if (offset === 0) {
             const currentHourVal = marineJson?.hourly?.sea_level_height_msl?.[marineBaseIndex + currentSystemHour] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[marineBaseIndex + currentSystemHour]) : 0;
             const nextHourVal = marineJson?.hourly?.sea_level_height_msl?.[marineBaseIndex + ((currentSystemHour + 1) % 24)] !== undefined ? Number(marineJson.hourly.sea_level_height_msl[marineBaseIndex + ((currentSystemHour + 1) % 24)]) : currentHourVal;
             const diff = nextHourVal - currentHourVal;
             if (diff > 0.01) {
-              tideState = "Subiendo (Llenante) ??";
+              tideState = "Subiendo (Llenante) 📈";
             } else if (diff < -0.01) {
-              tideState = "Bajando (Vaciante) ??";
+              tideState = "Bajando (Vaciante) 📉";
             } else {
-              tideState = "Marea Parada (Estacionaria) ??";
+              tideState = "Marea Parada (Estacionaria) ⏸️";
             }
 
-            // Sincronizaci�n autom�tica de telemetr�a de boya (06:00 a 21:00)
+            // Sincronización automática de telemetría de boya (06:00 a 21:00)
             if (currentSystemHour >= 6 && currentSystemHour <= 21) {
               const syncKey = `openwater_telem_synced_${currentSystemHour}_${selectedBeach}`;
               if (typeof window !== 'undefined' && !sessionStorage.getItem(syncKey)) {
@@ -1156,7 +1146,7 @@ export default function App() {
           let maxEastWind = 0;
           let validHoursCount = 0;
           let hasStormRiskToday = false;
-          // ?? MOTOR DOBLE DESACOPLADO: Factor de Sesgo del Sat�lite (F_sesgo) & Factor de Refracci�n (F_refraccion)
+          // 🚀 MOTOR DOBLE DESACOPLADO: Factor de Sesgo del Satélite (F_sesgo) & Factor de Refracción (F_refraccion)
           let todaySatHeights = [];
           const todayBaseStart = marineBaseIndex + 6;
           const todayBaseEnd = marineBaseIndex + 21;
@@ -1172,7 +1162,7 @@ export default function App() {
 
           const buoyRealH = latestBuoyHeight ? parseFloat(latestBuoyHeight) : null;
           
-          // Factor de Sesgo del Sat�lite (F_sesgo = Boya Real F�sica / Sat�lite Promedio)
+          // Factor de Sesgo del Satélite (F_sesgo = Boya Real Física / Satélite Promedio)
           let fSesgo = 1.0;
           if (buoyRealH !== null && buoyRealH > 0 && avgTodaySatH > 0) {
             fSesgo = buoyRealH / avgTodaySatH;
@@ -1204,7 +1194,7 @@ export default function App() {
             const rainProb = localClimateDown ? "-" : (weatherJson?.hourly?.precipitation_probability?.[i] || 0);
             const dewPoint = localClimateDown ? 0 : (weatherJson?.hourly?.dew_point_2m?.[i] || 0);
             
-            // Regla: Multiplicador T�rmico de Mediod�a en Misericordia (v9.5)
+            // Regla: Multiplicador Térmico de Mediodía en Misericordia (v9.5)
             const isMisericordia = selectedBeach === 'misericordia';
             if (isMisericordia && !localClimateDown) {
                 const isNoonWindow = displayHour >= 12 && displayHour <= 18;
@@ -1215,11 +1205,11 @@ export default function App() {
                 }
             }
 
-            // Detecci�n de tormenta el�ctrica
+            // Detección de tormenta eléctrica
             const isThunderstorm = (wCode === 95 || wCode === 96 || wCode === 99);
             if (isThunderstorm) hasStormRiskToday = true;
 
-            // Ola Sat�lite de cada hora multiplicada por el Factor Activo del Sector (F_orilla)
+            // Ola Satélite de cada hora multiplicada por el Factor Activo del Sector (F_orilla)
             let effectiveWaveHeight = waveHeight;
             let localRule = null;
             let ruleColor = "";
@@ -1227,7 +1217,7 @@ export default function App() {
             // Dynamic Scale Factor por Sector (F_orilla)
             const scaleFactor = getBoyaScaleFactor(selectedBeach, waveDir);
             
-            // La clasificaci�n del sector y el factor de escala aplicado dependen 100% EXCLUSIVAMENTE de la direcci�n real de la ola (waveDir)
+            // La clasificación del sector y el factor de escala aplicado dependen 100% EXCLUSIVAMENTE de la dirección real de la ola (waveDir)
             if ((selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') && waveDir >= 200 && waveDir <= 300) {
                 effectiveWaveHeight = waveHeight * scaleFactor;
                 localRule = "Escudo Activo";
@@ -1236,12 +1226,12 @@ export default function App() {
                 effectiveWaveHeight = waveHeight * scaleFactor;
             }
             
-            let driftInfo = { icon: "??", color: "text-slate-400", short: "Nula" };
+            let driftInfo = { icon: "⏺️", color: "text-slate-400", short: "Nula" };
             const isLevanteMar = waveDir !== undefined && waveDir !== null && waveDir >= 60 && waveDir <= 120;
             const isPedregalejo = selectedBeach === 'pedregalejo';
 
             if (isPedregalejo && isLevanteMar) {
-                driftInfo = { icon: "??", color: "text-red-600 font-bold bg-red-50 border-red-200", short: "Embudo: Fuengirola" };
+                driftInfo = { icon: "➡️", color: "text-red-600 font-bold bg-red-50 border-red-200", short: "Embudo: Fuengirola" };
                 localRule = "Efecto Embudo: Alta resistencia";
                 ruleColor = "text-red-700 font-bold bg-red-100 border border-red-300 shadow-sm";
             } else if (waveDir !== undefined && waveDir !== null && effectiveWaveHeight >= 0.2) {
@@ -1251,9 +1241,9 @@ export default function App() {
 
                 if (Math.abs(diff) < 85) { 
                     if (diff > 15) {
-                        driftInfo = { icon: "??", color: "text-indigo-600", short: "Nerja" };
+                        driftInfo = { icon: "⬅️", color: "text-indigo-600", short: "Nerja" };
                     } else if (diff < -15) {
-                        driftInfo = { icon: "??", color: "text-indigo-600", short: "Fuengirola" };
+                        driftInfo = { icon: "➡️", color: "text-indigo-600", short: "Fuengirola" };
                     }
                 }
             }
@@ -1266,9 +1256,9 @@ export default function App() {
             // Traductor visual de nubosidad
             let skyIcon = "-";
             if (!localClimateDown) {
-              if (cloudCover <= 25) skyIcon = "??";
-              else if (cloudCover <= 65) skyIcon = "?";
-              else skyIcon = "??";
+              if (cloudCover <= 25) skyIcon = "☀️";
+              else if (cloudCover <= 65) skyIcon = "⛅";
+              else skyIcon = "☁️";
             }
 
             const energyCoef = getDynamicWaveEnergyCoefficient(waveDir, period);
@@ -1298,14 +1288,14 @@ export default function App() {
             const isLevanteComponent = (waveDir >= 60 && waveDir <= 120) || (!localClimateDown && windDir >= 60 && windDir <= 120);
             if (isLevanteComponent && effectiveWaveHeight < 0.4) {
                 hourScore = Math.max(0, hourScore - 10);
-                if (!localRule || localRule === "Escudo Activo" || localRule === "Mag�n") {
+                if (!localRule || localRule === "Escudo Activo" || localRule === "Magón") {
                     localRule = "Falsa Calma: Corriente de Fondo";
                     ruleColor = "text-amber-600 bg-amber-50 border border-amber-200 shadow-sm";
                 }
             }
             
             if (!localClimateDown) {
-                // Viento gen�rico
+                // Viento genérico
                 if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
                 
                 // Rachas penalizan extra
@@ -1313,10 +1303,10 @@ export default function App() {
                     hourScore -= ((gustKnots - 15) * 2);
                 }
                 
-                // MAG�N (Ahora estrictamente limitado a olas de 0.5m o menos)
+                // MAGÓN (Ahora estrictamente limitado a olas de 0.5m o menos)
                 if (effectiveWaveHeight >= 0.4 && effectiveWaveHeight <= 0.5 && windKnots < 8 && period > 5.5) {
                     hourScore = 100 - (effectiveWaveHeight * 10); 
-                    localRule = "Mag�n";
+                    localRule = "Magón";
                     ruleColor = "text-emerald-600";
                 }
 
@@ -1336,37 +1326,37 @@ export default function App() {
                     ruleColor = "text-red-600";
                 }
 
-                // Regla: Batalla T�rmica en Misericordia (v9.5)
+                // Regla: Batalla Térmica en Misericordia (v9.5)
                 const isWestOrNorthWestWind = windDir >= 247.5 && windDir <= 337.5;
                 const isNoonWindow = displayHour >= 12 && displayHour <= 18;
                 if (isMisericordia && isNoonWindow && isWestOrNorthWestWind && windKnots < 15) {
-                    if (!localRule || localRule === "Escudo Activo" || localRule === "Mag�n") {
-                        localRule = "Batalla T�rmica ??";
+                    if (!localRule || localRule === "Escudo Activo" || localRule === "Magón") {
+                        localRule = "Batalla Térmica ⚔️";
                         ruleColor = "text-yellow-800 bg-yellow-100 border border-yellow-300 shadow-sm";
                     }
                 }
 
-                // Regla: Desacople de Incomodidad vs Altura (Mar Picado / Inc�modo) en Misericordia (v9.5)
+                // Regla: Desacople de Incomodidad vs Altura (Mar Picado / Incómodo) en Misericordia (v9.5)
                 if (isMisericordia && windKnots > 10) {
                     if (hourScore > 60) hourScore = 60;
-                    if (!localRule || localRule === "Escudo Activo" || localRule === "Mag�n" || localRule === "Batalla T�rmica ??" || localRule === "Falsa Calma: Corriente de Fondo") {
-                        localRule = "Mar Picado / Inc�modo";
+                    if (!localRule || localRule === "Escudo Activo" || localRule === "Magón" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo") {
+                        localRule = "Mar Picado / Incómodo";
                         ruleColor = "text-amber-700 bg-amber-50 border border-amber-200 shadow-sm";
                     }
                 }
             }
 
-            // EL MURO DE LA ROMPIENTE (Olas > 0.5m son muy inc�modas/peligrosas para entrar al agua)
+            // EL MURO DE LA ROMPIENTE (Olas > 0.5m son muy incómodas/peligrosas para entrar al agua)
             if (effectiveWaveHeight > 0.5) {
                 let rompientePenalty = 15;
                 if (isHighTideHour) {
-                    rompientePenalty = 25; // Penalizaci�n extra por rompiente en orilla inclinada durante Pleamar
+                    rompientePenalty = 25; // Penalización extra por rompiente en orilla inclinada durante Pleamar
                     if (!localRule || localRule === "Rompiente Dura") {
-                        localRule = "Rompiente Dura (Pleamar) ??";
+                        localRule = "Rompiente Dura (Pleamar) ⚠️";
                         ruleColor = "text-orange-800 font-bold bg-orange-100 border border-orange-300 shadow-sm animate-pulse";
                     }
                 } else {
-                    if (!localRule || localRule === "Mag�n" || localRule === "Escudo Activo" || localRule === "Batalla T�rmica ??" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Inc�modo") {
+                    if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo") {
                         localRule = "Rompiente Dura";
                         ruleColor = "text-orange-700 font-bold bg-orange-100 border border-orange-300 shadow-sm";
                     }
@@ -1379,13 +1369,13 @@ export default function App() {
             if (ripRisk === "Alta") {
                 let resacaPenalty = 30;
                 if (isHighTideHour) {
-                    resacaPenalty = 40; // Mayor peligro de succi�n por resaca a marea llena
+                    resacaPenalty = 40; // Mayor peligro de succión por resaca a marea llena
                     if (!localRule || localRule === "Resaca Fuerte") {
-                        localRule = "Resaca Fuerte (Pleamar) ??";
+                        localRule = "Resaca Fuerte (Pleamar) 🚨";
                         ruleColor = "text-red-700 font-black bg-red-100 border border-red-300 shadow-sm";
                     }
                 } else {
-                    if (!localRule || localRule === "Mag�n" || localRule === "Escudo Activo" || localRule === "Batalla T�rmica ??" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Inc�modo" || localRule === "Rompiente Dura" || localRule === "Efecto Embudo: Alta resistencia") {
+                    if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo" || localRule === "Rompiente Dura" || localRule === "Efecto Embudo: Alta resistencia") {
                         localRule = "Resaca Fuerte";
                         ruleColor = "text-red-600 font-bold bg-red-50 border border-red-200 shadow-sm";
                     }
@@ -1394,7 +1384,7 @@ export default function App() {
                 if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
             }
 
-            // DETECCION DE TAR� (Niebla de Advecci�n local por choque t�rmico en bolsas de agua fr�a)
+            // DETECCION DE TARÓ (Niebla de Advección local por choque térmico en bolsas de agua fría)
             let taroRisk = "Ninguno";
             
             // Calculamos la temperatura efectiva del agua en la franja marina (200m) aplicando el descuento por inercia de poniente
@@ -1402,17 +1392,17 @@ export default function App() {
             
             if (offset === 0) {
               if (recentColdWaterReport) {
-                // Si la comunidad o el admin report� agua fr�a, forzamos la masa fr�a en orilla (~18.5�C)
+                // Si la comunidad o el admin reportó agua fría, forzamos la masa fría en orilla (~18.5°C)
                 taroEffectiveWaterTemp = Math.min(taroEffectiveWaterTemp, 18.5);
               } else if (buoyTempForToday !== null && !isNaN(buoyTempForToday)) {
-                // Con boya activa, descontamos el gradiente t�rmico de la franja costera
+                // Con boya activa, descontamos el gradiente térmico de la franja costera
                 taroEffectiveWaterTemp = buoyTempForToday - upwellingOffset;
               }
             }
 
             if (!localClimateDown && dewPoint !== undefined && taroEffectiveWaterTemp !== undefined) {
               const deltaT = dewPoint - taroEffectiveWaterTemp;
-              const isSeaBreezeWind = windDir >= 80 && windDir <= 220; // Vientos de componente mar�tima (Levante, Sur, Sudeste)
+              const isSeaBreezeWind = windDir >= 80 && windDir <= 220; // Vientos de componente marítima (Levante, Sur, Sudeste)
               const isGentleWind = windKnots >= 3 && windKnots <= 12; // Viento suave que empuja pero no dispersa la niebla
               const humidity = weatherJson?.hourly?.relative_humidity_2m?.[i];
               
@@ -1425,41 +1415,41 @@ export default function App() {
               }
             }
 
-            // Aplicar penalizaciones de Tar� al Score de Seguridad y Regla Local
+            // Aplicar penalizaciones de Taró al Score de Seguridad y Regla Local
             if (taroRisk === "Alto") {
-                hourScore -= 40; // Penalizaci�n severa por falta de visibilidad
+                hourScore -= 40; // Penalización severa por falta de visibilidad
                 if (hourScore > 50) hourScore = 50; // Cap estricto a 50 (Peligro)
                 
-                if (!localRule || localRule === "Mag�n" || localRule === "Escudo Activo" || localRule === "Batalla T�rmica ??" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Inc�modo" || localRule === "Rompiente Dura" || localRule === "Resaca Fuerte" || localRule === "Rompiente Dura (Pleamar) ??" || localRule === "Resaca Fuerte (Pleamar) ??") {
-                    localRule = hasUpwellingMemory ? "Riesgo de Tar� (Bolsas 200m) ?????" : "Riesgo de Tar� ?????";
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo" || localRule === "Rompiente Dura" || localRule === "Resaca Fuerte" || localRule === "Rompiente Dura (Pleamar) ⚠️" || localRule === "Resaca Fuerte (Pleamar) 🚨") {
+                    localRule = hasUpwellingMemory ? "Riesgo de Taró (Bolsas 200m) 🌫️🚨" : "Riesgo de Taró 🌫️🚨";
                     ruleColor = "text-slate-800 font-black bg-slate-100 border border-slate-300 shadow-sm animate-pulse";
                 }
             } else if (taroRisk === "Moderado") {
-                hourScore -= 20; // Penalizaci�n moderada
+                hourScore -= 20; // Penalización moderada
                 if (hourScore > 70) hourScore = 70; // Cap a 70
                 
-                if (!localRule || localRule === "Mag�n" || localRule === "Escudo Activo" || localRule === "Batalla T�rmica ??" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Inc�modo") {
-                    localRule = hasUpwellingMemory ? "Bruma / Tar� (Bolsas 200m) ?????" : "Bruma / Tar� Leve ?????";
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo" || localRule === "Mar Picado / Incómodo") {
+                    localRule = hasUpwellingMemory ? "Bruma / Taró (Bolsas 200m) 🌫️⚠️" : "Bruma / Taró Leve 🌫️⚠️";
                     ruleColor = "text-slate-600 font-bold bg-slate-50 border border-slate-200 shadow-sm";
                 }
             } else if (taroRisk === "Bruma") {
-                hourScore -= 10; // Penalizaci�n ligera por bruma anclada en horizonte
+                hourScore -= 10; // Penalización ligera por bruma anclada en horizonte
                 if (hourScore > 80) hourScore = 80;
                 
-                if (!localRule || localRule === "Mag�n" || localRule === "Escudo Activo" || localRule === "Batalla T�rmica ??" || localRule === "Falsa Calma: Corriente de Fondo") {
-                    localRule = "Bruma Mar Adentro ???";
+                if (!localRule || localRule === "Magón" || localRule === "Escudo Activo" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo") {
+                    localRule = "Bruma Mar Adentro 🌫️";
                     ruleColor = "text-slate-600 font-medium bg-slate-50 border border-slate-200 shadow-sm";
                 }
             }
 
-            // SOBRESCRITURAS POR PELIGRO M�XIMO (Rayos y Niebla)
+            // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos y Niebla)
             if (isThunderstorm) {
                 hourScore = 0;
-                localRule = "Tormenta ?";
+                localRule = "Tormenta ⚡";
                 ruleColor = "text-yellow-700 bg-yellow-300 border-yellow-500 shadow-sm";
             } else if (!localClimateDown && visibility < 2000) {
-                hourScore = Math.max(0, hourScore - 40); // Castigo severo por p�rdida de visibilidad
-                localRule = "Niebla ???";
+                hourScore = Math.max(0, hourScore - 40); // Castigo severo por pérdida de visibilidad
+                localRule = "Niebla 🌫️";
                 ruleColor = "text-slate-600 bg-slate-200 border-slate-300 shadow-sm";
             }
 
@@ -1482,7 +1472,7 @@ export default function App() {
             if (hourScore > maxScore) { maxScore = hourScore; bestHourTime = formattedTime; }
             if (hourScore < minScore) { minScore = hourScore; worstHourTime = formattedTime; }
 
-            // C�LCULO DE VISIBILIDAD EFECTIVA (Adecuaci�n por Tar� y Niebla)
+            // CÁLCULO DE VISIBILIDAD EFECTIVA (Adecuación por Taró y Niebla)
             let visText = "Excelente";
             let visColor = "text-slate-800 font-bold";
             if (localClimateDown) {
@@ -1615,24 +1605,24 @@ export default function App() {
     }
 
     try {
-      const stormWarning = currentDayData.hasStormRisk ? " �HAY RIESGO DE TORMENTA EL�CTRICA (RAYOS) HOY!" : "";
-      const windText = isClimateDown ? "(Ignora el viento porque sat�lite est� ca�do)" : `Viento: ${currentDayData.hourly[0].windS} nudos. Cielo: ${currentDayData.hourly[0].cloudCover}% nublado. Calidad del agua: ${currentDayData.waterQuality.status}.`;
-      const extraMarine = `Medusas (heur�stico): ${currentDayData.jellyfish.risk}. Temperatura agua (modelo): ${currentDayData.temps.water}�C.`;
+      const stormWarning = currentDayData.hasStormRisk ? " ¡HAY RIESGO DE TORMENTA ELÉCTRICA (RAYOS) HOY!" : "";
+      const windText = isClimateDown ? "(Ignora el viento porque satélite está caído)" : `Viento: ${currentDayData.hourly[0].windS} nudos. Cielo: ${currentDayData.hourly[0].cloudCover}% nublado. Calidad del agua: ${currentDayData.waterQuality.status}.`;
+      const extraMarine = `Medusas (heurístico): ${currentDayData.jellyfish.risk}. Temperatura agua (modelo): ${currentDayData.temps.water}ºC.`;
       
       // Alerta de termoclina para la IA (v10.x)
       let termoclinaAlert = "";
       const isLevante = currentDayData.hourly[0].swellDir >= 60 && currentDayData.hourly[0].swellDir <= 120;
       if ((selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') && isLevante) {
-          termoclinaAlert = " ADVERTENCIA ADICIONAL PARA LA IA: Advierte al nadador de que puede encontrar bloques de agua fr�a repentinos (termoclinas) y sensaci�n de agua 'pesada' al cruzar la zona del Morlaco debido al relieve del fondo marino.";
+          termoclinaAlert = " ADVERTENCIA ADICIONAL PARA LA IA: Advierte al nadador de que puede encontrar bloques de agua fría repentinos (termoclinas) y sensación de agua 'pesada' al cruzar la zona del Morlaco debido al relieve del fondo marino.";
       }
 
-      const prompt = `Eres un experto nadador de aguas abiertas y socorrista en M�laga. 
+      const prompt = `Eres un experto nadador de aguas abiertas y socorrista en Málaga. 
       Analiza los siguientes datos MARINOS de ${currentDayData.dayLabel.toLowerCase()} para la playa ${currentDayData.name}:
-      Puntuaci�n media de seguridad: ${currentDayData.score}/100.
+      Puntuación media de seguridad: ${currentDayData.score}/100.
       Olas medias: ${currentDayData.hourly[0].swellH}m. ${windText} ${extraMarine}${stormWarning}${termoclinaAlert}
       Mejor hora para nadar: ${currentDayData.best.time}. Peor hora: ${currentDayData.worst.time}.
-      IMPORTANTE: Si la puntuaci�n media es menor a 70 o hay rachas que superen los 12 nudos, DEBES empezar tu consejo obligatoriamente con una advertencia seria de peligro en MAY�SCULAS.
-      Escribe un consejo corto y directo (m�ximo 3 frases) dirigido a un nadador de aguas abiertas. Usa un tono cercano.`;
+      IMPORTANTE: Si la puntuación media es menor a 70 o hay rachas que superen los 12 nudos, DEBES empezar tu consejo obligatoriamente con una advertencia seria de peligro en MAYÚSCULAS.
+      Escribe un consejo corto y directo (máximo 3 frases) dirigido a un nadador de aguas abiertas. Usa un tono cercano.`;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
@@ -1651,7 +1641,7 @@ export default function App() {
       if (result.candidates && result.candidates[0] && result.candidates[0].content) {
         setExpertAdvice(result.candidates[0].content.parts[0].text);
       } else {
-        throw new Error("La IA no devolvi� el formato esperado.");
+        throw new Error("La IA no devolvió el formato esperado.");
       }
     } catch (err) {
       setExpertAdvice(`Error de Google: ${err.message}`);
@@ -1698,7 +1688,7 @@ export default function App() {
                 if (parsed.storageKey) {
                   const cloudTs = Number(parsed.timestamp || 0);
                   const localTs = Number(localTimes[parsed.storageKey] || 0);
-                  // Solo aceptar la actualizaci�n de la nube si es m�s reciente o igual a la marca de tiempo local
+                  // Solo aceptar la actualización de la nube si es más reciente o igual a la marca de tiempo local
                   if (cloudTs >= localTs) {
                     if (parsed.factor !== undefined && parsed.factor !== null) {
                       mergedFactors[parsed.storageKey] = parsed.factor;
@@ -1798,7 +1788,7 @@ export default function App() {
       setIsAdminAuthorized(true);
       setReportStatus(null);
     } else {
-      setReportStatus({ type: 'error', text: 'C�digo PIN de administrador incorrecto.' });
+      setReportStatus({ type: 'error', text: 'Código PIN de administrador incorrecto.' });
     }
   };
 
@@ -1841,7 +1831,7 @@ export default function App() {
           todoSurfVal = ecmwfVal;
         }
       } catch (err) {
-        console.error("Error al rescatar previsiones sat�lite para Admin:", err);
+        console.error("Error al rescatar previsiones satélite para Admin:", err);
       }
     }
 
@@ -1854,7 +1844,7 @@ export default function App() {
       realVientoFza: adminRealVientoFza,
       realVientoDir: adminRealVientoDir,
       sensaciones: adminSensaciones,
-      origenDato: adminIsAlert ? "Admin: Alerta" : "Admin: Calibraci�n",
+      origenDato: adminIsAlert ? "Admin: Alerta" : "Admin: Calibración",
       appScore: hourForecast ? hourForecast.hourScore : "",
       appOlas: hourForecast ? hourForecast.swellH : "",
       appEnergia: hourForecast ? hourForecast.waveEnergy : "",
@@ -1871,7 +1861,7 @@ export default function App() {
     };
 
     try {
-      // Con mode: 'no-cors' evitamos la validaci�n estricta de CORS en la redirecci�n 302 de Google
+      // Con mode: 'no-cors' evitamos la validación estricta de CORS en la redirección 302 de Google
       await fetch(WEBHOOK_URL, {
         method: 'POST',
         mode: 'no-cors', 
@@ -1879,7 +1869,7 @@ export default function App() {
         body: JSON.stringify(payload)
       });
       
-      setReportStatus({ type: 'success', text: '�Calibraci�n enviada con �xito a Google Sheets!' });
+      setReportStatus({ type: 'success', text: '¡Calibración enviada con éxito a Google Sheets!' });
       setAdminSensaciones('');
       setAdminNotas('');
       setAdminIsAlert(false);
@@ -1895,7 +1885,7 @@ export default function App() {
         setReportStatus(null);
       }, 2500);
     } catch (err) {
-      setReportStatus({ type: 'error', text: `Error de conexi�n: ${err.message}` });
+      setReportStatus({ type: 'error', text: `Error de conexión: ${err.message}` });
     } finally {
       setIsSendingReport(false);
     }
@@ -1940,7 +1930,7 @@ export default function App() {
           todoSurfVal = ecmwfVal;
         }
       } catch (err) {
-        console.error("Error al rescatar previsiones sat�lite para Nadador:", err);
+        console.error("Error al rescatar previsiones satélite para Nadador:", err);
       }
     }
 
@@ -1953,15 +1943,15 @@ export default function App() {
       realVientoFza: "",
       realVientoDir: "",
       sensaciones: swimmerIsOnlyMessage 
-        ? `[Nombre: ${swimmerName.trim() || 'An�nimo'} | Medusas: - | Agua: -] ${swimmerSensaciones}`
-        : `[Nombre: ${swimmerName.trim() || 'An�nimo'} | Medusas: ${swimmerMedusas} | Agua: ${swimmerAgua}] ${swimmerSensaciones}`,
+        ? `[Nombre: ${swimmerName.trim() || 'Anónimo'} | Medusas: - | Agua: -] ${swimmerSensaciones}`
+        : `[Nombre: ${swimmerName.trim() || 'Anónimo'} | Medusas: ${swimmerMedusas} | Agua: ${swimmerAgua}] ${swimmerSensaciones}`,
       origenDato: swimmerIsOnlyMessage ? "Nadador: Mensaje" : "Nadador: Reporte",
       appScore: hourForecast ? hourForecast.hourScore : "",
       appOlas: hourForecast ? hourForecast.swellH : "",
       appEnergia: hourForecast ? hourForecast.waveEnergy : "",
       appVientoNudos: hourForecast ? hourForecast.windS : "",
       appVientoDir: hourForecast ? hourForecast.windDir : "",
-      notasCalibracion: swimmerIsOnlyMessage ? "Mensaje libre de nadador" : "Reporte p�blico de nadador",
+      notasCalibracion: swimmerIsOnlyMessage ? "Mensaje libre de nadador" : "Reporte público de nadador",
       boyaAltura: latestBuoyHeight || ecmwfVal || (hourForecast ? hourForecast.swellH : ""), 
       boyaPeriodo: latestBuoyPeriod || "",
       boyaDireccion: latestBuoyDir || (hourForecast && hourForecast.swellDir ? hourForecast.swellDir : "110"),
@@ -1979,7 +1969,7 @@ export default function App() {
         body: JSON.stringify(payload)
       });
       
-      setSwimmerReportStatus({ type: 'success', text: '�Tu reporte ha sido enviado con �xito! Muchas gracias.' });
+      setSwimmerReportStatus({ type: 'success', text: '¡Tu reporte ha sido enviado con éxito! Muchas gracias.' });
       setSwimmerSensaciones('');
       setSwimmerName('');
       setSwimmerIsOnlyMessage(false);
@@ -1990,7 +1980,7 @@ export default function App() {
         setSwimmerReportStatus(null);
       }, 2500);
     } catch (err) {
-      setSwimmerReportStatus({ type: 'error', text: `Error de conexi�n: ${err.message}` });
+      setSwimmerReportStatus({ type: 'error', text: `Error de conexión: ${err.message}` });
     } finally {
       setIsSendingSwimmerReport(false);
     }
@@ -2009,14 +1999,14 @@ export default function App() {
       realCorriente: "",
       realVientoFza: "",
       realVientoDir: "",
-      sensaciones: "Sincronizaci�n autom�tica de boya",
-      origenDato: "Boya: Sincronizaci�n",
+      sensaciones: "Sincronización automática de boya",
+      origenDato: "Boya: Sincronización",
       appScore: "",
       appOlas: "",
       appEnergia: "",
       appVientoNudos: "",
       appVientoDir: "",
-      notasCalibracion: "Actualizaci�n forzada de boya real",
+      notasCalibracion: "Actualización forzada de boya real",
       boyaAltura: latestBuoyHeight || "", 
       boyaPeriodo: latestBuoyPeriod || "",
       boyaDireccion: (latestBuoyDir && Number(latestBuoyDir) !== 110) ? String(latestBuoyDir) : (currentDayData && currentDayData.hourly && currentDayData.hourly[0] ? String(Math.round(currentDayData.hourly[0].swellDir)) : ""),
@@ -2053,7 +2043,7 @@ export default function App() {
       {/* BANNER BETA */}
       <div className="bg-slate-900 text-amber-400 text-xs text-center py-2 px-4 font-medium flex items-center justify-center gap-2">
         <AlertTriangle size={14} />
-        <span>?? <strong>App en Fase Beta:</strong> Datos experimentales. Por favor, danos feedback tras tus nados usando el formulario de abajo.</span>
+        <span>🚧 <strong>App en Fase Beta:</strong> Datos experimentales. Por favor, danos feedback tras tus nados usando el formulario de abajo.</span>
       </div>
 
       <div className="p-4 md:p-8 flex-grow w-full max-w-6xl mx-auto space-y-6">
@@ -2065,9 +2055,9 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-800 tracking-tight">OpenWater Tracker</h1>
-              <p className="text-slate-500 text-sm font-medium">Pron�stico en tiempo real para nadadores</p>
+              <p className="text-slate-500 text-sm font-medium">Pronóstico en tiempo real para nadadores</p>
               {lastUpdatedAt && (
-                <p className="text-[11px] text-slate-400 mt-1 font-medium" title="�ltima lectura correcta de sat�lites">
+                <p className="text-[11px] text-slate-400 mt-1 font-medium" title="Última lectura correcta de satélites">
                   Actualizado: {lastUpdatedAt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               )}
@@ -2079,10 +2069,10 @@ export default function App() {
               type="button"
               onClick={() => setIsModalOpen(true)}
               className="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-2.5 px-3 md:px-4 rounded-xl transition-colors border border-indigo-100 flex items-center justify-center gap-2"
-              title="Gu�a Local del Mar"
+              title="Guía Local del Mar"
             >
               <BookOpen size={18} />
-              <span className="hidden sm:inline">Gu�a Local</span>
+              <span className="hidden sm:inline">Guía Local</span>
             </button>
 
             <button
@@ -2090,8 +2080,8 @@ export default function App() {
               onClick={() => setDataRefreshKey((k) => k + 1)}
               disabled={isLoading}
               className="shrink-0 bg-white hover:bg-slate-50 text-slate-700 font-bold py-2.5 px-3 rounded-xl transition-colors border border-slate-200 flex items-center justify-center gap-2 disabled:opacity-50"
-              title="Volver a pedir datos a los sat�lites"
-              aria-label="Actualizar datos del sat�lite"
+              title="Volver a pedir datos a los satélites"
+              aria-label="Actualizar datos del satélite"
             >
               <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
               <span className="hidden sm:inline">Actualizar</span>
@@ -2110,9 +2100,9 @@ export default function App() {
                 <option value="misericordia">La Misericordia</option>
                 <option value="malagueta">La Malagueta</option>
                 <option value="pedregalejo">Pedregalejo</option>
-                <option value="los_alamos">Los �lamos (Torremolinos)</option>
+                <option value="los_alamos">Los Álamos (Torremolinos)</option>
                 <option value="bajondillo">El Bajondillo (Torremolinos)</option>
-                <option value="rincon_victoria">Rinc�n de la Victoria</option>
+                <option value="rincon_victoria">Rincón de la Victoria</option>
                 <option value="cala_del_moral">La Cala del Moral</option>
               </select>
             </div>
@@ -2122,7 +2112,7 @@ export default function App() {
         {/* BARRA DE ESTADO ACTUAL (AHORA MISMO) */}
         {!isLoading && currentNowData && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex flex-wrap items-center justify-center md:justify-start gap-4 md:gap-8 text-sm animate-in fade-in zoom-in duration-300">
-            <span className="font-bold text-slate-500 uppercase tracking-wide text-xs">?? En este instante:</span>
+            <span className="font-bold text-slate-500 uppercase tracking-wide text-xs">🔴 En este instante:</span>
             <div className="flex items-center gap-1.5 font-bold text-slate-700">
               <Waves size={16} className="text-blue-500"/> Olas {currentNowData.wave}m
             </div>
@@ -2130,7 +2120,7 @@ export default function App() {
               <Wind size={16} className="text-slate-400"/> Viento {currentNowData.wind} kts <span className="text-xs text-slate-400 font-medium">({currentNowData.dirStr})</span>
             </div>
             <div className="flex items-center gap-1.5 font-bold text-slate-700">
-              <Thermometer size={16} className="text-orange-500"/> Aire {currentNowData.temp}�C
+              <Thermometer size={16} className="text-orange-500"/> Aire {currentNowData.temp}ºC
             </div>
           </div>
         )}
@@ -2140,9 +2130,9 @@ export default function App() {
           <div className="bg-yellow-400 border border-yellow-500 p-4 rounded-2xl shadow-md flex items-start gap-3 animate-pulse">
             <Zap className="text-yellow-900 shrink-0 mt-0.5" size={24} />
             <div>
-              <h3 className="font-black text-yellow-900 uppercase">Peligro: Tormenta El�ctrica</h3>
+              <h3 className="font-black text-yellow-900 uppercase">Peligro: Tormenta Eléctrica</h3>
               <p className="text-sm text-yellow-800 font-medium mt-1">
-                El sat�lite detecta riesgo de ca�da de rayos en la costa durante el d�a de hoy. El agua es un conductor el�ctrico letal. Se proh�be terminantemente el ba�o en horas de tormenta.
+                El satélite detecta riesgo de caída de rayos en la costa durante el día de hoy. El agua es un conductor eléctrico letal. Se prohíbe terminantemente el baño en horas de tormenta.
               </p>
             </div>
           </div>
@@ -2154,7 +2144,7 @@ export default function App() {
             <div>
               <h3 className="font-bold text-amber-800">Modo de Emergencia Activo</h3>
               <p className="text-sm text-amber-700 mt-1">
-                El sat�lite global de clima est� temporalmente fuera de servicio. Estamos mostrando <strong>solo las previsiones de oleaje y corrientes</strong>. Los datos de viento, temperatura y alertas volver�n solos cuando el servidor se restaure.
+                El satélite global de clima está temporalmente fuera de servicio. Estamos mostrando <strong>solo las previsiones de oleaje y corrientes</strong>. Los datos de viento, temperatura y alertas volverán solos cuando el servidor se restaure.
               </p>
             </div>
           </div>
@@ -2165,8 +2155,8 @@ export default function App() {
             <div className="flex items-center gap-3 text-red-600 border-b border-red-100 pb-4">
               <AlertTriangle size={28} className="shrink-0" />
               <div>
-                <h2 className="font-bold text-lg">Error Cr�tico de Conexi�n</h2>
-                <p className="text-sm text-red-500 font-medium">Ni siquiera el sat�lite de olas est� respondiendo en este momento.</p>
+                <h2 className="font-bold text-lg">Error Crítico de Conexión</h2>
+                <p className="text-sm text-red-500 font-medium">Ni siquiera el satélite de olas está respondiendo en este momento.</p>
               </div>
             </div>
             {errorDetails.general && (
@@ -2178,7 +2168,7 @@ export default function App() {
               onClick={() => window.location.reload()}
               className="mt-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold py-3 rounded-xl transition-colors"
             >
-              Reintentar Conexi�n
+              Reintentar Conexión
             </button>
           </div>
         )}
@@ -2186,7 +2176,7 @@ export default function App() {
         {isLoading && !errorDetails ? (
           <div className="flex flex-col items-center justify-center py-24 bg-white rounded-2xl shadow-sm border border-slate-200">
             <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
-            <p className="text-slate-500 font-medium animate-pulse text-lg">Conectando con sat�lites...</p>
+            <p className="text-slate-500 font-medium animate-pulse text-lg">Conectando con satélites...</p>
           </div>
         ) : currentDayData && !errorDetails && (
           <>
@@ -2232,7 +2222,7 @@ export default function App() {
                 {/* Tarjeta 1: Score de Seguridad */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center relative">
                   <div className="absolute top-3 left-3 text-[8px] text-slate-300 font-semibold uppercase tracking-widest opacity-70">
-                    Algoritmo matem�tico
+                    Algoritmo matemático
                   </div>
                   <h2 className="text-slate-500 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
                     <Activity size={18} className="text-blue-500"/> Seguridad Media {isClimateDown && "(Solo Olas)"}
@@ -2253,10 +2243,10 @@ export default function App() {
                     </div>
                   </div>
                   <p className={`mt-5 font-black text-lg ${currentDayData.score > 70 ? 'text-emerald-600' : currentDayData.score > 40 ? 'text-amber-600' : 'text-red-600'}`}>
-                    {currentDayData.score > 70 ? 'Nado Seguro' : currentDayData.score > 40 ? 'Precauci�n: Mar Agitado' : 'No Recomendado Nadar'}
+                    {currentDayData.score > 70 ? 'Nado Seguro' : currentDayData.score > 40 ? 'Precaución: Mar Agitado' : 'No Recomendado Nadar'}
                   </p>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1 block">
-                    C�lculo por algoritmo matem�tico
+                    Cálculo por algoritmo matemático
                   </span>
                 </div>
 
@@ -2265,14 +2255,14 @@ export default function App() {
                   <div className="flex justify-between items-center border-b border-slate-800/80 pb-2.5">
                     <h3 className="text-slate-200 font-extrabold flex items-center gap-2 uppercase tracking-wider text-xs">
                       <Anchor size={16} className="text-cyan-400" />
-                      <span>Boya Real de M�laga</span>
+                      <span>Boya Real de Málaga</span>
                     </h3>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setShowPuertosIframe(!showPuertosIframe)}
                         className="text-[9px] font-extrabold text-cyan-300 hover:text-white bg-cyan-950/80 border border-cyan-800/60 px-2 py-0.5 rounded-md transition-all flex items-center gap-1 shadow-sm"
                       >
-                        {showPuertosIframe ? '?? Ver Ficha' : '??? Widget Oficial'}
+                        {showPuertosIframe ? '📊 Ver Ficha' : '🏛️ Widget Oficial'}
                       </button>
                       <span className="text-[9px] font-black text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> EN VIVO
@@ -2293,19 +2283,19 @@ export default function App() {
                       <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hs)</span>
                         <strong className="text-lg font-black text-cyan-300 block mt-0.5">
-                          {latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '�'}
+                          {latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—'}
                         </strong>
                       </div>
 
                       <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp)</span>
                         <strong className="text-lg font-black text-indigo-300 block mt-0.5">
-                          {latestBuoyPeriod ? `${latestBuoyPeriod}s` : '�'}
+                          {latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—'}
                         </strong>
                       </div>
 
                       <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Direcci�n Oleaje</span>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
                         <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
                           {(() => {
                             let activeDir = null;
@@ -2318,7 +2308,7 @@ export default function App() {
                                 activeDir = Number(hourRec.swellDir);
                               }
                             }
-                            return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}�)` : '�';
+                            return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}º)` : '—';
                           })()}
                         </strong>
                       </div>
@@ -2326,7 +2316,7 @@ export default function App() {
                       <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
                         <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
-                          {latestBuoyTemp ? `${latestBuoyTemp}�C` : '�'}
+                          {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '—'}
                         </strong>
                       </div>
                     </div>
@@ -2335,10 +2325,10 @@ export default function App() {
                   <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
                     <span>
                       Origen: {showPuertosIframe 
-                        ? '? Puertos del Estado (Estaci�n 2056 - M�laga)' 
-                        : '?? Open-Meteo (Modelo Marino)'}
+                        ? '⚓ Puertos del Estado (Estación 2056 - Málaga)' 
+                        : '🌐 Open-Meteo (Modelo Marino)'}
                     </span>
-                    <span>�ltima lectura: {latestBuoyDate ? formatFriendlyDate(latestBuoyDate) : 'Sin datos'}</span>
+                    <span>Última lectura: {latestBuoyDate ? formatFriendlyDate(latestBuoyDate) : 'Sin datos'}</span>
                   </div>
                 </div>
 
@@ -2349,7 +2339,7 @@ export default function App() {
                       <Thermometer size={16} className="text-blue-500"/> Temperaturas
                     </h3>
                     <span className="text-[10px] text-indigo-500 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100/50">
-                      Previsi�n vs Real
+                      Previsión vs Real
                     </span>
                   </div>
                   
@@ -2360,8 +2350,8 @@ export default function App() {
                       <div className="grid grid-cols-2 gap-2">
                         {/* Prevista */}
                         <div className="bg-blue-50/40 border border-blue-100/50 rounded-xl p-2.5 text-left">
-                          <span className="block text-[8px] font-bold text-blue-500 uppercase tracking-wider">Sat�lite</span>
-                          <span className="text-base font-black text-blue-700">{currentDayData.temps.water}�C</span>
+                          <span className="block text-[8px] font-bold text-blue-500 uppercase tracking-wider">Satélite</span>
+                          <span className="text-base font-black text-blue-700">{currentDayData.temps.water}ºC</span>
                           <span className="block text-[8px] text-blue-400 font-semibold mt-0.5">Modelo previsto</span>
                         </div>
                         
@@ -2369,7 +2359,7 @@ export default function App() {
                         <div className="bg-indigo-50/40 border border-indigo-100/50 rounded-xl p-2.5 text-left relative overflow-hidden">
                           <div className="flex justify-between items-center">
                             <span className="block text-[8px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
-                              ? Boya Real
+                              ⚓ Boya Real
                             </span>
                             <button
                               type="button"
@@ -2382,7 +2372,7 @@ export default function App() {
                             </button>
                           </div>
                           <span className="text-base font-black text-indigo-800 block mt-0.5">
-                            {latestBuoyTemp ? `${latestBuoyTemp}�C` : '� �C'}
+                            {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '— ºC'}
                           </span>
                           <span className="block text-[8px] text-indigo-500/70 font-semibold mt-0.5">
                             {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate).split(',')[0]}` : 'Sin datos'}
@@ -2398,9 +2388,9 @@ export default function App() {
                         <div>
                           <span className="block text-[8px] font-bold text-orange-500 uppercase tracking-wider">Ambiente ({currentDayData.dayLabel.split(' ')[0]})</span>
                           <span className={`text-base font-black ${isClimateDown ? 'text-slate-400' : 'text-orange-700'}`}>
-                            {currentDayData.temps.air === "-" ? "- �C" : `${currentDayData.temps.air}�C`}
+                            {currentDayData.temps.air === "-" ? "- ºC" : `${currentDayData.temps.air}ºC`}
                           </span>
-                          <span className="block text-[8px] text-orange-400 font-semibold mt-0.5">Predicci�n Modelo</span>
+                          <span className="block text-[8px] text-orange-400 font-semibold mt-0.5">Predicción Modelo</span>
                         </div>
                         <div className={isClimateDown ? "text-slate-400" : "text-orange-500"}>
                           <Sun size={24}/>
@@ -2416,7 +2406,7 @@ export default function App() {
                     <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
                       <Clock size={16} className="text-indigo-500"/> Horas Clave
                     </h3>
-                    <span className="text-[10px] text-slate-400 font-medium">C�lculo Propio</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Cálculo Propio</span>
                   </div>
                   
                   <div className="flex justify-between items-center bg-emerald-50 p-3 rounded-xl border border-emerald-100">
@@ -2448,7 +2438,7 @@ export default function App() {
                     <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
                       <Anchor size={16} className="text-blue-500"/> Estado Real
                     </h3>
-                    <span className="text-[10px] text-slate-400 font-medium">Lectura F�sica</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Lectura Física</span>
                   </div>
                   
                   <div className="space-y-3">
@@ -2463,7 +2453,7 @@ export default function App() {
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
                         </span>
-                        <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Boya de M�laga</span>
+                        <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Boya de Málaga</span>
                       </div>
                       <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
                     </a>
@@ -2483,7 +2473,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 5: Calidad del Agua, Medusas y Mareas (Grid triple en Tablet, vertical en PC/M�vil) */}
+                {/* Tarjeta 5: Calidad del Agua, Medusas y Mareas (Grid triple en Tablet, vertical en PC/Móvil) */}
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-1 gap-4">
                   {/* Calidad del Agua */}
                   <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
@@ -2491,7 +2481,7 @@ export default function App() {
                       <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
                         <TestTubes size={16} className={isClimateDown ? 'text-slate-400' : 'text-emerald-500'}/> Calidad del Agua
                       </h3>
-                      <span className="text-[10px] text-slate-400 font-medium">Sat�lite + Deriva</span>
+                      <span className="text-[10px] text-slate-400 font-medium">Satélite + Deriva</span>
                     </div>
                     
                     <div className={`flex flex-col p-3 rounded-xl border ${currentDayData.waterQuality.bgColor}`}>
@@ -2532,7 +2522,7 @@ export default function App() {
                       <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
                         <Waves size={16} className={isClimateDown ? 'text-slate-400' : 'text-blue-500'}/> Mareas
                       </h3>
-                      <span className="text-[10px] text-slate-400 font-medium">Sat�lite + REDMAR</span>
+                      <span className="text-[10px] text-slate-400 font-medium">Satélite + REDMAR</span>
                     </div>
 
                     <div className="flex flex-col gap-2.5">
@@ -2546,13 +2536,13 @@ export default function App() {
                         </div>
                       )}
 
-                      {/* Extremos del d�a */}
+                      {/* Extremos del día */}
                       <div className="grid grid-cols-2 gap-2 text-center">
                         {currentDayData?.tides?.extremes && currentDayData.tides.extremes.length > 0 ? (
                           currentDayData.tides.extremes.map((t, idx) => (
                             <div key={idx} className="bg-slate-50 border border-slate-100 p-2 rounded-xl flex flex-col justify-center">
                               <span className={`text-[9px] font-black uppercase tracking-wide ${t.type === 'Pleamar' ? 'text-indigo-600' : 'text-slate-500'}`}>
-                                {t.type === 'Pleamar' ? '?? Pleamar' : '?? Bajamar'}
+                                {t.type === 'Pleamar' ? '📈 Pleamar' : '📉 Bajamar'}
                               </span>
                               <span className="text-xs font-black text-slate-700 mt-0.5">
                                 {t.time}
@@ -2591,12 +2581,12 @@ export default function App() {
                         onClick={handleAskExpert}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
                       >
-                        <Bot size={18} /> Consultar previsi�n 
+                        <Bot size={18} /> Consultar previsión 
                       </button>
                     ) : isAiLoading ? (
                       <div className="flex items-center gap-2 text-blue-600/70 p-2">
                         <Loader2 size={18} className="animate-spin" />
-                        <span className="text-sm font-bold">El experto est� evaluando la playa...</span>
+                        <span className="text-sm font-bold">El experto está evaluando la playa...</span>
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -2625,10 +2615,10 @@ export default function App() {
                 <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50/50 gap-4">
                   <div className="flex items-center gap-3">
                     <h3 className="font-bold text-slate-800 text-lg">
-                      {selectedDay === 0 ? "Registro de ayer" : "Evoluci�n del mar"}
+                      {selectedDay === 0 ? "Registro de ayer" : "Evolución del mar"}
                     </h3>
                     <span className="hidden sm:inline-block text-[10px] text-slate-400 font-medium border border-slate-200 bg-white px-2 py-0.5 rounded-full">
-                      Predicci�n Matem�tica
+                      Predicción Matemática
                     </span>
                   </div>
                   <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
@@ -2639,14 +2629,14 @@ export default function App() {
                         onClick={() => setViewMode('table')}
                         className={`px-2.5 py-1 rounded transition-all ${viewMode === 'table' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                       >
-                        Tabla ??
+                        Tabla 📋
                       </button>
                       <button
                         type="button"
                         onClick={() => setViewMode('chart')}
                         className={`px-2.5 py-1 rounded transition-all ${viewMode === 'chart' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                       >
-                        Gr�fico ??
+                        Gráfico 📈
                       </button>
                     </div>
 
@@ -2665,19 +2655,19 @@ export default function App() {
                              <Activity className="text-indigo-600" size={20} />
                            </div>
                            <div className="text-left">
-                             <p className="font-bold text-indigo-900 text-sm">?? �Estuviste en el agua ayer?</p>
-                             <p className="text-xs text-indigo-700 font-medium mt-0.5">Comprueba esta tabla y ay�danos a calibrar el algoritmo.</p>
+                             <p className="font-bold text-indigo-900 text-sm">💡 ¿Estuviste en el agua ayer?</p>
+                             <p className="text-xs text-indigo-700 font-medium mt-0.5">Comprueba esta tabla y ayúdanos a calibrar el algoritmo.</p>
                            </div>
                          </div>
                           <button
                             onClick={() => setIsSwimmerModalOpen(true)}
                             className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs w-full sm:w-auto"
                           >
-                            ?? �Nadaste ayer? Reportar estado
+                            📝 ¿Nadaste ayer? Reportar estado
                           </button>
                      </div>
                      <p className="text-[11px] font-bold text-indigo-500 mt-3 text-center sm:text-left w-full">
-                       O si lo prefieres, cu�ntanoslo directamente por el grupo de WhatsApp del club.
+                       O si lo prefieres, cuéntanoslo directamente por el grupo de WhatsApp del club.
                      </p>
                   </div>
                 )}
@@ -2688,7 +2678,7 @@ export default function App() {
                     </div>
                   ) : (
                     <>
-                      {/* Cabecera del acorde�n horario (visible en PC y m�vil) */}
+                      {/* Cabecera del acordeón horario (visible en PC y móvil) */}
                       <div className="flex px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 bg-slate-50/50 rounded-t-2xl mb-1.5">
                     <span className="w-[50px] md:w-[80px]">Hora</span>
                     <span className="flex-grow pl-4 md:pl-8">Score</span>
@@ -2696,7 +2686,7 @@ export default function App() {
                     <span className="w-[85px] md:w-[150px] text-right pr-6 md:pr-10">Viento</span>
                   </div>
 
-                  {/* Listado en acorde�n interactivo (para PC y m�vil) */}
+                  {/* Listado en acordeón interactivo (para PC y móvil) */}
                   <div className="space-y-3 max-h-[800px] overflow-y-auto pr-1">
                     {currentDayData.hourly.map((hour, idx) => {
                       const isExpanded = expandedHourIdx === idx;
@@ -2721,8 +2711,8 @@ export default function App() {
                                 <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full font-bold text-[10px] md:text-xs
                                   ${hour.hourScore > 70 ? 'bg-emerald-100 text-emerald-700' : 
                                     hour.hourScore > 40 ? 'bg-amber-100 text-amber-700' : 
-                                    hour.localRule === "Tormenta ?" ? 'bg-yellow-100 text-yellow-700' :
-                                    hour.localRule === "Niebla ???" ? 'bg-slate-200 text-slate-600' :
+                                    hour.localRule === "Tormenta ⚡" ? 'bg-yellow-100 text-yellow-700' :
+                                    hour.localRule === "Niebla 🌫️" ? 'bg-slate-200 text-slate-600' :
                                     'bg-red-100 text-red-700'}`}>
                                   Score: {hour.hourScore}
                                 </span>
@@ -2764,19 +2754,19 @@ export default function App() {
                             </div>
                           </button>
 
-                          {/* Detalles desplegables (Rejilla de 2 cols en m�vil y 4 cols en PC) */}
+                          {/* Detalles desplegables (Rejilla de 2 cols en móvil y 4 cols en PC) */}
                           {isExpanded && (
                             <div className="px-4 pb-4 pt-2 border-t border-slate-100 bg-slate-50/40 text-xs text-slate-600 space-y-3 animate-in slide-in-from-top-2 duration-200">
                               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-                                {/* Tarjeta de Olas & Energ�a */}
+                                {/* Tarjeta de Olas & Energía */}
                                 <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
-                                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Energ�a y Oleaje</span>
+                                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Energía y Oleaje</span>
                                   <div className="mt-1 font-semibold text-slate-700">
                                     <span className="font-black text-slate-800 text-sm block">{hour.waveEnergy} Kj</span>
-                                    <span className="text-[9px] text-slate-400 block">Coeficiente: �{hour.energyCoef}</span>
+                                    <span className="text-[9px] text-slate-400 block">Coeficiente: ×{hour.energyCoef}</span>
                                     {hour.swellDir != null && !Number.isNaN(Number(hour.swellDir)) && (
                                       <span className="text-[9px] text-slate-500 block mt-0.5">
-                                        Direcci�n: {getWindDirection(Number(hour.swellDir))} ({Math.round(Number(hour.swellDir))}�)
+                                        Dirección: {getWindDirection(Number(hour.swellDir))} ({Math.round(Number(hour.swellDir))}°)
                                       </span>
                                     )}
                                   </div>
@@ -2800,12 +2790,12 @@ export default function App() {
                                   <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Viento</span>
                                   <div className="mt-1 font-semibold text-slate-700">
                                     {isClimateDown ? (
-                                      <span className="text-slate-400">�</span>
+                                      <span className="text-slate-400">—</span>
                                     ) : (
                                       <>
                                         <span className="font-black text-slate-800 text-sm block">{hour.windS} kts</span>
                                         <span className="text-[9px] text-slate-400 block">Rachas: {hour.gust} kts</span>
-                                        <span className="text-[9px] text-slate-500 block">Procedencia: {getWindDirectionFullName(hour.windDir)} ({hour.windDir}�)</span>
+                                        <span className="text-[9px] text-slate-500 block">Procedencia: {getWindDirectionFullName(hour.windDir)} ({hour.windDir}°)</span>
                                       </>
                                     )}
                                   </div>
@@ -2816,7 +2806,7 @@ export default function App() {
                                   <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Cielo y Lluvia</span>
                                   <div className="mt-1 font-semibold text-slate-700 flex items-center gap-2">
                                     {isClimateDown ? (
-                                      <span className="text-slate-400">�</span>
+                                      <span className="text-slate-400">—</span>
                                     ) : (
                                       <>
                                         <span className="text-2xl" title={`Nubosidad: ${hour.cloudCover}%`}>{hour.skyIcon}</span>
@@ -2832,11 +2822,11 @@ export default function App() {
                                 </div>
                               </div>
 
-                              {/* Tarjeta inferior para UV y Visibilidad (Ocupa todo el ancho: 2 cols en m�vil y 4 cols en PC) */}
+                              {/* Tarjeta inferior para UV y Visibilidad (Ocupa todo el ancho: 2 cols en móvil y 4 cols en PC) */}
                               {!isClimateDown && (
                                 <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between col-span-2 lg:col-span-4">
                                   <div>
-                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide block">�ndice UV</span>
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide block">Índice UV</span>
                                     <span className={`font-black text-sm ${hour.uv >= 6 ? 'text-amber-600' : 'text-slate-700'}`}>
                                       {hour.uv === '-' || hour.uv === undefined || hour.uv === null ? '-' : Number(hour.uv).toFixed(1)}
                                     </span>
@@ -2863,15 +2853,15 @@ export default function App() {
             ) : (
               <div className="space-y-6 text-left w-full">
                 
-                {/* Selector de Nado Hist�rico y Ficha de An�lisis */}
+                {/* Selector de Nado Histórico y Ficha de Análisis */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
                     <div>
                       <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 uppercase tracking-wide">
                         <Search size={16} className="text-indigo-600" />
-                        An�lisis Retrospectivo (A Toro Pasado)
+                        Análisis Retrospectivo (A Toro Pasado)
                       </h4>
-                      <p className="text-xs text-slate-500 mt-1">Selecciona una sesi�n real para auditar qu� fall� o acert� en los modelos satelitales.</p>
+                      <p className="text-xs text-slate-500 mt-1">Selecciona una sesión real para auditar qué falló o acertó en los modelos satelitales.</p>
                     </div>
                     {(() => {
                       const calibrationLogsOnly = [...calibrationHistory]
@@ -2890,7 +2880,7 @@ export default function App() {
                           }}
                           className="border border-slate-300 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 bg-white shadow-sm focus:border-indigo-500 outline-none w-full"
                         >
-                          <option value="">-- Seleccionar Sesi�n Guardada --</option>
+                          <option value="">-- Seleccionar Sesión Guardada --</option>
                           {calibrationLogsOnly.map((item, idx) => {
                             const cleanSens = String(item.sensaciones || "").replace(/^\[.*?\]\s*/, '').trim();
                             const sensPreview = cleanSens ? ` - "${cleanSens.substring(0, 25)}${cleanSens.length > 25 ? '...' : ''}"` : '';
@@ -2919,19 +2909,19 @@ export default function App() {
                     }
                     
                     let badgeColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                    let badgeText = `Calibraci�n �ptima (Desv�o ${diffPercent}%)`;
-                    let suggestion = "El factor de escala din�mica de la boya se est� adaptando correctamente a la orilla.";
+                    let badgeText = `Calibración Óptima (Desvío ${diffPercent}%)`;
+                    let suggestion = "El factor de escala dinámica de la boya se está adaptando correctamente a la orilla.";
                     
                     if (diffPercent > 35) {
                       badgeColor = "bg-red-50 text-red-700 border-red-200";
-                      badgeText = `Desviaci�n Alta (Desv�o ${diffPercent}%)`;
+                      badgeText = `Desviación Alta (Desvío ${diffPercent}%)`;
                       suggestion = appOlas > swimmerRealM 
-                        ? "Nuestra App estim� olas demasiado altas. Considera reducir manualmente el factor de escala." 
-                        : "Nuestra App estim� olas demasiado bajas. Considera elevar el factor de escala.";
+                        ? "Nuestra App estimó olas demasiado altas. Considera reducir manualmente el factor de escala." 
+                        : "Nuestra App estimó olas demasiado bajas. Considera elevar el factor de escala.";
                     } else if (diffPercent > 15) {
                       badgeColor = "bg-amber-50 text-amber-700 border-amber-200";
-                      badgeText = `Ajuste Ligero (Desv�o ${diffPercent}%)`;
-                      suggestion = "La estimaci�n local es aceptable, dentro del umbral de precisi�n ordinario.";
+                      badgeText = `Ajuste Ligero (Desvío ${diffPercent}%)`;
+                      suggestion = "La estimación local es aceptable, dentro del umbral de precisión ordinario.";
                     }
 
                     return (
@@ -2939,9 +2929,9 @@ export default function App() {
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200/60 pb-4 mb-4 gap-4">
                           <div>
                             <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                              ??? {BEACHES[selectedHistoryLog.playa]?.name} ({selectedHistoryLog.horaNado})
+                              🏖️ {BEACHES[selectedHistoryLog.playa]?.name} ({selectedHistoryLog.horaNado})
                             </h4>
-                            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Sesi�n registrada el {new Date(selectedHistoryLog.fechaRegistro).toLocaleString('es-ES')}</p>
+                            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Sesión registrada el {new Date(selectedHistoryLog.fechaRegistro).toLocaleString('es-ES')}</p>
                           </div>
                           
                           <div className="flex flex-col items-end gap-1">
@@ -2949,7 +2939,7 @@ export default function App() {
                               {badgeText}
                             </span>
                             <p className="text-[10px] text-slate-500 font-medium italic max-w-sm text-right mt-1">
-                              ?? {suggestion}
+                              💡 {suggestion}
                             </p>
                           </div>
                         </div>
@@ -2958,23 +2948,23 @@ export default function App() {
                           <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
                             <span className="text-[9px] font-bold text-slate-400 uppercase">Windy (ECMWF)</span>
                             <span className="text-sm font-black text-indigo-600 mt-1">
-                              {selectedHistoryLog.modelEcmwfOlas ? `${parseFloat(selectedHistoryLog.modelEcmwfOlas.toString().replace(",", ".")).toFixed(2)}m` : '�'}
+                              {selectedHistoryLog.modelEcmwfOlas ? `${parseFloat(selectedHistoryLog.modelEcmwfOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
                             </span>
-                            <span className="text-[9px] text-slate-400 font-semibold mt-1">Modelo Sat�lite Bruto</span>
+                            <span className="text-[9px] text-slate-400 font-semibold mt-1">Modelo Satélite Bruto</span>
                           </div>
                           
                           <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
                             <span className="text-[9px] font-bold text-slate-400 uppercase">Windy (GFS)</span>
                             <span className="text-sm font-black text-sky-600 mt-1">
-                              {selectedHistoryLog.modelGfsOlas ? `${parseFloat(selectedHistoryLog.modelGfsOlas.toString().replace(",", ".")).toFixed(2)}m` : '�'}
+                              {selectedHistoryLog.modelGfsOlas ? `${parseFloat(selectedHistoryLog.modelGfsOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
                             </span>
-                            <span className="text-[9px] text-slate-400 font-semibold mt-1">Modelo Sat�lite Bruto</span>
+                            <span className="text-[9px] text-slate-400 font-semibold mt-1">Modelo Satélite Bruto</span>
                           </div>
 
                           <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center">
                             <span className="text-[9px] font-bold text-slate-400 uppercase">TodoSurf</span>
                             <span className="text-sm font-black text-emerald-600 mt-1">
-                              {selectedHistoryLog.modelTodoSurfOlas ? `${parseFloat(selectedHistoryLog.modelTodoSurfOlas.toString().replace(",", ".")).toFixed(2)}m` : '�'}
+                              {selectedHistoryLog.modelTodoSurfOlas ? `${parseFloat(selectedHistoryLog.modelTodoSurfOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
                             </span>
                             <span className="text-[9px] text-slate-400 font-semibold mt-1">Copernicus/NOAA</span>
                           </div>
@@ -2982,7 +2972,7 @@ export default function App() {
                           <div className="bg-white p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/10 text-center flex flex-col justify-center">
                             <span className="text-[9px] font-bold text-indigo-600 uppercase">Nuestra App (Orilla)</span>
                             <span className="text-sm font-black text-blue-600 mt-1">
-                              {selectedHistoryLog.appOlas ? `${parseFloat(selectedHistoryLog.appOlas.toString().replace(",", ".")).toFixed(2)}m` : '�'}
+                              {selectedHistoryLog.appOlas ? `${parseFloat(selectedHistoryLog.appOlas.toString().replace(",", ".")).toFixed(2)}m` : '—'}
                             </span>
                             <span className="text-[9px] font-black text-slate-600 mt-1">Score: {selectedHistoryLog.appScore}/100</span>
                           </div>
@@ -2992,17 +2982,17 @@ export default function App() {
                             <span className="text-sm font-black text-slate-800 mt-1">
                               {(() => {
                                 const buoyData = getBuoyReadingForLog(selectedHistoryLog);
-                                return buoyData.height ? `${buoyData.height}m` : '�';
+                                return buoyData.height ? `${buoyData.height}m` : '—';
                               })()}
                             </span>
                             <span className="text-[9px] text-slate-500 font-semibold mt-1">
                               {(() => {
                                 const buoyData = getBuoyReadingForLog(selectedHistoryLog);
                                 const dirVal = buoyData.dir || selectedHistoryLog.boyaDireccion;
-                                const dirText = dirVal ? `${getWindDirection(dirVal)} (${Math.round(dirVal)}�)` : '';
-                                const periodText = (buoyData.period && buoyData.period !== '�') ? buoyData.period : '';
-                                if (dirText && periodText) return `${dirText} � ${periodText}`;
-                                return dirText || periodText || '�';
+                                const dirText = dirVal ? `${getWindDirection(dirVal)} (${Math.round(dirVal)}º)` : '';
+                                const periodText = (buoyData.period && buoyData.period !== '—') ? buoyData.period : '';
+                                if (dirText && periodText) return `${dirText} • ${periodText}`;
+                                return dirText || periodText || '—';
                               })()}
                             </span>
                           </div>
@@ -3012,7 +3002,7 @@ export default function App() {
                           <div className="flex-grow text-left">
                             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
                               Sensaciones de: <strong className="text-indigo-500 font-bold">
-                                {isSwimmer && parsedDetails.nombre !== 'An�nimo' ? parsedDetails.nombre : 
+                                {isSwimmer && parsedDetails.nombre !== 'Anónimo' ? parsedDetails.nombre : 
                                  (logType.startsWith('admin') ? 'Administrador' : 'Nadador')}
                               </strong>
                             </span>
@@ -3080,7 +3070,7 @@ export default function App() {
                       </div>
                     );
                   })() : (
-                    <p className="text-xs text-slate-400 font-medium text-center py-6">Selecciona uno de los nados hist�ricos arriba para ver la comparativa de desv�os.</p>
+                    <p className="text-xs text-slate-400 font-medium text-center py-6">Selecciona uno de los nados históricos arriba para ver la comparativa de desvíos.</p>
                   )}
                 </div>
 
@@ -3118,41 +3108,41 @@ export default function App() {
                             bgClass = "bg-amber-50/20 hover:bg-amber-50/40 border-amber-100/60";
                             typeBadge = (
                               <span className="text-[8px] font-black text-amber-700 bg-amber-100/70 px-1.5 py-0.5 rounded">
-                                ?? Factor Admin
+                                🔒 Factor Admin
                               </span>
                             );
                           } else if (recType === 'buoy_sync') {
                             bgClass = "bg-blue-50/20 hover:bg-blue-50/45 border-blue-100/60";
                             typeBadge = (
                               <span className="text-[8px] font-black text-blue-600 bg-blue-100/70 px-1.5 py-0.5 rounded">
-                                ? Boya Real
+                                ⚓ Boya Real
                               </span>
                             );
                           } else if (recType === 'swimmer_msg') {
                             bgClass = "bg-indigo-50/25 hover:bg-indigo-50/45 border-indigo-100/60";
                             typeBadge = (
                               <span className="text-[8px] font-black text-indigo-600 bg-indigo-100/60 px-1.5 py-0.5 rounded">
-                                ?? Mensaje
+                                💬 Mensaje
                               </span>
                             );
                           } else if (recType === 'admin_alert') {
                             bgClass = "bg-rose-50/45 hover:bg-rose-50/70 border-rose-100/80 border-l-4 border-l-rose-500 animate-pulse";
                             typeBadge = (
                               <span className="text-[8px] font-black text-rose-600 bg-rose-100/70 px-1.5 py-0.5 rounded">
-                                ?? Alerta Admin
+                                ⚠️ Alerta Admin
                               </span>
                             );
                           } else if (recType === 'admin_report') {
                             bgClass = "bg-violet-50/15 hover:bg-violet-50/30 border-violet-100/60";
                             typeBadge = (
                               <span className="text-[8px] font-black text-violet-600 bg-violet-100/70 px-1.5 py-0.5 rounded">
-                                ?? Calibraci�n
+                                📋 Calibración
                               </span>
                             );
                           } else {
                             typeBadge = (
                               <span className="text-[8px] font-black text-emerald-600 bg-emerald-100/70 px-1.5 py-0.5 rounded">
-                                ?? Reporte Nado
+                                👤 Reporte Nado
                               </span>
                             );
                           }
@@ -3162,13 +3152,13 @@ export default function App() {
                               <div className="flex justify-between items-start mb-2.5">
                                 <div className="flex flex-col gap-1">
                                   <span className="text-xs font-bold text-slate-800 uppercase tracking-tight leading-none">
-                                    ??? {BEACHES[item.playa]?.name.split(',')[0] || item.playa}
+                                    🏖️ {BEACHES[item.playa]?.name.split(',')[0] || item.playa}
                                   </span>
                                   <div className="mt-0.5 flex gap-1 items-center">
                                     {typeBadge}
                                   </div>
                                 </div>
-                                <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded leading-none shrink-0" title="D�a y hora de la sesi�n de nado">
+                                <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded leading-none shrink-0" title="Día y hora de la sesión de nado">
                                   Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
                                 </span>
                               </div>
@@ -3177,7 +3167,7 @@ export default function App() {
                                 <div className="grid grid-cols-4 gap-1 border-y border-blue-100/60 py-2 my-2 text-center text-xs">
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Altura</span>
-                                    <span className="font-black text-blue-600">{item.boyaAltura ? `${parseFloat(item.boyaAltura.toString().replace(',', '.')).toFixed(2)}m` : '�'}</span>
+                                    <span className="font-black text-blue-600">{item.boyaAltura ? `${parseFloat(item.boyaAltura.toString().replace(',', '.')).toFixed(2)}m` : '—'}</span>
                                   </div>
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Periodo</span>
@@ -3191,13 +3181,13 @@ export default function App() {
                                         const dirVal = (rawDir && Number(rawDir) !== 110)
                                           ? rawDir
                                           : (currentDayData && currentDayData.hourly && currentDayData.hourly[0] ? currentDayData.hourly[0].swellDir : null);
-                                        return dirVal ? getWindDirection(dirVal) : '�';
+                                        return dirVal ? getWindDirection(dirVal) : '—';
                                       })()}
                                     </span>
                                   </div>
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Temp</span>
-                                    <span className="font-black text-indigo-600">{item.boyaTemp ? `${formatBoyaTemp(item.boyaTemp)}�C` : '�'}</span>
+                                    <span className="font-black text-indigo-600">{item.boyaTemp ? `${formatBoyaTemp(item.boyaTemp)}ºC` : '—'}</span>
                                   </div>
                                 </div>
                               ) : (recType === 'swimmer_msg' || recType === 'admin_alert') ? (
@@ -3230,7 +3220,7 @@ export default function App() {
                                   </div>
                                   <div>
                                     <span className="block text-[9px] font-bold text-slate-400 uppercase">Viento</span>
-                                    <span className="font-black text-slate-600">{item.realVientoFza || '�'}</span>
+                                    <span className="font-black text-slate-600">{item.realVientoFza || '—'}</span>
                                   </div>
                                   <div>
                                     <span className="block text-[9px] font-bold text-slate-400 uppercase">Deriva</span>
@@ -3246,8 +3236,8 @@ export default function App() {
                                 if (displayComment && recType !== 'buoy_sync') {
                                   return (
                                     <div className="space-y-1">
-                                      {isSwimmerType && parsed.nombre && parsed.nombre !== 'An�nimo' && (
-                                        <p className="text-[10px] font-bold text-slate-500 text-left">?? {parsed.nombre}</p>
+                                      {isSwimmerType && parsed.nombre && parsed.nombre !== 'Anónimo' && (
+                                        <p className="text-[10px] font-bold text-slate-500 text-left">👤 {parsed.nombre}</p>
                                       )}
                                       <p className="text-xs text-slate-600 italic leading-tight mb-2 text-left">
                                         "{displayComment}"
@@ -3260,8 +3250,8 @@ export default function App() {
 
                               {item.boyaAltura && recType !== 'buoy_sync' && (
                                 <div className="mt-2 pt-2 border-t border-slate-200/40 text-[9px] font-semibold text-slate-400 flex justify-between">
-                                  <span>? Boya Real: {item.boyaAltura}m</span>
-                                  <span>??? Agua: {formatBoyaTemp(item.boyaTemp)}�C</span>
+                                  <span>⚓ Boya Real: {item.boyaAltura}m</span>
+                                  <span>🌡️ Agua: {formatBoyaTemp(item.boyaTemp)}ºC</span>
                                 </div>
                               )}
 
@@ -3317,7 +3307,7 @@ export default function App() {
                               <td colSpan="7" className="py-20 text-center">
                                 <div className="flex items-center justify-center gap-2 text-slate-400">
                                   <Loader2 className="animate-spin" size={24} />
-                                  <span className="font-bold">Calculando desv�os de sat�lites...</span>
+                                  <span className="font-bold">Calculando desvíos de satélites...</span>
                                 </div>
                               </td>
                             </tr>
@@ -3359,13 +3349,13 @@ export default function App() {
           </>
         )}
 
-        {/* COMUNIDAD OPENWATER: FEED DE REPORTES Y ACCI�N DE COLABORACI�N */}
+        {/* COMUNIDAD OPENWATER: FEED DE REPORTES Y ACCIÓN DE COLABORACIÓN */}
         <div className="mt-8 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-4 gap-4">
             <div>
               <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
                 <Waves className="text-blue-600 animate-pulse" size={22} />
-                Comunidad OpenWater: �C�mo est� el mar hoy?
+                Comunidad OpenWater: ¿Cómo está el mar hoy?
               </h2>
               <p className="text-slate-500 text-xs font-semibold mt-1">
                 Reportes en tiempo real y sensaciones de los propios nadadores en la orilla.
@@ -3386,7 +3376,7 @@ export default function App() {
               className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-5 rounded-xl transition-all shadow-md hover:shadow-lg text-xs flex items-center justify-center gap-2 shrink-0"
             >
               <Bot size={16} />
-              �Has nadado hoy? Reportar estado
+              ¿Has nadado hoy? Reportar estado
             </button>
           </div>
 
@@ -3409,7 +3399,7 @@ export default function App() {
               <>
                 {latestAlert && (
                   <div className="mb-5 bg-rose-50 border border-rose-200/60 rounded-2xl p-4 shadow-sm text-left flex items-start gap-3 w-full border-l-4 border-l-rose-500">
-                    <span className="text-xl shrink-0">??</span>
+                    <span className="text-xl shrink-0">⚠️</span>
                     <div className="flex-grow">
                       <span className="inline-block text-[8px] font-black text-rose-600 bg-rose-100/60 px-2 py-0.5 rounded-full uppercase tracking-wider mb-1">
                         Alerta Oficial del Administrador
@@ -3433,7 +3423,7 @@ export default function App() {
                   ) : filteredReports.length === 0 ? (
                     <div className="col-span-full text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                       <p className="text-xs text-slate-400 font-bold">No hay reportes de nadadores hoy para esta playa.</p>
-                      <p className="text-[11px] text-slate-400 mt-1">S� el primero en informar a la comunidad sobre el estado del agua.</p>
+                      <p className="text-[11px] text-slate-400 mt-1">Sé el primero en informar a la comunidad sobre el estado del agua.</p>
                     </div>
                   ) : (
                     filteredReports
@@ -3449,28 +3439,28 @@ export default function App() {
                           bgClass = "bg-blue-50/20 border-blue-100/50 hover:bg-blue-50/35 hover:border-blue-200";
                           typeBadge = (
                             <span className="inline-block text-[8px] font-black text-blue-600 bg-blue-100/60 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                              ? Lectura Boya
+                              ⚓ Lectura Boya
                             </span>
                           );
                         } else if (recType === 'swimmer_msg') {
                           bgClass = "bg-indigo-50/10 border-indigo-100/50 hover:bg-indigo-50/20 hover:border-indigo-200";
                           typeBadge = (
                             <span className="inline-block text-[8px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                              ?? Mensaje
+                              💬 Mensaje
                             </span>
                           );
                         } else if (recType === 'admin_report') {
                           bgClass = "bg-violet-50/10 border-violet-100/50 hover:bg-violet-50/20 hover:border-violet-200";
                           typeBadge = (
                             <span className="inline-block text-[8px] font-black text-violet-600 bg-violet-100/60 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                              ?? Calibraci�n
+                              📋 Calibración
                             </span>
                           );
                         } else {
                           bgClass = "bg-slate-50 border-slate-200/60 hover:bg-blue-50/10 hover:border-blue-100";
                           typeBadge = (
                             <span className="inline-block text-[8px] font-black text-emerald-600 bg-emerald-100/60 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                              ?? Reporte Nado
+                              👤 Reporte Nado
                             </span>
                           );
                         }
@@ -3481,10 +3471,10 @@ export default function App() {
                               <div className="flex justify-between items-center text-xs">
                                 <div className="flex items-center gap-1.5 font-bold text-slate-700">
                                   <span className="text-sm">
-                                    {recType === 'buoy_sync' ? '?' : recType === 'admin_report' ? '??' : recType === 'swimmer_msg' ? '??' : '??'}
+                                    {recType === 'buoy_sync' ? '⚓' : recType === 'admin_report' ? '📋' : recType === 'swimmer_msg' ? '💬' : '👤'}
                                   </span>
                                   <span>
-                                    {recType === 'buoy_sync' ? 'Boya Real M�laga' : (item.origenDato.startsWith('Admin') ? 'Admin' : (parsed.nombre && parsed.nombre !== 'An�nimo' ? parsed.nombre : 'Nadador An�nimo'))}
+                                    {recType === 'buoy_sync' ? 'Boya Real Málaga' : (item.origenDato.startsWith('Admin') ? 'Admin' : (parsed.nombre && parsed.nombre !== 'Anónimo' ? parsed.nombre : 'Nadador Anónimo'))}
                                   </span>
                                   {typeBadge}
                                 </div>
@@ -3497,7 +3487,7 @@ export default function App() {
                                 <div className="grid grid-cols-3 gap-2 border-y border-blue-100/60 py-2 my-2 text-center text-xs bg-white/50 rounded-lg">
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Altura</span>
-                                    <span className="font-black text-blue-600">{parseBoyaNum(item.boyaAltura, 0.05, 15) !== null ? `${parseBoyaNum(item.boyaAltura, 0.05, 15).toFixed(2)}m` : '�'}</span>
+                                    <span className="font-black text-blue-600">{parseBoyaNum(item.boyaAltura, 0.05, 15) !== null ? `${parseBoyaNum(item.boyaAltura, 0.05, 15).toFixed(2)}m` : '—'}</span>
                                   </div>
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Periodo</span>
@@ -3505,7 +3495,7 @@ export default function App() {
                                   </div>
                                   <div>
                                     <span className="block text-[8px] font-bold text-slate-400 uppercase">Temp</span>
-                                    <span className="font-black text-indigo-600">{formatBoyaTemp(item.boyaTemp) !== '�' ? `${formatBoyaTemp(item.boyaTemp)}�C` : '�'}</span>
+                                    <span className="font-black text-indigo-600">{formatBoyaTemp(item.boyaTemp) !== '—' ? `${formatBoyaTemp(item.boyaTemp)}ºC` : '—'}</span>
                                   </div>
                                 </div>
                               ) : (recType === 'swimmer_msg') ? (
@@ -3513,31 +3503,31 @@ export default function App() {
                               ) : recType === 'swimmer_report' ? (
                                 <div className="flex flex-wrap gap-1.5">
                                   <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-[10px] font-bold text-blue-700 rounded-md">
-                                    ?? Olas: {item.realOlas}/5
+                                    🌊 Olas: {item.realOlas}/5
                                   </span>
                                   <span className="px-2 py-0.5 bg-red-50 border border-red-100 text-[10px] font-bold text-red-700 rounded-md">
-                                    ?? Resaca: {item.realResaca}/5
+                                    🔄 Resaca: {item.realResaca}/5
                                   </span>
                                   <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700 rounded-md">
-                                    ?? Deriva: {item.realCorriente}/5
+                                    🧭 Deriva: {item.realCorriente}/5
                                   </span>
                                   <span className="px-2 py-0.5 bg-rose-50 border border-rose-100 text-[10px] font-bold text-rose-700 rounded-md">
-                                    ?? Medusas: {parsed.medusas}
+                                    🪼 Medusas: {parsed.medusas}
                                   </span>
                                   <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-[10px] font-bold text-emerald-700 rounded-md">
-                                    ?? Agua: {parsed.agua}
+                                    🧼 Agua: {parsed.agua}
                                   </span>
                                 </div>
                               ) : (
                                 <div className="flex flex-wrap gap-1.5">
                                   <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-[10px] font-bold text-blue-700 rounded-md">
-                                    ?? Olas: {item.realOlas}/5
+                                    🌊 Olas: {item.realOlas}/5
                                   </span>
                                   <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-700 rounded-md">
-                                    ?? Viento: {item.realVientoFza || '�'}
+                                    💨 Viento: {item.realVientoFza || '—'}
                                   </span>
                                   <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700 rounded-md">
-                                    ?? Deriva: {item.realCorriente}/5
+                                    🧭 Deriva: {item.realCorriente}/5
                                   </span>
                                 </div>
                               )}
@@ -3576,7 +3566,7 @@ export default function App() {
                       onClick={() => setVisibleReportsCount(prev => prev + 3)}
                       className="bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 font-bold py-2 px-5 rounded-xl border border-slate-200 shadow-sm transition-all text-xs flex items-center gap-1.5"
                     >
-                      <span>Mostrar m�s comentarios</span>
+                      <span>Mostrar más comentarios</span>
                       <ChevronDown size={14} />
                     </button>
                   </div>
@@ -3606,7 +3596,7 @@ export default function App() {
             <p className="text-xs text-slate-500 leading-relaxed flex items-start gap-2">
               <AlertTriangle className="shrink-0 text-slate-400 mt-0.5" size={14} />
               <span>
-                <strong className="text-slate-700">Aviso Legal y Descargo de Responsabilidad:</strong> OpenWater Tracker proporciona estimaciones matem�ticas basadas en modelos meteorol�gicos satelitales globales y algoritmos heur�sticos locales. Los datos mostrados son puramente informativos y <strong>no garantizan la seguridad real</strong> en el agua. Las condiciones oce�nicas pueden cambiar repentinamente. El uso de esta aplicaci�n para planificar actividades acu�ticas se realiza bajo la exclusiva responsabilidad del usuario. Ante cualquier duda, bandera roja o mala apariencia del mar en la orilla, no entre al agua.
+                <strong className="text-slate-700">Aviso Legal y Descargo de Responsabilidad:</strong> OpenWater Tracker proporciona estimaciones matemáticas basadas en modelos meteorológicos satelitales globales y algoritmos heurísticos locales. Los datos mostrados son puramente informativos y <strong>no garantizan la seguridad real</strong> en el agua. Las condiciones oceánicas pueden cambiar repentinamente. El uso de esta aplicación para planificar actividades acuáticas se realiza bajo la exclusiva responsabilidad del usuario. Ante cualquier duda, bandera roja o mala apariencia del mar en la orilla, no entre al agua.
               </span>
             </p>
           </div>
@@ -3634,15 +3624,15 @@ export default function App() {
                   <BookOpen size={24} />
                 </div>
                 <div>
-                  <h3 id="guia-nadadores-titulo" className="text-lg font-bold text-slate-800 tracking-tight">Gu�a F�cil para Nadadores</h3>
-                  <p className="text-xs text-slate-500 font-medium">C�mo leer OpenWater Tracker</p>
+                  <h3 id="guia-nadadores-titulo" className="text-lg font-bold text-slate-800 tracking-tight">Guía Fácil para Nadadores</h3>
+                  <p className="text-xs text-slate-500 font-medium">Cómo leer OpenWater Tracker</p>
                 </div>
               </div>
               <button 
                 type="button"
                 onClick={() => setIsModalOpen(false)}
                 className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
-                aria-label="Cerrar gu�a"
+                aria-label="Cerrar guía"
               >
                 <X size={24} />
               </button>
@@ -3652,38 +3642,38 @@ export default function App() {
               
               <section>
                 <p className="text-slate-600 leading-relaxed text-sm md:text-base">
-                  Hemos cogido los datos en bruto de los sat�lites y los sensores marinos y los hemos pasado por el <strong>"filtro de la experiencia local"</strong> para crear el primer predictor de aguas abiertas pensado por y para la costa de M�laga.
+                  Hemos cogido los datos en bruto de los satélites y los sensores marinos y los hemos pasado por el <strong>"filtro de la experiencia local"</strong> para crear el primer predictor de aguas abiertas pensado por y para la costa de Málaga.
                 </p>
               </section>
 
-              {/* 1. EL TAR� Y LA NIEBLA MARINA */}
+              {/* 1. EL TARÓ Y LA NIEBLA MARINA */}
               <section>
                 <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <CloudFog size={20} className="text-slate-600"/> 1. El Tar� y la Niebla Marina
+                  <CloudFog size={20} className="text-slate-600"/> 1. El Taró y la Niebla Marina
                 </h4>
                 <p className="text-sm text-slate-600 mb-4">
-                  En verano es muy com�n el <strong>Tar�</strong> (niebla de advecci�n): esa masa de niebla espesa que entra de golpe a mediod�a atrapando la costa. Se forma cuando el aire c�lido y h�medo del Levante pasa por encima de bolsas de agua fr�a residuales de Poniente.
+                  En verano es muy común el <strong>Taró</strong> (niebla de advección): esa masa de niebla espesa que entra de golpe a mediodía atrapando la costa. Se forma cuando el aire cálido y húmedo del Levante pasa por encima de bolsas de agua fría residuales de Poniente.
                 </p>
                 <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm">
                   <div className="flex gap-3 items-start">
-                    <span className="text-base shrink-0">??</span>
+                    <span className="text-base shrink-0">🚨</span>
                     <div>
-                      <strong className="text-slate-800">Riesgo de Tar� (o Bolsas 200m):</strong>
-                      <p className="text-xs text-slate-600 mt-0.5">Niebla densa en orilla o a 200m pasadas las boyas amarillas. Visibilidad muy reducida (&lt; 1 km) y castigo en el Score. Mucha precauci�n con perder la costa de vista.</p>
+                      <strong className="text-slate-800">Riesgo de Taró (o Bolsas 200m):</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Niebla densa en orilla o a 200m pasadas las boyas amarillas. Visibilidad muy reducida (&lt; 1 km) y castigo en el Score. Mucha precaución con perder la costa de vista.</p>
                     </div>
                   </div>
                   <div className="flex gap-3 items-start">
-                    <span className="text-base shrink-0">??</span>
+                    <span className="text-base shrink-0">⚠️</span>
                     <div>
-                      <strong className="text-slate-800">Bruma / Tar� Leve:</strong>
-                      <p className="text-xs text-slate-600 mt-0.5">Niebla suave que reduce la visi�n de los edificios y los espigones (1 a 3 km).</p>
+                      <strong className="text-slate-800">Bruma / Taró Leve:</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Niebla suave que reduce la visión de los edificios y los espigones (1 a 3 km).</p>
                     </div>
                   </div>
                   <div className="flex gap-3 items-start">
-                    <span className="text-base shrink-0">???</span>
+                    <span className="text-base shrink-0">🌫️</span>
                     <div>
                       <strong className="text-slate-800">Bruma Mar Adentro:</strong>
-                      <p className="text-xs text-slate-600 mt-0.5">Calima h�meda o bruma anclada en el horizonte marino (la orilla est� clara, pero mar adentro se ve turbio).</p>
+                      <p className="text-xs text-slate-600 mt-0.5">Calima húmeda o bruma anclada en el horizonte marino (la orilla está clara, pero mar adentro se ve turbio).</p>
                     </div>
                   </div>
                 </div>
@@ -3698,22 +3688,22 @@ export default function App() {
                   <div className="flex gap-3 items-start">
                     <Anchor className="text-blue-600 shrink-0 mt-1" size={18} />
                     <div>
-                      <strong className="text-slate-800">Boya de M�laga (Mar abierto):</strong>
+                      <strong className="text-slate-800">Boya de Málaga (Mar abierto):</strong>
                       <p className="text-xs text-slate-600 mt-0.5">Mide la temperatura real de la gran masa de agua mar adentro (a varias millas de la costa).</p>
                     </div>
                   </div>
                   <div className="flex gap-3 items-start">
                     <ThermometerSun className="text-amber-500 shrink-0 mt-1" size={18} />
                     <div>
-                      <strong className="text-slate-800">Sat�lite (Modelo te�rico):</strong>
-                      <p className="text-xs text-slate-600 mt-0.5">Te da una estimaci�n general, aunque suele marcar 2�C o 3�C por encima de lo que sientes al meter el pie en la playa.</p>
+                      <strong className="text-slate-800">Satélite (Modelo teórico):</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Te da una estimación general, aunque suele marcar 2ºC o 3ºC por encima de lo que sientes al meter el pie en la playa.</p>
                     </div>
                   </div>
                   <div className="flex gap-3 items-start">
                     <Waves className="text-cyan-600 shrink-0 mt-1" size={18} />
                     <div>
-                      <strong className="text-slate-800">Bolsas de Agua Fr�a (Inercia de Poniente):</strong>
-                      <p className="text-xs text-slate-600 mt-0.5">Tras d�as de Poniente, el mar "escupe" agua helada profunda hacia la costa. A veces la orilla est� agradable pero a 150m pasas una bolsa helada a 18�C. La app detecta el viento de los d�as previos para avisarte de estas bolsas.</p>
+                      <strong className="text-slate-800">Bolsas de Agua Fría (Inercia de Poniente):</strong>
+                      <p className="text-xs text-slate-600 mt-0.5">Tras días de Poniente, el mar "escupe" agua helada profunda hacia la costa. A veces la orilla está agradable pero a 150m pasas una bolsa helada a 18ºC. La app detecta el viento de los días previos para avisarte de estas bolsas.</p>
                     </div>
                   </div>
                 </div>
@@ -3722,38 +3712,38 @@ export default function App() {
               {/* 3. LAS CORRIENTES Y DERIVA */}
               <section>
                 <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Compass size={20} className="text-indigo-500"/> 3. Las Corrientes: Hacia d�nde te lleva el agua
+                  <Compass size={20} className="text-indigo-500"/> 3. Las Corrientes: Hacia dónde te lleva el agua
                 </h4>
                 <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                   <div className="flex gap-3 items-start">
                      <AlertTriangle className="text-red-500 shrink-0 mt-1" size={20} />
                      <div>
                        <strong className="text-slate-800">La Resaca (Hacia adentro):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Si entra agua con fuerza a la playa, tiene que buscar salida hacia mar abierto creando embudos de succi�n. Se marca como Baja, Media o Alta.</p>
+                       <p className="text-sm text-slate-600 mt-1">Si entra agua con fuerza a la playa, tiene que buscar salida hacia mar abierto creando embudos de succión. Se marca como Baja, Media o Alta.</p>
                      </div>
                   </div>
                   <div className="flex gap-3 items-start">
                      <Compass className="text-indigo-500 shrink-0 mt-1" size={20} />
                      <div>
                        <strong className="text-slate-800">La Deriva Lateral (Flechitas Nerja / Fuengirola):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Cruzando el �ngulo de la playa con el de la ola, sabemos si el agua "resbala" empuj�ndote hacia el Este (?? etiqueta <strong>Nerja</strong>) o hacia el Oeste (?? etiqueta <strong>Fuengirola</strong>) a lo largo de la costa.</p>
+                       <p className="text-sm text-slate-600 mt-1">Cruzando el ángulo de la playa con el de la ola, sabemos si el agua "resbala" empujándote hacia el Este (⬅️ etiqueta <strong>Nerja</strong>) o hacia el Oeste (➡️ etiqueta <strong>Fuengirola</strong>) a lo largo de la costa.</p>
                      </div>
                   </div>
                 </div>
               </section>
 
-              {/* 4. ENERG�A EN KJ */}
+              {/* 4. ENERGÍA EN KJ */}
               <section>
                 <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Activity size={20} className="text-orange-500"/> 4. La Fuerza de las Olas (Energ�a en Kj)
+                  <Activity size={20} className="text-orange-500"/> 4. La Fuerza de las Olas (Energía en Kj)
                 </h4>
                 <p className="text-sm text-slate-600 mb-4">
-                  Lo que de verdad te empuja en el pecho no son los metros de ola, sino su <strong>Energ�a en Kilojulios (Kj)</strong>.
+                  Lo que de verdad te empuja en el pecho no son los metros de ola, sino su <strong>Energía en Kilojulios (Kj)</strong>.
                 </p>
                 <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 text-sm text-orange-800 font-medium flex items-start gap-3">
                   <Info className="shrink-0 text-orange-600 mt-0.5" size={20} />
                   <p>
-                    <strong>La regla al cuadrado:</strong> Una ola de 0.8m no tiene el doble de fuerza que una de 0.4m... <strong>�Tiene 4 veces m�s energ�a!</strong> Por eso, a partir de 0.6m notar�s que el mar golpea con mucha dureza. F�jate en la columna de <strong>Energ�a (Kj)</strong> para conocer el impacto real.
+                    <strong>La regla al cuadrado:</strong> Una ola de 0.8m no tiene el doble de fuerza que una de 0.4m... <strong>¡Tiene 4 veces más energía!</strong> Por eso, a partir de 0.6m notarás que el mar golpea con mucha dureza. Fíjate en la columna de <strong>Energía (Kj)</strong> para conocer el impacto real.
                   </p>
                 </div>
               </section>
@@ -3768,21 +3758,21 @@ export default function App() {
                      <Zap className="text-yellow-600 shrink-0 mt-1" size={20} />
                      <div>
                        <strong className="text-slate-800">Corte por Tormenta (Rayos):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Si el sat�lite detecta riesgo el�ctrico, la nota caer� a 0 puntos. En el agua eres el punto m�s alto, un pararrayos natural. Sal inmediatamente.</p>
+                       <p className="text-sm text-slate-600 mt-1">Si el satélite detecta riesgo eléctrico, la nota caerá a 0 puntos. En el agua eres el punto más alto, un pararrayos natural. Sal inmediatamente.</p>
                      </div>
                   </div>
                   <div className="flex gap-3 items-start">
                      <TestTubes className="text-emerald-500 shrink-0 mt-1" size={20} />
                      <div>
                        <strong className="text-slate-800">Calidad del Agua (Arrastres):</strong>
-                       <p className="text-sm text-slate-600 mt-1">La app suma la lluvia ca�da desde ayer. Si llueve fuerte, los aliviaderos de M�laga y el r�o Guadalhorce escupir�n suciedad que la corriente traer� a la playa (tarjeta en "Precauci�n" o "Riesgo Alto").</p>
+                       <p className="text-sm text-slate-600 mt-1">La app suma la lluvia caída desde ayer. Si llueve fuerte, los aliviaderos de Málaga y el río Guadalhorce escupirán suciedad que la corriente traerá a la playa (tarjeta en "Precaución" o "Riesgo Alto").</p>
                      </div>
                   </div>
                   <div className="flex gap-3 items-start">
-                     <span className="text-base shrink-0">??</span>
+                     <span className="text-base shrink-0">🪼</span>
                      <div>
-                       <strong className="text-slate-800">Riesgo de Medusas (Heur�stico de Levante):</strong>
-                       <p className="text-sm text-slate-600 mt-1">Cuando el viento sopla de Levante (Este/Sureste) durante m�s de 4 horas seguidas, la app eleva la precauci�n por medusas, ya que esa corriente arrastra los enjambres hacia la orilla.</p>
+                       <strong className="text-slate-800">Riesgo de Medusas (Heurístico de Levante):</strong>
+                       <p className="text-sm text-slate-600 mt-1">Cuando el viento sopla de Levante (Este/Sureste) durante más de 4 horas seguidas, la app eleva la precaución por medusas, ya que esa corriente arrastra los enjambres hacia la orilla.</p>
                      </div>
                   </div>
                 </div>
@@ -3791,22 +3781,22 @@ export default function App() {
               {/* 6. REGLAS LOCALES */}
               <section>
                 <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Bot size={20} className="text-indigo-500"/> 6. El "Cerebro" Malague�o (Reglas Locales)
+                  <Bot size={20} className="text-indigo-500"/> 6. El "Cerebro" Malagueño (Reglas Locales)
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-cyan-50 p-2.5 rounded-xl text-cyan-600"><Waves size={24} /></div>
-                      <h5 className="font-bold text-slate-800">El "Mag�n"</h5>
+                      <h5 className="font-bold text-slate-800">El "Magón"</h5>
                     </div>
-                    <p className="text-sm text-slate-600">Ola tendida sin viento. Aunque sea grande (0.5m), la app no castiga la nota en exceso porque es mar de fondo c�modo.</p>
+                    <p className="text-sm text-slate-600">Ola tendida sin viento. Aunque sea grande (0.5m), la app no castiga la nota en exceso porque es mar de fondo cómodo.</p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-amber-50 p-2.5 rounded-xl text-amber-600"><ThermometerSun size={24} /></div>
-                      <h5 className="font-bold text-slate-800">La "Lavadora" T�rmica</h5>
+                      <h5 className="font-bold text-slate-800">La "Lavadora" Térmica</h5>
                     </div>
-                    <p className="text-sm text-slate-600">A mediod�a, el Poniente superior a 12 nudos levanta un mar picado insoportable para respirar.</p>
+                    <p className="text-sm text-slate-600">A mediodía, el Poniente superior a 12 nudos levanta un mar picado insoportable para respirar.</p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
@@ -3820,28 +3810,28 @@ export default function App() {
                       <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600"><ShieldAlert size={24} /></div>
                       <h5 className="font-bold text-slate-800">El Escudo del Puerto</h5>
                     </div>
-                    <p className="text-sm text-slate-600">La Malagueta y Pedregalejo est�n fuertemente protegidas contra las olas de Poniente o Suroeste. El sat�lite llega aqu� muy atenuado.</p>
+                    <p className="text-sm text-slate-600">La Malagueta y Pedregalejo están fuertemente protegidas contra las olas de Poniente o Suroeste. El satélite llega aquí muy atenuado.</p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-orange-50 p-2.5 rounded-xl text-orange-600"><AlertTriangle size={24} /></div>
                       <h5 className="font-bold text-slate-800">Rompiente Dura (en Pleamar)</h5>
                     </div>
-                    <p className="text-sm text-slate-600">Ola peque�a mar adentro que rompe con un seco y duro golpe de agua en la orilla debido al escal�n de arena y la marea llena.</p>
+                    <p className="text-sm text-slate-600">Ola pequeña mar adentro que rompe con un seco y duro golpe de agua en la orilla debido al escalón de arena y la marea llena.</p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-purple-50 p-2.5 rounded-xl text-purple-600"><Activity size={24} /></div>
-                      <h5 className="font-bold text-slate-800">Batalla T�rmica ??</h5>
+                      <h5 className="font-bold text-slate-800">Batalla Térmica ⚔️</h5>
                     </div>
-                    <p className="text-sm text-slate-600">A mediod�a, el terral de ma�ana choca de frente con la brisa marina (viraz�n), creando un mar cruzado, picado y desordenado.</p>
+                    <p className="text-sm text-slate-600">A mediodía, el terral de mañana choca de frente con la brisa marina (virazón), creando un mar cruzado, picado y desordenado.</p>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm md:col-span-2">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600"><Compass size={24} /></div>
-                      <h5 className="font-bold text-slate-800">Falsa Calma (Corriente de Fondo) ??</h5>
+                      <h5 className="font-bold text-slate-800">Falsa Calma (Corriente de Fondo) ⚠️</h5>
                     </div>
-                    <p className="text-sm text-slate-600">La superficie se ve lisa como un espejo (mar plato), pero por abajo las olas vienen con un periodo largo (m�s de 6 segundos) empujando con fuerza por el fondo.</p>
+                    <p className="text-sm text-slate-600">La superficie se ve lisa como un espejo (mar plato), pero por abajo las olas vienen con un periodo largo (más de 6 segundos) empujando con fuerza por el fondo.</p>
                   </div>
                 </div>
               </section>
@@ -3849,10 +3839,10 @@ export default function App() {
               {/* 7. LA COMUNIDAD */}
               <section>
                 <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b pb-2">
-                  <Users size={20} className="text-emerald-500"/> 7. La Comunidad: T� eres el mejor sensor
+                  <Users size={20} className="text-emerald-500"/> 7. La Comunidad: Tú eres el mejor sensor
                 </h4>
                 <p className="text-sm text-slate-600 leading-relaxed">
-                  Haz clic en el bot�n <strong>?? �Nadaste ayer? Reportar estado</strong> para contarnos si viste medusas, si el agua estaba fr�a o limpia. Con tus datos reales en la orilla, la app calibra su algoritmo en tiempo real para todos los compa�eros del club.
+                  Haz clic en el botón <strong>📝 ¿Nadaste ayer? Reportar estado</strong> para contarnos si viste medusas, si el agua estaba fría o limpia. Con tus datos reales en la orilla, la app calibra su algoritmo en tiempo real para todos los compañeros del club.
                 </p>
               </section>
 
@@ -3860,7 +3850,7 @@ export default function App() {
               <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-sm text-amber-800 font-medium flex items-start gap-3">
                 <Info className="shrink-0 text-amber-600 mt-0.5" size={20} />
                 <p>
-                  <strong>El sentido com�n manda:</strong> Estas previsiones son matem�ticas y c�lculos. Si la app dice verde pero al llegar ves bandera roja o tienes un mal presentimiento, <strong>no te metas</strong>. Tu instinto es el mejor sat�lite.
+                  <strong>El sentido común manda:</strong> Estas previsiones son matemáticas y cálculos. Si la app dice verde pero al llegar ves bandera roja o tienes un mal presentimiento, <strong>no te metas</strong>. Tu instinto es el mejor satélite.
                 </p>
               </div>
 
@@ -3883,7 +3873,7 @@ export default function App() {
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="text-indigo-600" size={20} />
-                <h3 className="text-base font-bold text-slate-800">Panel de Calibraci�n R�pida</h3>
+                <h3 className="text-base font-bold text-slate-800">Panel de Calibración Rápida</h3>
               </div>
               <button 
                 type="button"
@@ -3898,7 +3888,7 @@ export default function App() {
               {!isAdminAuthorized ? (
                 /* FORMULARIO DE PIN */
                 <form onSubmit={handleVerifyPin} className="space-y-4">
-                  <p className="text-xs text-slate-500 font-medium">Introduce el c�digo PIN de administraci�n para registrar tu sesi�n de nado.</p>
+                  <p className="text-xs text-slate-500 font-medium">Introduce el código PIN de administración para registrar tu sesión de nado.</p>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase mb-2">PIN Administrador</label>
                     <input 
@@ -3923,32 +3913,32 @@ export default function App() {
                 </form>
               ) : (
                 <>
-                  {/* PESTA�AS NAVEGACI�N ADMIN */}
+                  {/* PESTAÑAS NAVEGACIÓN ADMIN */}
                   <div className="flex border-b border-slate-200 mb-5 bg-slate-100/80 p-1 rounded-2xl gap-1">
                     <button
                       type="button"
                       onClick={() => setAdminTab('factors')}
                       className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 ${adminTab === 'factors' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
                     >
-                      ?? Control de Factores
+                      ⚙️ Control de Factores
                     </button>
                     <button
                       type="button"
                       onClick={() => setAdminTab('telemetry')}
                       className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 ${adminTab === 'telemetry' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
                     >
-                      ?? Auditor�a Telemetr�a
+                      📡 Auditoría Telemetría
                     </button>
                     <button
                       type="button"
                       onClick={() => setAdminTab('report')}
                       className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 ${adminTab === 'report' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
                     >
-                      ?? Registrar / Alerta
+                      📝 Registrar / Alerta
                     </button>
                   </div>
 
-                  {/* PESTA�A 1: REGISTRAR NADO O ALERTA OFICIAL */}
+                  {/* PESTAÑA 1: REGISTRAR NADO O ALERTA OFICIAL */}
                   {adminTab === 'report' && (
                     <form onSubmit={handleSendReport} className="space-y-4 text-left">
                       <div className="grid grid-cols-2 gap-3">
@@ -3962,9 +3952,9 @@ export default function App() {
                             <option value="misericordia">La Misericordia</option>
                             <option value="malagueta">La Malagueta</option>
                             <option value="pedregalejo">Pedregalejo</option>
-                            <option value="los_alamos">Los �lamos</option>
+                            <option value="los_alamos">Los Álamos</option>
                             <option value="bajondillo">El Bajondillo</option>
-                            <option value="rincon_victoria">Rinc�n de la Victoria</option>
+                            <option value="rincon_victoria">Rincón de la Victoria</option>
                             <option value="cala_del_moral">La Cala del Moral</option>
                           </select>
                         </div>
@@ -3981,7 +3971,7 @@ export default function App() {
                       </div>
 
                       <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
-                        <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Observaci�n Real (1 al 5)</span>
+                        <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Observación Real (1 al 5)</span>
                         
                         <div className="space-y-1">
                           <div className="flex justify-between items-center text-xs">
@@ -4000,11 +3990,11 @@ export default function App() {
                           </div>
                           {adminRealOlas && (
                             <div className="text-[10px] text-right font-bold text-blue-600 italic">
-                              {adminRealOlas === 1 && "1/5 (0.05m) � Plato: Mar balsa, nadas sin turbulencia alguna"}
-                              {adminRealOlas === 2 && "2/5 (0.20m) � Rizado suave: Mar rizado, no interrumpe la respiraci�n"}
-                              {adminRealOlas === 3 && "3/5 (0.45m) � Marejada / Inc�modo: Salpica al respirar, girar cabeza"}
-                              {adminRealOlas === 4 && "4/5 (0.80m) � Fuerte / Oleaje: Dificultad para orientarse, picado"}
-                              {adminRealOlas === 5 && "5/5 (1.20m) � Muy Duro / Rompiente: Impide nadar con normalidad"}
+                              {adminRealOlas === 1 && "1/5 (0.05m) • Plato: Mar balsa, nadas sin turbulencia alguna"}
+                              {adminRealOlas === 2 && "2/5 (0.20m) • Rizado suave: Mar rizado, no interrumpe la respiración"}
+                              {adminRealOlas === 3 && "3/5 (0.45m) • Marejada / Incómodo: Salpica al respirar, girar cabeza"}
+                              {adminRealOlas === 4 && "4/5 (0.80m) • Fuerte / Oleaje: Dificultad para orientarse, picado"}
+                              {adminRealOlas === 5 && "5/5 (1.20m) • Muy Duro / Rompiente: Impide nadar con normalidad"}
                             </div>
                           )}
                         </div>
@@ -4063,7 +4053,7 @@ export default function App() {
                       </div>
 
                       <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100/60 space-y-2 text-left">
-                        <span className="block text-[10px] font-black text-blue-700 uppercase tracking-wider mb-1">? Datos de la Boya Real (M�laga) - Opcional</span>
+                        <span className="block text-[10px] font-black text-blue-700 uppercase tracking-wider mb-1">⚓ Datos de la Boya Real (Málaga) - Opcional</span>
                         
                         <div className="grid grid-cols-2 gap-3">
                           <div>
@@ -4090,7 +4080,7 @@ export default function App() {
                         
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Direcci�n Boya (�)</label>
+                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Dirección Boya (º)</label>
                             <input 
                               type="text" 
                               value={adminBoyaDireccion}
@@ -4100,7 +4090,7 @@ export default function App() {
                             />
                           </div>
                           <div>
-                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Temp Agua (�C)</label>
+                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Temp Agua (ºC)</label>
                             <input 
                               type="text" 
                               value={adminBoyaTemp}
@@ -4124,7 +4114,7 @@ export default function App() {
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Dir (Direcci�n)</label>
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Dir (Dirección)</label>
                           <input 
                             type="text" 
                             value={adminRealVientoDir}
@@ -4146,12 +4136,12 @@ export default function App() {
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Notas Internas Calibraci�n</label>
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Notas Internas Calibración</label>
                         <input 
                           type="text" 
                           value={adminNotas}
                           onChange={(e) => setAdminNotas(e.target.value)}
-                          placeholder="Ej. 'Windy fall� por 3 nudos, TodoSurf clavado.'"
+                          placeholder="Ej. 'Windy falló por 3 nudos, TodoSurf clavado.'"
                           className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700"
                         />
                       </div>
@@ -4166,7 +4156,7 @@ export default function App() {
                           className="w-3.5 h-3.5 text-rose-600 border-slate-300 rounded focus:ring-rose-500 cursor-pointer"
                         />
                         <label htmlFor="adminIsAlert" className="text-[11px] font-black text-rose-600 select-none cursor-pointer">
-                          ?? Publicar como Alerta Oficial Destacada en la web
+                          ⚠️ Publicar como Alerta Oficial Destacada en la web
                         </label>
                       </div>
 
@@ -4182,26 +4172,26 @@ export default function App() {
                         className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-md text-xs flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                         {isSendingReport && <Loader2 size={14} className="animate-spin" />}
-                        Guardar en Google Sheets ??
+                        Guardar en Google Sheets 🚀
                       </button>
                     </form>
                   )}
 
-                  {/* PESTA�A 2: PANEL PRIVADO DE CONTROL DIRECTO DE FACTORES DE ESCALA */}
+                  {/* PESTAÑA 2: PANEL PRIVADO DE CONTROL DIRECTO DE FACTORES DE ESCALA */}
                   {adminTab === 'factors' && (
                     <div className="text-left space-y-4">
                       <div className="flex justify-between items-center mb-1">
                         <h4 className="text-xs font-black uppercase text-indigo-700 tracking-wider flex items-center gap-1.5">
                           <ShieldAlert size={14} className="text-indigo-600" />
-                          <span>Control por Direcci�n de Ola</span>
+                          <span>Control por Dirección de Ola</span>
                         </h4>
-                        <span className="bg-indigo-100 text-indigo-700 text-[9px] font-black px-2.5 py-0.5 rounded-full">?? Acceso Supervisor</span>
+                        <span className="bg-indigo-100 text-indigo-700 text-[9px] font-black px-2.5 py-0.5 rounded-full">🔒 Acceso Supervisor</span>
                       </div>
                       <p className="text-[11px] text-slate-500 font-medium">
-                        Supervisa y modifica los factores directamente sin enviar reportes. El algoritmo eval�a la <strong>ventana m�vil de los �ltimos 5 nados m�s recientes</strong>.
+                        Supervisa y modifica los factores directamente sin enviar reportes. El algoritmo evalúa la <strong>ventana móvil de los últimos 5 nados más recientes</strong>.
                       </p>
 
-                      {/* BANNER DE NOTIFICACI�N DE CAMBIO APLICADO */}
+                      {/* BANNER DE NOTIFICACIÓN DE CAMBIO APLICADO */}
                       {factorFeedbackMsg && (
                         <div className="bg-emerald-50 text-emerald-800 border border-emerald-300 p-3 rounded-xl text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
                           <span>{factorFeedbackMsg}</span>
@@ -4246,7 +4236,7 @@ export default function App() {
                               playa: bKey,
                               horaNado: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
                               sensaciones: `[FactorConfig: ${JSON.stringify({ storageKey, factor: fixedVal, timestamp: nowTs })}]`,
-                              notas: `Ajuste de calibraci�n para ${bName} ${secKey.toUpperCase()}`
+                              notas: `Ajuste de calibración para ${bName} ${secKey.toUpperCase()}`
                             };
                             try {
                               fetch(WEBHOOK_URL, {
@@ -4258,23 +4248,9 @@ export default function App() {
                             } catch(e) {}
                           }
 
-                                                    const defaultMap = {
-                            misericordia: { levante_fuerte: 0.85, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.35, terral: 0.15 },
-                            malagueta:    { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.30, terral: 0.15 },
-                            pedregalejo:  { levante_fuerte: 0.65, levante_suave: 0.50, poniente_fuerte: 0.40, poniente_suave: 0.30, terral: 0.15 },
-                            los_alamos:   { levante_fuerte: 0.90, levante_suave: 0.85, poniente_fuerte: 0.90, poniente_suave: 0.75, terral: 0.20 },
-                            bajondillo:   { levante_fuerte: 0.80, levante_suave: 0.70, poniente_fuerte: 0.70, poniente_suave: 0.60, terral: 0.20 },
-                            cala_del_moral:{levante_fuerte: 0.75, levante_suave: 0.65, poniente_fuerte: 0.70, poniente_suave: 0.45, terral: 0.15 },
-                            rincon_victoria:{levante_fuerte:0.85, levante_suave: 0.80, poniente_fuerte: 0.70, poniente_suave: 0.50, terral: 0.15 }
-                          };
-                          const bFact = defaultMap[bKey] || { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.50, poniente_suave: 0.35, terral: 0.15 };
-
                           const sectors = [
-                            { key: 'levante_fuerte', title: 'ðŸŒ… Sector LEVANTE FUERTE (E / SE â‰¥ 10 kn)', defaultFactor: bFact.levante_fuerte },
-                            { key: 'levante_suave',  title: 'â˜€ï¸ Sector LEVANTE SUAVE / BRISA (E / SE < 10 kn)', defaultFactor: bFact.levante_suave },
-                            { key: 'poniente_fuerte',title: 'ðŸŒŠ Sector PONIENTE FUERTE (S / SO â‰¥ 10 kn)', defaultFactor: bFact.poniente_fuerte },
-                            { key: 'poniente_suave', title: 'ðŸ–ï¸ Sector PONIENTE SUAVE / RESACA (S / SO < 10 kn)', defaultFactor: bFact.poniente_suave },
-                            { key: 'terral',         title: 'ðŸ”¥ Sector Clima TERRAL (Viento NW / N de Tierra)', defaultFactor: bFact.terral }
+                            { key: 'levante', title: '🌊 Sector Oleaje LEVANTE (Mar de Fondo E / SE)', isLevante: true, defaultFactor: bKey === 'misericordia' ? 0.60 : 1.00 },
+                            { key: 'poniente', title: '🌊 Sector Oleaje PONIENTE / SUR (Mar de Fondo S / SO)', isLevante: false, defaultFactor: bKey === 'misericordia' ? 0.50 : (bKey === 'malagueta' || bKey === 'pedregalejo' ? 0.70 : 1.00) }
                           ];
 
                           return (
@@ -4288,7 +4264,7 @@ export default function App() {
                                 {sectors.map(sec => {
                                   const storageKey = `${bKey}_${sec.key}`;
                                   
-                                  // 1. Obtener todos los reportes del sector basados estrictamente en la direcci�n del oleaje a la HORA DEL NADO
+                                  // 1. Obtener todos los reportes del sector basados estrictamente en la dirección del oleaje a la HORA DEL NADO
                                   const allSectorLogs = calibrationHistory.filter(l => {
                                     if (l.playa !== bKey || !l.realOlas) return false;
                                     const buoyData = getBuoyReadingForLog(l);
@@ -4300,7 +4276,7 @@ export default function App() {
 
                                   const totalLogsCount = allSectorLogs.length;
 
-                                  // Helper para obtener la previsi�n del sat�lite bruto registrada a la hora del nado
+                                  // Helper para obtener la previsión del satélite bruto registrada a la hora del nado
                                   function getLogSatHeight(l) {
                                     const satH = parseFloat((l.modelEcmwfOlas || l.appOlas || "").toString().replace(",", "."));
                                     if (!isNaN(satH) && satH > 0) return satH;
@@ -4310,7 +4286,7 @@ export default function App() {
                                     return 0.36;
                                   }
 
-                                  // A) CALCULO HIST�RICO GLOBAL (Sugerencia progresiva desde el Nado #1, con filtro �1.5s si hay >=5 nados)
+                                  // A) CALCULO HISTÓRICO GLOBAL (Sugerencia progresiva desde el Nado #1, con filtro ±1.5σ si hay >=5 nados)
                                   let suggestedGlobalFactor = null;
                                   let cleanGlobalCount = 0;
                                   if (totalLogsCount >= 1) {
@@ -4351,7 +4327,7 @@ export default function App() {
                                     }
                                   }
 
-                                  // C) CALCULO DE DESV�O (%) ENTRE SUGERENCIA RECIENTE E HIST�RICA
+                                  // C) CALCULO DE DESVÍO (%) ENTRE SUGERENCIA RECIENTE E HISTÓRICA
                                   let devPercentText = null;
                                   if (suggestedRecentFactor !== null && suggestedGlobalFactor !== null && suggestedGlobalFactor > 0) {
                                     const diffPct = ((suggestedRecentFactor - suggestedGlobalFactor) / suggestedGlobalFactor) * 100;
@@ -4373,20 +4349,20 @@ export default function App() {
                                       <div className="flex justify-between items-center text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
                                         <span className="text-slate-500 font-medium">Activo en Web:</span>
                                         <strong className={`font-black text-sm ${isOverridden ? 'text-emerald-700' : 'text-indigo-600'}`}>
-                                          {Number(activeFactor).toFixed(2)}x {isOverridden ? '?? (Aprobado Admin)' : '(Default F�brica)'}
+                                          {Number(activeFactor).toFixed(2)}x {isOverridden ? '🔒 (Aprobado Admin)' : '(Default Fábrica)'}
                                         </strong>
                                       </div>
 
-                                      {/* SECCI�N COMPARATIVA DE SUGERENCIAS DUALES CON FILTRO ANTI-RUIDO */}
+                                      {/* SECCIÓN COMPARATIVA DE SUGERENCIAS DUALES CON FILTRO ANTI-RUIDO */}
                                       <div className="bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-100/70 space-y-2">
                                         <div className="text-[10px] font-black uppercase text-indigo-800 tracking-wider flex justify-between items-center">
-                                          <span>?? Comparativa Algoritmo (Progresivo desde 1er Nado)</span>
+                                          <span>📊 Comparativa Algoritmo (Progresivo desde 1er Nado)</span>
                                         </div>
 
                                         {/* SUGERENCIA RECIENTE PROGRESIVA */}
                                         <div className="flex justify-between items-center text-xs pt-1">
                                           <div className="flex items-center gap-1.5">
-                                            <span className="text-emerald-700 font-bold">? Reciente ({countRecent >= 5 ? 'Consolidado' : 'Post-Ajuste'}):</span>
+                                            <span className="text-emerald-700 font-bold">⚡ Reciente ({countRecent >= 5 ? 'Consolidado' : 'Post-Ajuste'}):</span>
                                             <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${countRecent >= 5 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
                                               {countRecent}/5 nados
                                             </span>
@@ -4398,17 +4374,17 @@ export default function App() {
                                           )}
                                         </div>
 
-                                        {/* SUGERENCIA HIST�RICA GLOBAL PROGRESIVA */}
+                                        {/* SUGERENCIA HISTÓRICA GLOBAL PROGRESIVA */}
                                         <div className="flex justify-between items-center text-xs pt-1 border-t border-indigo-100/60">
                                           <div className="flex items-center gap-1.5">
-                                            <span className="text-blue-700 font-bold">?? Hist�rica Global ({cleanGlobalCount} v�lidos):</span>
+                                            <span className="text-blue-700 font-bold">📜 Histórica Global ({cleanGlobalCount} válidos):</span>
                                           </div>
                                           {suggestedGlobalFactor !== null ? (
                                             <div className="flex items-center gap-2">
                                               <strong className="text-blue-700 font-black">{suggestedGlobalFactor.toFixed(2)}x</strong>
                                               {devPercentText && (
                                                 <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${parseFloat(devPercentText) >= 0 ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
-                                                  Desv�o: {devPercentText}
+                                                  Desvío: {devPercentText}
                                                 </span>
                                               )}
                                             </div>
@@ -4418,7 +4394,7 @@ export default function App() {
                                         </div>
                                       </div>
 
-                                      {/* BOTONES DE ACCI�N */}
+                                      {/* BOTONES DE ACCIÓN */}
                                       <div className="flex items-center justify-between gap-1.5 pt-1 flex-wrap">
                                         {suggestedRecentFactor !== null && (
                                           <button
@@ -4434,12 +4410,12 @@ export default function App() {
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`?? �Aprobado Factor Reciente (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
+                                              setFactorFeedbackMsg(`🟢 ¡Aprobado Factor Reciente (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm flex-1 min-w-[120px] text-center"
                                           >
-                                            {countRecent >= 5 ? `?? Aprobar Consolidado (${suggestedRecentFactor.toFixed(2)}x)` : `? Aprobar Reciente (${suggestedRecentFactor.toFixed(2)}x)`}
+                                            {countRecent >= 5 ? `🟢 Aprobar Consolidado (${suggestedRecentFactor.toFixed(2)}x)` : `⚡ Aprobar Reciente (${suggestedRecentFactor.toFixed(2)}x)`}
                                           </button>
                                         )}
 
@@ -4457,12 +4433,12 @@ export default function App() {
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`?? �Aprobada Sugerencia Global (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
+                                              setFactorFeedbackMsg(`🔵 ¡Aprobada Sugerencia Global (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm flex-1 min-w-[120px] text-center"
                                           >
-                                            ?? Aprobar Global ({suggestedGlobalFactor.toFixed(2)}x)
+                                            🔵 Aprobar Global ({suggestedGlobalFactor.toFixed(2)}x)
                                           </button>
                                         )}
 
@@ -4480,12 +4456,12 @@ export default function App() {
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               saveFactorChangeToCloud(bKey, sec.key, null, nowTs, bName);
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`?? Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}). Sincronizado en la nube.`);
+                                              setFactorFeedbackMsg(`🔄 Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}). Sincronizado en la nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }}
                                             className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
                                           >
-                                            ? Reset ({sec.defaultFactor.toFixed(2)}x)
+                                            ↩ Reset ({sec.defaultFactor.toFixed(2)}x)
                                           </button>
                                         )}
 
@@ -4504,13 +4480,13 @@ export default function App() {
                                               localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                               saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
                                               setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`?? �Factor manual para ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x! Sincronizado en la nube.`);
+                                              setFactorFeedbackMsg(`✏️ ¡Factor manual para ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x! Sincronizado en la nube.`);
                                               setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                             }
                                           }}
                                           className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-indigo-200 transition-colors ml-auto"
                                         >
-                                          ?? Manual
+                                          ✏️ Manual
                                         </button>
                                       </div>
                                     </div>
@@ -4529,16 +4505,16 @@ export default function App() {
                       <div className="flex justify-between items-center mb-1 border-b border-slate-200 pb-2">
                         <h4 className="text-xs font-black uppercase text-indigo-700 tracking-wider flex items-center gap-1.5">
                           <Activity size={16} className="text-cyan-500" />
-                          <span>Matriz de Auditor�a de Telemetr�a (2 Etapas)</span>
+                          <span>Matriz de Auditoría de Telemetría (2 Etapas)</span>
                         </h4>
                         <span className="text-[9px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-700/60 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> 16 COLUMNAS BIAS/REFRACCI�N
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> 16 COLUMNAS BIAS/REFRACCIÓN
                         </span>
                       </div>
 
-                      {/* Tarjetas resumen de m�tricas */}
+                      {/* Tarjetas resumen de métricas */}
                       {(() => {
-                        // Calcular F_sesgo medio (Boya / Sat�lite) desde calibrationHistory
+                        // Calcular F_sesgo medio (Boya / Satélite) desde calibrationHistory
                         const validSesgoLogs = calibrationHistory.filter(l => {
                           const buoyInfo = getBuoyReadingForLog(l);
                           const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
@@ -4581,30 +4557,30 @@ export default function App() {
                         return (
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <div className="bg-gradient-to-br from-indigo-50 to-slate-50 p-3.5 rounded-2xl border border-indigo-100/80 shadow-sm space-y-1">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase block">Etapa 1: Sesgo Sat�lite (F_sesgo)</span>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase block">Etapa 1: Sesgo Satélite (F_sesgo)</span>
                               <strong className="text-xl font-black text-indigo-700 block">{avgFSesgo}x</strong>
-                              <span className="text-[9px] text-slate-500 block">Relaci�n Boya Real / Sat�lite (D-1) ({validSesgoLogs.length} muestras)</span>
+                              <span className="text-[9px] text-slate-500 block">Relación Boya Real / Satélite (D-1) ({validSesgoLogs.length} muestras)</span>
                             </div>
 
                             <div className="bg-gradient-to-br from-cyan-50 to-slate-50 p-3.5 rounded-2xl border border-cyan-100/80 shadow-sm space-y-1">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase block">Etapa 2: Refracci�n Orilla (F_refraccion)</span>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase block">Etapa 2: Refracción Orilla (F_refraccion)</span>
                               <strong className="text-xl font-black text-cyan-700 block">{avgFRefrac}x</strong>
-                              <span className="text-[9px] text-slate-500 block">Atenuaci�n Batim�trica Orilla / Boya ({validRefracLogs.length} reportes)</span>
+                              <span className="text-[9px] text-slate-500 block">Atenuación Batimétrica Orilla / Boya ({validRefracLogs.length} reportes)</span>
                             </div>
 
                             <div className="bg-gradient-to-br from-emerald-50 to-slate-50 p-3.5 rounded-2xl border border-emerald-100/80 shadow-sm space-y-1">
                               <span className="text-[10px] font-bold text-slate-500 uppercase block">Factor Combinado (F_combinado)</span>
                               <strong className="text-xl font-black text-emerald-700 block">{avgFCombinado}x</strong>
-                              <span className="text-[9px] text-slate-500 block">Multiplicador global Orilla = Sat�lite � F_combinado</span>
+                              <span className="text-[9px] text-slate-500 block">Multiplicador global Orilla = Satélite × F_combinado</span>
                             </div>
                           </div>
                         );
                       })()}
 
-                      {/* Tabla de auditor�a por sectores */}
+                      {/* Tabla de auditoría por sectores */}
                       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                         <div className="bg-slate-900 text-white px-4 py-2.5 flex justify-between items-center text-xs font-bold">
-                          <span>Desglose de Telemetr�a por Sectores de Oleaje</span>
+                          <span>Desglose de Telemetría por Sectores de Oleaje</span>
                           <span className="text-[10px] text-slate-400">Misericordia, Malagueta, Pedregalejo</span>
                         </div>
 
@@ -4613,7 +4589,7 @@ export default function App() {
                             <thead className="bg-slate-100 text-slate-600 text-[10px] uppercase border-b border-slate-200">
                               <tr>
                                 <th className="p-2.5 font-extrabold">Playa / Sector</th>
-                                <th className="p-2.5 text-center font-extrabold">Sat�lite D-1</th>
+                                <th className="p-2.5 text-center font-extrabold">Satélite D-1</th>
                                 <th className="p-2.5 text-center font-extrabold">Boya Real</th>
                                 <th className="p-2.5 text-center font-extrabold text-indigo-700">F_sesgo</th>
                                 <th className="p-2.5 text-center font-extrabold">Orilla Real</th>
@@ -4666,10 +4642,10 @@ export default function App() {
                                   return (
                                     <tr key={`${bKey}_${sec.secKey}`} className="hover:bg-slate-50/80 transition-colors">
                                       <td className="p-2.5 font-bold text-slate-800">{sec.name}</td>
-                                      <td className="p-2.5 text-center font-bold text-indigo-600">{lastSat ? `${lastSat.toFixed(2)}m` : '�'}</td>
-                                      <td className="p-2.5 text-center font-bold text-cyan-600">{lastBuoy ? `${lastBuoy.toFixed(2)}m` : '�'}</td>
+                                      <td className="p-2.5 text-center font-bold text-indigo-600">{lastSat ? `${lastSat.toFixed(2)}m` : '—'}</td>
+                                      <td className="p-2.5 text-center font-bold text-cyan-600">{lastBuoy ? `${lastBuoy.toFixed(2)}m` : '—'}</td>
                                       <td className="p-2.5 text-center font-black text-indigo-700 bg-indigo-50/50">{fSesgoSec}x</td>
-                                      <td className="p-2.5 text-center font-bold text-emerald-600">{lastOrilla ? `${lastOrilla.toFixed(2)}m` : '�'}</td>
+                                      <td className="p-2.5 text-center font-bold text-emerald-600">{lastOrilla ? `${lastOrilla.toFixed(2)}m` : '—'}</td>
                                       <td className="p-2.5 text-center font-black text-cyan-700 bg-cyan-50/50">{fRefracSec}x</td>
                                       <td className="p-2.5 text-center font-black text-emerald-700 bg-emerald-50/50">{fCombSec}x</td>
                                     </tr>
@@ -4731,9 +4707,9 @@ export default function App() {
                       <option value="misericordia">La Misericordia</option>
                       <option value="malagueta">La Malagueta</option>
                       <option value="pedregalejo">Pedregalejo</option>
-                      <option value="los_alamos">Los �lamos</option>
+                      <option value="los_alamos">Los Álamos</option>
                       <option value="bajondillo">El Bajondillo</option>
-                      <option value="rincon_victoria">Rinc�n de la Victoria</option>
+                      <option value="rincon_victoria">Rincón de la Victoria</option>
                       <option value="cala_del_moral">La Cala del Moral</option>
                     </select>
                   </div>
@@ -4754,13 +4730,13 @@ export default function App() {
                 {/* Campo opcional: Nombre del Nadador */}
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">
-                    ?? �Tu Nombre? (Opcional)
+                    👤 ¿Tu Nombre? (Opcional)
                   </label>
                   <input 
                     type="text" 
                     value={swimmerName} 
                     onChange={(e) => setSwimmerName(e.target.value)} 
-                    placeholder="Ej. Juan, Mar�a... (deja vac�o para ser An�nimo)" 
+                    placeholder="Ej. Juan, María... (deja vacío para ser Anónimo)" 
                     maxLength={25}
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white placeholder-slate-400 focus:border-indigo-500 outline-none"
                   />
@@ -4776,18 +4752,18 @@ export default function App() {
                     className="w-3.5 h-3.5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
                   />
                   <label htmlFor="swimmerIsOnlyMessage" className="text-[11px] font-black text-indigo-600 select-none cursor-pointer">
-                    ?? Publicar solo un mensaje/aviso (sin valoraciones f�sicas)
+                    📢 Publicar solo un mensaje/aviso (sin valoraciones físicas)
                   </label>
                 </div>
 
                 {!swimmerIsOnlyMessage && (
                   <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-xs">
-                    <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Evaluaci�n de la playa</span>
+                    <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Evaluación de la playa</span>
                   
                   {/* Olas */}
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <span className="font-bold text-slate-700">?? Ola en la Orilla:</span>
+                      <span className="font-bold text-slate-700">🌊 Ola en la Orilla:</span>
                       <div className="flex gap-1">
                         {[1,2,3,4,5].map(v => (
                           <button 
@@ -4802,11 +4778,11 @@ export default function App() {
                     </div>
                     {swimmerRealOlas && (
                       <div className="text-[9px] text-right font-bold text-blue-600 italic">
-                        {swimmerRealOlas === 1 && "1/5 (0.05m) � Plato: Mar balsa, nadas sin turbulencia alguna"}
-                        {swimmerRealOlas === 2 && "2/5 (0.20m) � Rizado suave: Mar rizado, no interrumpe la respiraci�n"}
-                        {swimmerRealOlas === 3 && "3/5 (0.45m) � Marejada / Inc�modo: Salpica al respirar, girar cabeza"}
-                        {swimmerRealOlas === 4 && "4/5 (0.80m) � Fuerte / Oleaje: Dificultad para orientarse, picado"}
-                        {swimmerRealOlas === 5 && "5/5 (1.20m) � Muy Duro / Rompiente: Impide nadar con normalidad"}
+                        {swimmerRealOlas === 1 && "1/5 (0.05m) • Plato: Mar balsa, nadas sin turbulencia alguna"}
+                        {swimmerRealOlas === 2 && "2/5 (0.20m) • Rizado suave: Mar rizado, no interrumpe la respiración"}
+                        {swimmerRealOlas === 3 && "3/5 (0.45m) • Marejada / Incómodo: Salpica al respirar, girar cabeza"}
+                        {swimmerRealOlas === 4 && "4/5 (0.80m) • Fuerte / Oleaje: Dificultad para orientarse, picado"}
+                        {swimmerRealOlas === 5 && "5/5 (1.20m) • Muy Duro / Rompiente: Impide nadar con normalidad"}
                       </div>
                     )}
                   </div>
@@ -4814,7 +4790,7 @@ export default function App() {
                   {/* Resaca */}
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <span className="font-bold text-slate-700">?? Resaca (Arrastre):</span>
+                      <span className="font-bold text-slate-700">🔄 Resaca (Arrastre):</span>
                       <div className="flex gap-1">
                         {[1,2,3,4,5].map(v => (
                           <button 
@@ -4841,7 +4817,7 @@ export default function App() {
                   {/* Corriente */}
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <span className="font-bold text-slate-700">?? Deriva (Corriente):</span>
+                      <span className="font-bold text-slate-700">🧭 Deriva (Corriente):</span>
                       <div className="flex gap-1">
                         {[1,2,3,4,5].map(v => (
                           <button 
@@ -4867,7 +4843,7 @@ export default function App() {
 
                   {/* Medusas */}
                   <div className="flex justify-between items-center pt-1 border-t border-slate-200/50">
-                    <span className="font-bold text-slate-700 flex items-center gap-1">?? Medusas:</span>
+                    <span className="font-bold text-slate-700 flex items-center gap-1">🪼 Medusas:</span>
                     <div className="flex gap-1">
                       {['Ninguna', 'Pocas', 'Muchas'].map(v => (
                         <button 
@@ -4875,7 +4851,7 @@ export default function App() {
                           onClick={() => setSwimmerMedusas(v)}
                           className={`px-2.5 py-1 rounded-full font-bold text-[10px] flex items-center justify-center transition-colors ${swimmerMedusas === v ? 'bg-rose-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}
                         >
-                          {v === 'Muchas' ? 'Muchas ??' : v}
+                          {v === 'Muchas' ? 'Muchas 🚩' : v}
                         </button>
                       ))}
                     </div>
@@ -4883,7 +4859,7 @@ export default function App() {
 
                   {/* Limpieza */}
                   <div className="flex justify-between items-center pt-1 border-t border-slate-200/50">
-                    <span className="font-bold text-slate-700 flex items-center gap-1">?? Agua:</span>
+                    <span className="font-bold text-slate-700 flex items-center gap-1">🧼 Agua:</span>
                     <div className="flex gap-1">
                       {['Limpia', 'Turbia', 'Sucia'].map(v => (
                         <button 
@@ -4891,7 +4867,7 @@ export default function App() {
                           onClick={() => setSwimmerAgua(v)}
                           className={`px-2.5 py-1 rounded-full font-bold text-[10px] flex items-center justify-center transition-colors ${swimmerAgua === v ? 'bg-emerald-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}
                         >
-                          {v === 'Sucia' ? 'Sucia ??' : v}
+                          {v === 'Sucia' ? 'Sucia ⚠️' : v}
                         </button>
                       ))}
                     </div>
@@ -4906,7 +4882,7 @@ export default function App() {
                   <textarea 
                     value={swimmerSensaciones}
                     onChange={(e) => setSwimmerSensaciones(e.target.value)}
-                    placeholder={swimmerIsOnlyMessage ? "Ej. '�Qui�n se apunta a nadar a las 19:00?' o 'Mar de fondo fuerte, precauci�n hoy...'" : "Ej. 'El agua estaba plato pero fr�a, no hay medusas hoy...'"}
+                    placeholder={swimmerIsOnlyMessage ? "Ej. '¿Quién se apunta a nadar a las 19:00?' o 'Mar de fondo fuerte, precaución hoy...'" : "Ej. 'El agua estaba plato pero fría, no hay medusas hoy...'"}
                     required={swimmerIsOnlyMessage}
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-blue-500"
                     maxLength={150}
@@ -4925,7 +4901,7 @@ export default function App() {
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-md text-xs flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {isSendingSwimmerReport && <Loader2 size={14} className="animate-spin" />}
-                  {swimmerIsOnlyMessage ? 'Enviar Mensaje a la Comunidad ??' : 'Enviar Reporte An�nimo ??'}
+                  {swimmerIsOnlyMessage ? 'Enviar Mensaje a la Comunidad 🚀' : 'Enviar Reporte Anónimo 🚀'}
                 </button>
               </form>
             </div>
@@ -4934,14 +4910,14 @@ export default function App() {
       )}
       {/* Footer con Contador de Visitas */}
       <footer className="w-full text-center py-6 mt-8 border-t border-slate-100 text-[10px] font-bold text-slate-400/70 tracking-wide uppercase flex flex-col sm:flex-row items-center justify-center gap-1.5 select-none">
-        <span>� {new Date().getFullYear()} OpenWater Tracker M�laga</span>
-        <span className="hidden sm:inline">�</span>
+        <span>© {new Date().getFullYear()} OpenWater Tracker Málaga</span>
+        <span className="hidden sm:inline">•</span>
         <span>Club de Nado Aliquindoi</span>
         {totalVisits > 0 && (
           <>
-            <span className="hidden sm:inline">�</span>
+            <span className="hidden sm:inline">•</span>
             <span className="bg-slate-50 border border-slate-200/50 px-2 py-0.5 rounded text-[9px] text-slate-500 font-extrabold normal-case">
-              ? {totalVisits.toLocaleString('es-ES')} visitas
+              ⚡ {totalVisits.toLocaleString('es-ES')} visitas
             </span>
           </>
         )}
@@ -4950,8 +4926,4 @@ export default function App() {
     </div>
   );
 }
-
-
-
-
 
