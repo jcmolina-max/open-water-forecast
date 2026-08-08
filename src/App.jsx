@@ -4248,22 +4248,9 @@ export default function App() {
                             } catch(e) {}
                           }
 
-                          const defaultFactoryMap = {
-                            misericordia:   { levante_fuerte: 0.85, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.35, terral: 0.15 },
-                            malagueta:      { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.30, terral: 0.15 },
-                            pedregalejo:    { levante_fuerte: 0.65, levante_suave: 0.50, poniente_fuerte: 0.40, poniente_suave: 0.30, terral: 0.15 },
-                            los_alamos:     { levante_fuerte: 0.90, levante_suave: 0.85, poniente_fuerte: 0.90, poniente_suave: 0.75, terral: 0.20 },
-                            bajondillo:     { levante_fuerte: 0.80, levante_suave: 0.70, poniente_fuerte: 0.70, poniente_suave: 0.60, terral: 0.20 },
-                            cala_del_moral: { levante_fuerte: 0.75, levante_suave: 0.65, poniente_fuerte: 0.70, poniente_suave: 0.45, terral: 0.15 },
-                            rincon_victoria:{ levante_fuerte: 0.85, levante_suave: 0.80, poniente_fuerte: 0.70, poniente_suave: 0.50, terral: 0.15 }
-                          };
-                          const bFact = defaultFactoryMap[bKey] || { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.50, poniente_suave: 0.35, terral: 0.15 };
                           const sectors = [
-                            { key: 'levante_fuerte', title: '🌅 Sector LEVANTE FUERTE (E / SE ≥ 10 kn)', defaultFactor: bFact.levante_fuerte },
-                            { key: 'levante_suave',  title: '☀️ Sector LEVANTE SUAVE / BRISA (E / SE < 10 kn)', defaultFactor: bFact.levante_suave },
-                            { key: 'poniente_fuerte',title: '🌊 Sector PONIENTE FUERTE (S / SO ≥ 10 kn)', defaultFactor: bFact.poniente_fuerte },
-                            { key: 'poniente_suave', title: '🏖️ Sector PONIENTE SUAVE / RESACA (S / SO < 10 kn)', defaultFactor: bFact.poniente_suave },
-                            { key: 'terral',         title: '🔥 Sector Clima TERRAL (Viento NW / N de Tierra)', defaultFactor: bFact.terral }
+                            { key: 'levante', title: '🌊 Sector Oleaje LEVANTE (Mar de Fondo E / SE)', isLevante: true, defaultFactor: bKey === 'misericordia' ? 0.60 : 1.00 },
+                            { key: 'poniente', title: '🌊 Sector Oleaje PONIENTE / SUR (Mar de Fondo S / SO)', isLevante: false, defaultFactor: bKey === 'misericordia' ? 0.50 : (bKey === 'malagueta' || bKey === 'pedregalejo' ? 0.70 : 1.00) }
                           ];
 
                           return (
@@ -4407,14 +4394,12 @@ export default function App() {
                                         </div>
                                       </div>
 
-                                      {/* BOTONES DE ACCION PERMANENTES (4 SIEMPRE VISIBLES EN GRID 2x2) */}
+                                      {/* BOTONES DE ACCION PERMANENTES (4 ACTIVOS EN GRID 2x2) */}
                                       <div className="grid grid-cols-2 gap-1.5 pt-1">
                                         <button
                                           type="button"
-                                          disabled={suggestedRecentFactor === null}
                                           onClick={() => {
-                                            if (suggestedRecentFactor === null) return;
-                                            const fixedVal = parseFloat(suggestedRecentFactor.toFixed(2));
+                                            const fixedVal = parseFloat((suggestedRecentFactor !== null ? suggestedRecentFactor : Number(activeFactor)).toFixed(2));
                                             const nowTs = Date.now();
                                             const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
                                             const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
@@ -4424,26 +4409,20 @@ export default function App() {
                                             localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                             saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
                                             setDataRefreshKey(k => k + 1);
-                                            setFactorFeedbackMsg(`🟢 ¡Aprobado Factor Reciente (${fixedVal}x) para ${bName}! Sincronizado.`);
+                                            setFactorFeedbackMsg(`🟢 ¡Aprobado Factor (${fixedVal}x) para ${bName}! Sincronizado.`);
                                             setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                           }}
-                                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm text-center flex items-center justify-center gap-1 ${
-                                            suggestedRecentFactor !== null
-                                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
-                                              : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
-                                          }`}
+                                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm text-center flex items-center justify-center gap-1 cursor-pointer"
                                         >
                                           {suggestedRecentFactor !== null 
                                             ? (countRecent >= 5 ? `🟢 Aprobar Consolidado (${suggestedRecentFactor.toFixed(2)}x)` : `⚡ Aprobar Reciente (${suggestedRecentFactor.toFixed(2)}x)`)
-                                            : '⚡ Aprobar Reciente'}
+                                            : `🟢 Aprobar (${Number(activeFactor).toFixed(2)}x)`}
                                         </button>
 
                                         <button
                                           type="button"
-                                          disabled={suggestedGlobalFactor === null}
                                           onClick={() => {
-                                            if (suggestedGlobalFactor === null) return;
-                                            const fixedVal = parseFloat(suggestedGlobalFactor.toFixed(2));
+                                            const fixedVal = parseFloat((suggestedGlobalFactor !== null ? suggestedGlobalFactor : Number(activeFactor)).toFixed(2));
                                             const nowTs = Date.now();
                                             const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
                                             const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
@@ -4456,15 +4435,11 @@ export default function App() {
                                             setFactorFeedbackMsg(`🔵 ¡Aprobada Sugerencia Global (${fixedVal}x) para ${bName}! Sincronizado.`);
                                             setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                           }}
-                                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm text-center flex items-center justify-center gap-1 ${
-                                            suggestedGlobalFactor !== null
-                                              ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
-                                              : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
-                                          }`}
+                                          className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm text-center flex items-center justify-center gap-1 cursor-pointer"
                                         >
                                           {suggestedGlobalFactor !== null 
                                             ? `🔵 Aprobar Global (${suggestedGlobalFactor.toFixed(2)}x)`
-                                            : '📜 Aprobar Global'}
+                                            : `🔵 Aprobar Global (${Number(activeFactor).toFixed(2)}x)`}
                                         </button>
 
                                         <button
