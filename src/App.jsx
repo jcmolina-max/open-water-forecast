@@ -4248,16 +4248,29 @@ export default function App() {
                             } catch(e) {}
                           }
 
+                          const defaultFactoryMap = {
+                            misericordia:   { levante_fuerte: 0.85, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.35, terral: 0.15 },
+                            malagueta:      { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.30, terral: 0.15 },
+                            pedregalejo:    { levante_fuerte: 0.65, levante_suave: 0.50, poniente_fuerte: 0.40, poniente_suave: 0.30, terral: 0.15 },
+                            los_alamos:     { levante_fuerte: 0.90, levante_suave: 0.85, poniente_fuerte: 0.90, poniente_suave: 0.75, terral: 0.20 },
+                            bajondillo:     { levante_fuerte: 0.80, levante_suave: 0.70, poniente_fuerte: 0.70, poniente_suave: 0.60, terral: 0.20 },
+                            cala_del_moral: { levante_fuerte: 0.75, levante_suave: 0.65, poniente_fuerte: 0.70, poniente_suave: 0.45, terral: 0.15 },
+                            rincon_victoria:{ levante_fuerte: 0.85, levante_suave: 0.80, poniente_fuerte: 0.70, poniente_suave: 0.50, terral: 0.15 }
+                          };
+                          const bFact = defaultFactoryMap[bKey] || { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.50, poniente_suave: 0.35, terral: 0.15 };
                           const sectors = [
-                            { key: 'levante', title: '🌊 Sector Oleaje LEVANTE (Mar de Fondo E / SE)', isLevante: true, defaultFactor: bKey === 'misericordia' ? 0.60 : 1.00 },
-                            { key: 'poniente', title: '🌊 Sector Oleaje PONIENTE / SUR (Mar de Fondo S / SO)', isLevante: false, defaultFactor: bKey === 'misericordia' ? 0.50 : (bKey === 'malagueta' || bKey === 'pedregalejo' ? 0.70 : 1.00) }
+                            { key: 'levante_fuerte', title: '🌅 Sector LEVANTE FUERTE (E / SE ≥ 10 kn)', defaultFactor: bFact.levante_fuerte },
+                            { key: 'levante_suave',  title: '☀️ Sector LEVANTE SUAVE / BRISA (E / SE < 10 kn)', defaultFactor: bFact.levante_suave },
+                            { key: 'poniente_fuerte',title: '🌊 Sector PONIENTE FUERTE (S / SO ≥ 10 kn)', defaultFactor: bFact.poniente_fuerte },
+                            { key: 'poniente_suave', title: '🏖️ Sector PONIENTE SUAVE / RESACA (S / SO < 10 kn)', defaultFactor: bFact.poniente_suave },
+                            { key: 'terral',         title: '🔥 Sector Clima TERRAL (Viento NW / N de Tierra)', defaultFactor: bFact.terral }
                           ];
 
                           return (
                             <div key={bKey} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5">
                               <div className="border-b border-slate-200 pb-1.5 flex justify-between items-center">
                                 <strong className="text-slate-900 font-black text-sm">{bName}</strong>
-                                <span className="text-[9px] font-bold text-slate-400 uppercase">2 Sectores Marinos</span>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase">5 Sectores Marinos</span>
                               </div>
 
                               <div className="grid grid-cols-1 gap-2.5">
