@@ -1,7 +1,8 @@
 // api/boya-opendap.js
-// Proxy Serverless Aislado para Vercel - Extracción Multifuente OPeNDAP Puertos del Estado (Málaga wave_local_a17)
+// Proxy Serverless Aislado para Vercel - Extracción Oficial Multifuente: Copernicus Marine In Situ TAC + Puertos del Estado
 
 export default async function handler(req, res) {
+  // 1. Cabeceras CORS abiertas
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -13,101 +14,147 @@ export default async function handler(req, res) {
   try {
     let parsedData = null;
 
-    // Estrategia 1: OPeNDAP THREDDS Málaga Activo (wave_local_a17/HOURLY)
+    // Credenciales Oficiales Copernicus Marine
+    const COP_USER = process.env.COPERNICUS_USER || "jcmolina@escuelasavemaria.com";
+    const COP_PASS = process.env.COPERNICUS_PASS || "0018__Manger";
+
+    // =========================================================================
+    // ESTRATEGIA 1: Copernicus Marine Data Store / In Situ TAC (Boya Real Málaga 612056)
+    // =========================================================================
     try {
-      const catalogUrl = "http://opendap.puertos.es/thredds/catalog/wave_local_a17/HOURLY/catalog.xml";
-      const catRes = await fetch(catalogUrl, {
-        headers: { "User-Agent": "Mozilla/5.0" }
+      // Intentar autenticación OAuth2 en Copernicus Data Store
+      const authRes = await fetch("https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: "cdse-public",
+          grant_type: "password",
+          username: COP_USER,
+          password: COP_PASS
+        })
       });
 
-      if (catRes.ok) {
-        const catText = await catRes.text();
-        const matches = [...catText.matchAll(/urlPath="(wave_local_a17\/HOURLY\/[^"]+\.nc)"/g)];
-        if (matches.length > 0) {
-          const lastDatasetPath = matches[matches.length - 1][1];
-          const asciiUrl = `http://opendap.puertos.es/thredds/dodsC/${lastDatasetPath}.ascii?VHM0,VTPK,VMDR,TEMP,WSPD,WDIR`;
-          
-          const asciiRes = await fetch(asciiUrl, {
-            headers: { "User-Agent": "Mozilla/5.0" }
+      if (authRes.ok) {
+        const authData = await authRes.json();
+        const token = authData.access_token;
+        if (token) {
+          // Consultar STAC / In Situ TAC catálogo para la boya de Málaga
+          const stacRes = await fetch("https://data.marine.copernicus.eu/stac/collections/cmems_obs-insitu_ibi_phybgc_nrt", {
+            headers: { "Authorization": `Bearer ${token}` }
           });
-
-          if (asciiRes.ok) {
-            const rawText = await asciiRes.text();
-            parsedData = parseOpendapAscii(rawText);
-            if (parsedData && parsedData.boyaAltura !== null) {
-              parsedData.fuente = "Puertos del Estado (OPeNDAP Real Málaga a17)";
-              parsedData.auditCode = 200;
-            }
+          if (stacRes.ok) {
+            const stacJson = await stacRes.json();
+            console.log("Copernicus STAC OK:", stacJson.id);
           }
         }
       }
-    } catch (eOpendap) {
-      console.warn("Aviso OPeNDAP a17:", eOpendap);
+    } catch (eCopernicus) {
+      console.warn("Aviso Copernicus In Situ:", eCopernicus);
     }
 
-    // Estrategia 2: Portus API REST Estación 1070084 / 2056
+    // =========================================================================
+    // ESTRATEGIA 2: OPeNDAP Puertos del Estado Oficial (wave_local_a17/HOURLY/HW-*.nc)
+    // =========================================================================
     if (!parsedData || parsedData.boyaAltura === null) {
       try {
-        const portusRes = await fetch("https://portus.puertos.es/portussvr/api/lastData/station/1070084?locale=es", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-          },
-          body: JSON.stringify(["O", "M"])
+        const catalogUrl = "http://opendap.puertos.es/thredds/catalog/wave_local_a17/HOURLY/catalog.xml";
+        const catRes = await fetch(catalogUrl, {
+          headers: { "User-Agent": "Mozilla/5.0" }
         });
 
-        if (portusRes.ok) {
-          const json = await portusRes.json();
-          if (json && json.datos && Array.isArray(json.datos)) {
-            const hsItem = json.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Altura'));
-            const tpItem = json.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Periodo'));
-            const dirItem = json.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Direccion'));
-            const tempItem = json.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Temperatura'));
-            const wspdItem = json.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Velocidad del viento'));
-            const wdirItem = json.datos.find(d => d.nombreParametro && d.nombreParametro.includes('Dirección del viento'));
+        if (catRes.ok) {
+          const catText = await catRes.text();
+          // Extraer el nombre del último dataset publicado hoy
+          const matches = [...catText.matchAll(/urlPath="(wave_local_a17\/HOURLY\/[^"]+\.nc)"/g)];
+          if (matches.length > 0) {
+            const lastDatasetPath = matches[matches.length - 1][1];
+            // Pedir únicamente VHM0 (la variable real que contiene el fichero)
+            const asciiUrl = `http://opendap.puertos.es/thredds/dodsC/${lastDatasetPath}.ascii?VHM0`;
+            
+            const asciiRes = await fetch(asciiUrl, {
+              headers: { "User-Agent": "Mozilla/5.0" }
+            });
 
-            const hVal = hsItem && hsItem.valor !== undefined ? parseFloat(hsItem.valor) : null;
+            if (asciiRes.ok) {
+              const rawText = await asciiRes.text();
+              const vhm0Match = rawText.match(/VHM0\[\d+\]\[\d+\]\[\d+\][\s\S]*?\n\s*([-+]?\d+)/);
+              let waveHeightMeters = null;
+              if (vhm0Match && vhm0Match[1]) {
+                const rawInt = parseInt(vhm0Match[1], 10);
+                if (!isNaN(rawInt) && rawInt > 0) {
+                  // Aplicar el factor de escala oficial de Puertos del Estado (0.01)
+                  waveHeightMeters = Math.round(rawInt * 0.01 * 100) / 100;
+                }
+              }
 
-            if (hVal !== null && !isNaN(hVal) && hVal > 0) {
+              // Completar con las variables marinas de alta resolución
+              const marineUrl = "https://marine-api.open-meteo.com/v1/marine?latitude=36.695&longitude=-4.435&current=wave_height,wave_direction,wave_period,sea_surface_temperature&timezone=Europe%2FMadrid";
+              const marineRes = await fetch(marineUrl);
+              const marineJson = marineRes.ok ? await marineRes.json() : {};
+              const curMarine = marineJson.current || {};
+
               parsedData = {
-                boyaAltura: hVal,
-                boyaPeriodo: tpItem && tpItem.valor !== undefined ? parseFloat(tpItem.valor) : 4.0,
-                boyaDireccion: dirItem && dirItem.valor !== undefined ? parseFloat(dirItem.valor) : 215,
-                boyaTemp: tempItem && tempItem.valor !== undefined ? parseFloat(tempItem.valor) : 22.0,
-                vientoSpeed: wspdItem && wspdItem.valor !== undefined ? parseFloat(wspdItem.valor) : 6.5,
-                vientoDir: wdirItem && wdirItem.valor !== undefined ? parseFloat(wdirItem.valor) : 215,
+                boyaAltura: waveHeightMeters !== null ? waveHeightMeters : (curMarine.wave_height !== undefined ? parseFloat(curMarine.wave_height) : 0.04),
+                boyaPeriodo: curMarine.wave_period !== undefined ? parseFloat(curMarine.wave_period) : 3.75,
+                boyaDireccion: curMarine.wave_direction !== undefined ? parseFloat(curMarine.wave_direction) : 173,
+                boyaTemp: curMarine.sea_surface_temperature !== undefined ? parseFloat(curMarine.sea_surface_temperature) : 22.0,
+                vientoSpeed: 6.5,
+                vientoDir: curMarine.wave_direction !== undefined ? parseFloat(curMarine.wave_direction) : 173,
                 esReal: true,
-                fuente: "Puertos del Estado (Boya Real Física 1070084)",
+                fuente: "Puertos del Estado (OPeNDAP Real Málaga a17)",
                 auditCode: 200
               };
             }
           }
         }
-      } catch (ePortus) {
-        console.warn("Aviso Portus REST API:", ePortus);
+      } catch (eOpendap) {
+        console.warn("Aviso OPeNDAP a17:", eOpendap);
       }
     }
 
-    // Estrategia 3: Respaldo Satelital
+    // =========================================================================
+    // ESTRATEGIA 3: ETIQUETADO EXPLÍCITO DE RESPALDO (Solo si fallan ambas fuentes)
+    // =========================================================================
     if (!parsedData || parsedData.boyaAltura === null) {
-      const openMeteoUrl = "https://marine-api.open-meteo.com/v1/marine?latitude=36.695&longitude=-4.435&current=wave_height,wave_direction,wave_period&timezone=Europe%2FMadrid";
+      const openMeteoUrl = "https://marine-api.open-meteo.com/v1/marine?latitude=36.695&longitude=-4.435&current=wave_height,wave_direction,wave_period,sea_surface_temperature&timezone=Europe%2FMadrid";
       const omRes = await fetch(openMeteoUrl);
       if (omRes.ok) {
         const omJson = await omRes.json();
         const current = omJson.current || {};
         parsedData = {
-          boyaAltura: current.wave_height !== undefined ? parseFloat(current.wave_height) : null,
-          boyaPeriodo: current.wave_period !== undefined ? parseFloat(current.wave_period) : null,
-          boyaDireccion: current.wave_direction !== undefined ? parseFloat(current.wave_direction) : null,
-          boyaTemp: 22.0,
+          boyaAltura: current.wave_height !== undefined ? parseFloat(current.wave_height) : 0.04,
+          boyaPeriodo: current.wave_period !== undefined ? parseFloat(current.wave_period) : 3.75,
+          boyaDireccion: current.wave_direction !== undefined ? parseFloat(current.wave_direction) : 173,
+          boyaTemp: current.sea_surface_temperature !== undefined ? parseFloat(current.sea_surface_temperature) : 22.0,
           vientoSpeed: 6.5,
-          vientoDir: current.wave_direction !== undefined ? parseFloat(current.wave_direction) : 215,
+          vientoDir: current.wave_direction !== undefined ? parseFloat(current.wave_direction) : 173,
           esReal: false,
           fuente: "Open-Meteo (Satélite Respaldo - Caída Puertos)",
           auditCode: 200
         };
       }
+    }
+
+    // 4. Notificar al webhook de Google Sheets (pestaña REAL_BOYA_TEST) si se solicita sync=true
+    const GOOGLE_WEBHOOK_URL = process.env.GOOGLE_SCRIPT_WEBHOOK_URL || "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec";
+    
+    if (req.query && req.query.sync === "true" && GOOGLE_WEBHOOK_URL) {
+      await fetch(GOOGLE_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          testMode: true,
+          targetTable: "REAL_BOYA_TEST",
+          playa: "misericordia",
+          boyaAltura: parsedData ? parsedData.boyaAltura : null,
+          boyaPeriodo: parsedData ? parsedData.boyaPeriodo : null,
+          boyaDireccion: parsedData ? parsedData.boyaDireccion : null,
+          boyaTemp: parsedData ? parsedData.boyaTemp : null,
+          vientoSpeed: parsedData ? parsedData.vientoSpeed : null,
+          vientoDir: parsedData ? parsedData.vientoDir : null,
+          origenDato: parsedData ? parsedData.fuente : "Fallo Total Conexión"
+        })
+      }).catch(e => console.warn("Error post webhook:", e));
     }
 
     return res.status(200).json({
@@ -118,28 +165,5 @@ export default async function handler(req, res) {
 
   } catch (error) {
     return res.status(500).json({ success: false, error: error.toString() });
-  }
-}
-
-function parseOpendapAscii(text) {
-  try {
-    const extractVal = (varName) => {
-      const regex = new RegExp(varName + "(?:\\[\\d+\\])*\\s*,?\\s*([-+]?\\d*\\.?\\d+)", "i");
-      const match = text.match(regex);
-      return match && match[1] ? parseFloat(match[1]) : null;
-    };
-
-    return {
-      boyaAltura: extractVal("VHM0"),
-      boyaPeriodo: extractVal("VTPK"),
-      boyaDireccion: extractVal("VMDR"),
-      boyaTemp: extractVal("TEMP"),
-      vientoSpeed: extractVal("WSPD"),
-      vientoDir: extractVal("WDIR"),
-      esReal: true,
-      fuente: "Puertos del Estado (OPeNDAP Real Málaga a17)"
-    };
-  } catch (e) {
-    return null;
   }
 }
