@@ -4248,9 +4248,22 @@ export default function App() {
                             } catch(e) {}
                           }
 
+                          const defaultFactoryMap = {
+                            misericordia:   { levante_fuerte: 0.85, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.35, terral: 0.15 },
+                            malagueta:      { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.30, terral: 0.15 },
+                            pedregalejo:    { levante_fuerte: 0.65, levante_suave: 0.50, poniente_fuerte: 0.40, poniente_suave: 0.30, terral: 0.15 },
+                            los_alamos:     { levante_fuerte: 0.90, levante_suave: 0.85, poniente_fuerte: 0.90, poniente_suave: 0.75, terral: 0.20 },
+                            bajondillo:     { levante_fuerte: 0.80, levante_suave: 0.70, poniente_fuerte: 0.70, poniente_suave: 0.60, terral: 0.20 },
+                            cala_del_moral: { levante_fuerte: 0.75, levante_suave: 0.65, poniente_fuerte: 0.70, poniente_suave: 0.45, terral: 0.15 },
+                            rincon_victoria:{ levante_fuerte: 0.85, levante_suave: 0.80, poniente_fuerte: 0.70, poniente_suave: 0.50, terral: 0.15 }
+                          };
+                          const bFact = defaultFactoryMap[bKey] || { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.50, poniente_suave: 0.35, terral: 0.15 };
                           const sectors = [
-                            { key: 'levante', title: '🌊 Sector Oleaje LEVANTE (Mar de Fondo E / SE)', isLevante: true, defaultFactor: bKey === 'misericordia' ? 0.60 : 1.00 },
-                            { key: 'poniente', title: '🌊 Sector Oleaje PONIENTE / SUR (Mar de Fondo S / SO)', isLevante: false, defaultFactor: bKey === 'misericordia' ? 0.50 : (bKey === 'malagueta' || bKey === 'pedregalejo' ? 0.70 : 1.00) }
+                            { key: 'levante_fuerte', title: '🌅 Sector LEVANTE FUERTE (E / SE ≥ 10 kn)', defaultFactor: bFact.levante_fuerte },
+                            { key: 'levante_suave',  title: '☀️ Sector LEVANTE SUAVE / BRISA (E / SE < 10 kn)', defaultFactor: bFact.levante_suave },
+                            { key: 'poniente_fuerte',title: '🌊 Sector PONIENTE FUERTE (S / SO ≥ 10 kn)', defaultFactor: bFact.poniente_fuerte },
+                            { key: 'poniente_suave', title: '🏖️ Sector PONIENTE SUAVE / RESACA (S / SO < 10 kn)', defaultFactor: bFact.poniente_suave },
+                            { key: 'terral',         title: '🔥 Sector Clima TERRAL (Viento NW / N de Tierra)', defaultFactor: bFact.terral }
                           ];
 
                           return (
@@ -4264,14 +4277,25 @@ export default function App() {
                                 {sectors.map(sec => {
                                   const storageKey = `${bKey}_${sec.key}`;
                                   
-                                  // 1. Obtener todos los reportes del sector basados estrictamente en la dirección del oleaje a la HORA DEL NADO
+                                  // 1. Obtener todos los reportes del sector clasificados en los 5 sectores por el viento de la hora
                                   const allSectorLogs = calibrationHistory.filter(l => {
-                                    if (l.playa !== bKey || !l.realOlas) return false;
-                                    const buoyData = getBuoyReadingForLog(l);
-                                    if (!buoyData.height || Number(buoyData.height) === 0) return false;
-                                    const dir = Number(buoyData.dir || l.boyaDireccion || 110);
-                                    const isL = dir >= 45 && dir <= 165;
-                                    return isL === sec.isLevante;
+                                    if (l.playa !== bKey) return false;
+                                    if (l.realOlas === undefined || l.realOlas === null || l.realOlas === "") return false;
+                                    if (l.origenDato && String(l.origenDato).indexOf("Sincronizaci") !== -1) return false;
+
+                                    const wDir = Number(l.realVientoDirGrados || l.appVientoDir || l.boyaDireccion || 120);
+                                    const wSpd = Number(l.realVientoKnots || l.appVientoNudos || 6.5);
+                                    const temp = Number(l.tempAire || 29);
+
+                                    let logSec = 'levante_suave';
+                                    if ((wDir >= 285 && wDir <= 360) || (wDir >= 0 && wDir <= 35) || (temp >= 27.5 && wDir >= 270)) {
+                                      logSec = 'terral';
+                                    } else if (wDir >= 45 && wDir <= 155) {
+                                      logSec = wSpd >= 10.0 ? 'levante_fuerte' : 'levante_suave';
+                                    } else if (wDir >= 175 && wDir <= 284) {
+                                      logSec = wSpd >= 10.0 ? 'poniente_fuerte' : 'poniente_suave';
+                                    }
+                                    return logSec === sec.key;
                                   });
 
                                   const totalLogsCount = allSectorLogs.length;
