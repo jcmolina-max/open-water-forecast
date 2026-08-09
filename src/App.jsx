@@ -694,6 +694,27 @@ export default function App() {
   // Estado para las pestañas del Modal Admin ('factors' o 'report')
   const [adminTab, setAdminTab] = useState('factors');
   const [factorFeedbackMsg, setFactorFeedbackMsg] = useState(null);
+  const [expandedSectorAudit, setExpandedSectorAudit] = useState({});
+  const [discardedReportIds, setDiscardedReportIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_discarded_reports') || '[]');
+    } catch(e) {
+      return [];
+    }
+  });
+
+  const toggleDiscardReport = (repId) => {
+    setDiscardedReportIds(prev => {
+      let updated;
+      if (prev.includes(repId)) {
+        updated = prev.filter(id => id !== repId);
+      } else {
+        updated = [...prev, repId];
+      }
+      localStorage.setItem('openwater_discarded_reports', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   // Estado para los Factores de Escala Ajustados/Aprobados manualmente por el Administrador (PIN 6611)
   const [adminManualScaleFactors, setAdminManualScaleFactors] = useState(() => {
@@ -4317,7 +4338,14 @@ export default function App() {
                                     return logSec === sec.key;
                                   });
 
-                                  const totalLogsCount = allSectorLogs.length;
+                                    const validSectorLogs = allSectorLogs.filter(l => {
+                                      const repId = String(l.idRegistro || l.timestamp || l.horaNado || '');
+                                      if (discardedReportIds.includes(repId)) return false;
+                                      const audit = String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase();
+                                      if (audit.includes("DESCARTADO") || audit.includes("PRUEBA") || audit.includes("TEST")) return false;
+                                      return true;
+                                    });
+                                    const totalLogsCount = validSectorLogs.length;
 
                                   // Helper para obtener la previsión del satélite bruto registrada a la hora del nado
                                   function getLogSatHeight(l) {
@@ -4384,9 +4412,15 @@ export default function App() {
                                     <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2.5">
                                       <div className="flex justify-between items-center text-xs">
                                         <strong className="text-slate-800 font-extrabold">{sec.title}</strong>
-                                        <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                                          {totalLogsCount} nados totales
-                                        </span>
+                                        <button 
+                                          type="button"
+                                          onClick={() => setExpandedSectorAudit(prev => ({ ...prev, [storageKey]: !prev[storageKey] }))}
+                                          className="text-[9px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-full flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
+                                          title="Click para ver y auditar los nados de este sector"
+                                        >
+                                          <span>{totalLogsCount} válidos ({allSectorLogs.length} tot.)</span>
+                                          <ChevronDown size={11} className={expandedSectorAudit && expandedSectorAudit[storageKey] ? "rotate-180 transition-transform" : "transition-transform"} />
+                                        </button>
                                       </div>
 
                                       <div className="flex justify-between items-center text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
@@ -4536,6 +4570,45 @@ export default function App() {
                                           ✏️ Manual
                                         </button>
                                       </div>
+
+                                      {expandedSectorAudit && expandedSectorAudit[storageKey] && (
+                                        <div className="mt-2.5 pt-2.5 border-t border-slate-200 space-y-1.5 bg-slate-100/80 p-2.5 rounded-xl text-left">
+                                          <div className="flex justify-between items-center mb-1">
+                                            <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
+                                              📋 Auditoría de Nados ({totalLogsCount} válidos / {allSectorLogs.length} tot.)
+                                            </span>
+                                            <span className="text-[8px] text-slate-500 font-semibold">Click para descartar/activar</span>
+                                          </div>
+                                          <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                                            {allSectorLogs.map((l, lIdx) => {
+                                              const repId = String(l.idRegistro || l.timestamp || l.horaNado || lIdx);
+                                              const isDiscarded = discardedReportIds.includes(repId) || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("DESCARTADO") || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("PRUEBA");
+                                              const waveVal = parseSwimmerOlasToMeters(l.realOlas);
+                                              const swimTime = l.horaNado ? cleanSwimHour(l.horaNado) : (l.timestamp ? formatFriendlyDate(l.timestamp).split(',')[0] : 'Hoy');
+                                              const author = l.sensaciones ? (l.sensaciones.length > 35 ? l.sensaciones.substring(0, 35) + '...' : l.sensaciones) : (l.origenDato || 'Reporte');
+
+                                              return (
+                                                <div key={repId + lIdx} className={`flex justify-between items-center p-2 rounded-lg border text-left transition-all ${isDiscarded ? 'bg-rose-50/60 border-rose-200 opacity-60' : 'bg-white border-slate-200 shadow-2xs'}`}>
+                                                  <div className="space-y-0.5 flex-1 mr-2 min-w-0">
+                                                    <div className="flex items-center gap-1.5">
+                                                      <span className="text-[9px] font-black text-slate-800">{swimTime}</span>
+                                                      <span className="text-[8px] font-extrabold text-cyan-700 bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-100">Ola: {waveVal.toFixed(2)}m</span>
+                                                    </div>
+                                                    <p className="text-[9px] text-slate-600 truncate font-medium">{author}</p>
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => toggleDiscardReport(repId)}
+                                                    className={`text-[8px] font-extrabold px-2 py-1 rounded-md transition-all shrink-0 cursor-pointer ${isDiscarded ? 'bg-rose-100 text-rose-800 hover:bg-emerald-100 hover:text-emerald-800 border border-rose-300' : 'bg-emerald-100 text-emerald-800 hover:bg-rose-100 hover:text-rose-800 border border-emerald-300'}`}
+                                                  >
+                                                    {isDiscarded ? '🔴 Descartado' : '🟢 Válido'}
+                                                  </button>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 })}
