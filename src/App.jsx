@@ -4583,8 +4583,8 @@ export default function App() {
                                             {allSectorLogs.map((l, lIdx) => {
                                               const repId = String(l.idRegistro || l.timestamp || l.horaNado || lIdx);
                                               const isDiscarded = discardedReportIds.includes(repId) || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("DESCARTADO") || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("PRUEBA");
-                                              const waveVal = parseSwimmerOlasToMeters(l.realOlas);
-                                              const swimTime = l.horaNado ? cleanSwimHour(l.horaNado) : (l.timestamp ? formatFriendlyDate(l.timestamp).split(',')[0] : 'Hoy');
+                                              const waveVal = swimmerScaleToMeters(l.realOlas);
+                                              const swimTime = l.horaNado ? String(l.horaNado).substring(0, 5) : (l.timestamp ? formatFriendlyDate(l.timestamp).split(',')[0] : 'Hoy');
                                               const author = l.sensaciones ? (l.sensaciones.length > 35 ? l.sensaciones.substring(0, 35) + '...' : l.sensaciones) : (l.origenDato || 'Reporte');
 
                                               return (
