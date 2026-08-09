@@ -1881,9 +1881,9 @@ export default function App() {
     const payload = {
       horaNado: adminHoraNado,
       playa: adminPlaya,
-      realOlas: adminRealOlas,
-      realResaca: adminRealResaca,
-      realCorriente: adminRealCorriente,
+      realOlas: adminIsAlert ? "" : adminRealOlas,
+      realResaca: adminIsAlert ? "" : adminRealResaca,
+      realCorriente: adminIsAlert ? "" : adminRealCorriente,
       realVientoFza: adminRealVientoFza,
       realVientoDir: adminRealVientoDir,
       sensaciones: adminSensaciones,
@@ -4326,6 +4326,10 @@ export default function App() {
                                     if (l.realOlas === undefined || l.realOlas === null || l.realOlas === "") return false;
                                     if (l.origenDato && String(l.origenDato).indexOf("Sincronizaci") !== -1) return false;
 
+                                    // EXCLUIR ALERTAS DE TEXTO (Avisos de banderas/niebla sin medición real de ola)
+                                    const orig = String(l.origenDato || '').trim().toLowerCase();
+                                    if (orig.includes("alerta") || orig.includes("mensaje") || String(l.notasCalibracion || '').includes("[ALERTA_OFICIAL]")) return false;
+
                                     const wDir = Number(l.realVientoDirGrados || l.appVientoDir || l.boyaDireccion || 120);
                                     const wSpd = Number(l.realVientoKnots || l.appVientoNudos || 6.5);
                                     const temp = Number(l.tempAire || 29);
@@ -4599,11 +4603,23 @@ export default function App() {
                                               const swimTime = datePrefix ? (datePrefix + (cleanH ? ' ' + cleanH : '')) : (cleanH || 'Hoy');
                                               const author = l.sensaciones ? (l.sensaciones.length > 35 ? l.sensaciones.substring(0, 35) + '...' : l.sensaciones) : (l.origenDato || 'Reporte');
 
+                                              const orig = String(l.origenDato || '').trim().toLowerCase();
+                                              let badgeLabel = '👤 Nadador';
+                                              let badgeStyle = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                                              if (orig.includes('admin: calibraci') || orig.includes('web admin') || orig.includes('admin: factor')) {
+                                                badgeLabel = '⚙️ Admin Calibración';
+                                                badgeStyle = 'bg-purple-50 text-purple-700 border-purple-200';
+                                              } else if (orig.includes('alerta')) {
+                                                badgeLabel = '📢 Alerta';
+                                                badgeStyle = 'bg-amber-50 text-amber-700 border-amber-200';
+                                              }
+
                                               return (
                                                 <div key={repId + lIdx} className={'flex justify-between items-center p-2 rounded-lg border text-left transition-all ' + (isDiscarded ? 'bg-rose-50/60 border-rose-200 opacity-60' : 'bg-white border-slate-200 shadow-2xs')}>
                                                   <div className="space-y-0.5 flex-1 mr-2 min-w-0">
-                                                    <div className="flex items-center gap-1.5">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
                                                       <span className="text-[9px] font-black text-slate-800">{swimTime}</span>
+                                                      <span className={'text-[7.5px] font-extrabold px-1.5 py-0.2 rounded border ' + badgeStyle}>{badgeLabel}</span>
                                                       <span className="text-[8px] font-extrabold text-cyan-700 bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-100">Ola: {waveVal.toFixed(2)}m</span>
                                                     </div>
                                                     <p className="text-[9px] text-slate-600 truncate font-medium">{author}</p>
