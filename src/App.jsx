@@ -4583,7 +4583,7 @@ export default function App() {
                                           <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
                                             {allSectorLogs.map((l, lIdx) => {
                                               const repId = String(l.idRegistro || l.timestamp || l.horaNado || lIdx);
-                                              const isDiscarded = isLogDiscarded(l, lIdx);
+                                              const isDiscarded = discardedReportIds.includes(repId) || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("DESCARTADO") || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("PRUEBA");
                                               const waveVal = swimmerScaleToMeters(l.realOlas);
                                               let rawH = l.horaNado ? String(l.horaNado) : '';
                                               let cleanH = '';
