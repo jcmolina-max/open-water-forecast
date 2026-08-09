@@ -1701,8 +1701,11 @@ export default function App() {
         const fetchedLogs = isArr ? json : (json.data || []);
         const sortedLogs = [...fetchedLogs].sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
         setCalibrationHistory(sortedLogs);
-        if (!isArr && json.visitasTotales !== undefined) {
-          setTotalVisits(Number(json.visitasTotales));
+        if (!isArr) {
+          const vCount = json.total_visitas !== undefined ? json.total_visitas : (json.totalVisitas !== undefined ? json.totalVisitas : json.visitasTotales);
+          if (vCount !== undefined && vCount !== null) {
+            setTotalVisits(Number(vCount));
+          }
         }
 
         // 1. Cargar factores y marcas de tiempo locales guardadas en localStorage
@@ -5046,7 +5049,7 @@ export default function App() {
           <>
             <span className="hidden sm:inline">•</span>
             <span className="bg-slate-50 border border-slate-200/50 px-2 py-0.5 rounded text-[9px] text-slate-500 font-extrabold normal-case">
-              ⚡ {totalVisits.toLocaleString('es-ES')} visitas
+              👥 {totalVisits.toLocaleString('es-ES')} visitas
             </span>
           </>
         )}
