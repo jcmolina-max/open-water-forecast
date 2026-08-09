@@ -546,38 +546,35 @@ export default function App() {
   const [latestBuoySource, setLatestBuoySource] = useState(null);
   const [showPuertosIframe, setShowPuertosIframe] = useState(false);
 
-  useEffect(() => {
-    // Ordenar explícitamente por timestamp descendente (los más recientes de hoy PRIMERO)
-    const sortedNewestFirst = [...calibrationHistory].sort((a, b) => {
-      const tsA = parseLogTimestamp(a);
-      const tsB = parseLogTimestamp(b);
-      return tsB - tsA;
-    });
+      useEffect(() => {
+      const sortedNewestFirst = [...calibrationHistory].sort((a, b) => {
+        const tsA = parseLogTimestamp(a);
+        const tsB = parseLogTimestamp(b);
+        return tsB - tsA;
+      });
 
-    // 1. Buscar última altura real de boya válida (0.05m a 15m)
-    const heightLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaAltura, 0.05, 15) !== null);
-    setLatestBuoyHeight(heightLog ? parseBoyaNum(heightLog.boyaAltura, 0.05, 15).toFixed(2) : null);
+      // Priorizar el reporte más reciente del Admin o de calibración manual
+      const adminLog = sortedNewestFirst.find(item => {
+        const orig = String(item.origenDato || '');
+        return orig.indexOf('Admin') !== -1 || orig.indexOf('Calibración') !== -1 || orig.indexOf('Manual') !== -1 || (item.boyaTemp && Number(item.boyaTemp) > 0);
+      }) || sortedNewestFirst[0];
 
-    // 2. Buscar último periodo real de boya válido (1s a 30s)
-    const periodLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaPeriodo, 1, 30) !== null);
-    setLatestBuoyPeriod(periodLog ? `${parseBoyaNum(periodLog.boyaPeriodo, 1, 30).toFixed(1)}` : null);
+      if (adminLog) {
+        const h = parseBoyaNum(adminLog.boyaAltura, 0.01, 15) !== null ? parseBoyaNum(adminLog.boyaAltura, 0.01, 15).toFixed(2) : (adminLog.realOlas ? Number(String(adminLog.realOlas).replace(',', '.')).toFixed(2) : null);
+        const t = parseBoyaNum(adminLog.boyaPeriodo, 1, 30) !== null ? parseBoyaNum(adminLog.boyaPeriodo, 1, 30).toFixed(1) : null;
+        const d = parseBoyaNum(adminLog.boyaDireccion, 0, 360) !== null ? parseBoyaNum(adminLog.boyaDireccion, 0, 360) : null;
+        const temp = parseBoyaNum(adminLog.boyaTemp, 5, 35) !== null ? parseBoyaNum(adminLog.boyaTemp, 5, 35).toFixed(1) : null;
 
-    // 3. Buscar última dirección real de boya válida (0º a 360º)
-    const dirLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaDireccion, 0, 360) !== null);
-    setLatestBuoyDir(dirLog ? parseBoyaNum(dirLog.boyaDireccion, 0, 360) : null);
+        setLatestBuoyHeight(h);
+        setLatestBuoyPeriod(t);
+        setLatestBuoyDir(d);
+        setLatestBuoyTemp(temp);
 
-    // 4. Buscar última temperatura real de agua válida (5ºC a 35ºC)
-    const tempLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaTemp, 5, 35) !== null);
-    setLatestBuoyTemp(tempLog ? parseBoyaNum(tempLog.boyaTemp, 5, 35).toFixed(1) : null);
-
-    // 5. Fecha y Fuente de la última lectura física de la boya
-    const dateLog = heightLog || tempLog || periodLog || sortedNewestFirst[0];
-    setLatestBuoyDate(dateLog && dateLog.fechaRegistro ? new Date(dateLog.fechaRegistro) : null);
-    
-    const srcLog = heightLog || dateLog;
-    const srcText = srcLog ? (String(srcLog.origenDato || '') + ' ' + String(srcLog.notasCalibracion || '')) : '';
-    setLatestBuoySource(srcText);
-  }, [calibrationHistory]);
+        const dObj = adminLog.timestamp ? new Date(adminLog.timestamp) : (adminLog.fechaRegistro ? new Date(adminLog.fechaRegistro) : new Date());
+        setLatestBuoyDate(dObj);
+        setLatestBuoySource('✏️ Calibración Manual Admin');
+      }
+    }, [calibrationHistory]);
 
   // Sincronización Inteligente de Boya Real al abrir la App (Smart Throttle 15 min)
   useEffect(() => {
@@ -2323,12 +2320,12 @@ export default function App() {
                   )}
 
                   <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
-                    <span>
-                      Origen: {showPuertosIframe 
-                        ? '⚓ Puertos del Estado (Estación 2056 - Málaga)' 
-                        : '🌐 Open-Meteo (Modelo Marino)'}
-                    </span>
-                    <span>Última lectura: {latestBuoyDate ? formatFriendlyDate(latestBuoyDate) : 'Sin datos'}</span>
+                                          <span>
+                        Origen: {showPuertosIframe 
+                          ? '📡 Puertos del Estado (Estación 2056 - Málaga)' 
+                          : (latestBuoySource || '✏️ Calibración Manual Admin')}
+                      </span>
+                      <span>Última lectura: {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'Sin reporte hoy'}</span>
                   </div>
                 </div>
 
