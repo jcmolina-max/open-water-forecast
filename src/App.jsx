@@ -4338,7 +4338,15 @@ export default function App() {
                                     return logSec === sec.key;
                                   });
 
-                                  const totalLogsCount = allSectorLogs.length;
+                                   // Filtrar los nados válidos excluyendo los descartados
+                                   const validSectorLogs = allSectorLogs.filter((l, idx) => {
+                                     const repId = String(l.idRegistro || l.timestamp || l.horaNado || idx);
+                                     if (discardedReportIds.includes(repId)) return false;
+                                     const audit = String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase();
+                                     if (audit.includes("DESCARTADO") || audit.includes("PRUEBA") || audit.includes("TEST")) return false;
+                                     return true;
+                                   });
+                                   const totalLogsCount = validSectorLogs.length;
 
                                   // Helper para obtener la previsión del satélite bruto registrada a la hora del nado
                                   function getLogSatHeight(l) {
@@ -4354,7 +4362,7 @@ export default function App() {
                                   let suggestedGlobalFactor = null;
                                   let cleanGlobalCount = 0;
                                   if (totalLogsCount >= 1) {
-                                    const allRatios = allSectorLogs.map(l => {
+                                    const allRatios = validSectorLogs.map(l => {
                                       return scaleToMeters(l.realOlas) / getLogSatHeight(l);
                                     }).filter(r => !isNaN(r) && isFinite(r) && r > 0);
                                     const cleanRatios = totalLogsCount >= 5 ? filterOutliers(allRatios) : allRatios;
@@ -4368,7 +4376,7 @@ export default function App() {
                                   // B) CALCULO RECIENTE (Sugerencia progresiva desde el Nado #1 post-ajuste)
                                   const approvalTime = adminFactorApprovalTimes && adminFactorApprovalTimes[storageKey] ? Number(adminFactorApprovalTimes[storageKey]) : 0;
                                   
-                                  const postApprovalLogs = allSectorLogs.filter(l => {
+                                  const postApprovalLogs = validSectorLogs.filter(l => {
                                     if (approvalTime > 0) {
                                       const logTs = parseLogTimestamp(l);
                                       if (logTs === 0 || logTs <= approvalTime) return false;
@@ -4563,53 +4571,6 @@ export default function App() {
                                           ✏️ Manual
                                         </button>
                                       </div>
-
-                                      {expandedSectorAudit && expandedSectorAudit[storageKey] && (
-                                        <div className="mt-2.5 pt-2.5 border-t border-slate-200 space-y-1.5 bg-slate-100/80 p-2.5 rounded-xl text-left">
-                                          <div className="flex justify-between items-center mb-1">
-                                            <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
-                                              📋 Auditoría de Nados ({totalLogsCount} válidos / {allSectorLogs.length} tot.)
-                                            </span>
-                                            <span className="text-[8px] text-slate-500 font-semibold">Click para descartar/activar</span>
-                                          </div>
-                                          <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                                            {allSectorLogs.map((l, lIdx) => {
-                                              const repId = String(l.idRegistro || l.timestamp || l.horaNado || lIdx);
-                                              const isDiscarded = discardedReportIds.includes(repId) || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("DESCARTADO") || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("PRUEBA");
-                                              const waveVal = swimmerScaleToMeters(l.realOlas);
-                                              let rawH = l.horaNado ? String(l.horaNado) : '';
-                                              let cleanH = '';
-                                              if (rawH.includes('T')) {
-                                                cleanH = rawH.split('T')[1].substring(0, 5);
-                                              } else if (rawH.includes(':') && !rawH.includes('1899')) {
-                                                cleanH = rawH.substring(0, 5);
-                                              }
-                                              const datePrefix = l.timestamp ? formatFriendlyDate(l.timestamp).split(',')[0] : '';
-                                              const swimTime = datePrefix ? (datePrefix + (cleanH ? ' ' + cleanH : '')) : (cleanH || 'Hoy');
-                                              const author = l.sensaciones ? (l.sensaciones.length > 35 ? l.sensaciones.substring(0, 35) + '...' : l.sensaciones) : (l.origenDato || 'Reporte');
-
-                                              return (
-                                                <div key={repId + lIdx} className={'flex justify-between items-center p-2 rounded-lg border text-left transition-all ' + (isDiscarded ? 'bg-rose-50/60 border-rose-200 opacity-60' : 'bg-white border-slate-200 shadow-2xs')}>
-                                                  <div className="space-y-0.5 flex-1 mr-2 min-w-0">
-                                                    <div className="flex items-center gap-1.5">
-                                                      <span className="text-[9px] font-black text-slate-800">{swimTime}</span>
-                                                      <span className="text-[8px] font-extrabold text-cyan-700 bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-100">Ola: {waveVal.toFixed(2)}m</span>
-                                                    </div>
-                                                    <p className="text-[9px] text-slate-600 truncate font-medium">{author}</p>
-                                                  </div>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => toggleDiscardReport(repId)}
-                                                    className={'text-[8px] font-extrabold px-2 py-1 rounded-md transition-all shrink-0 cursor-pointer ' + (isDiscarded ? 'bg-rose-100 text-rose-800 hover:bg-emerald-100 hover:text-emerald-800 border border-rose-300' : 'bg-emerald-100 text-emerald-800 hover:bg-rose-100 hover:text-rose-800 border border-emerald-300')}
-                                                  >
-                                                    {isDiscarded ? '🔴 Descartado' : '🟢 Válido'}
-                                                  </button>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      )}
                                     </div>
                                   );
                                 })}
