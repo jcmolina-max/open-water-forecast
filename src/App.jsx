@@ -327,6 +327,20 @@ function parseBoyaNum(val, min = -100, max = 500) {
   return num;
 }
 
+function parseBoyaDir(val) {
+  if (val === undefined || val === null || val === "") return null;
+  const str = String(val).trim().toUpperCase();
+  if (str === "N" || str === "NORTE") return 0;
+  if (str === "NE" || str === "NORESTE") return 45;
+  if (str === "E" || str === "ESTE" || str === "LEVANTE") return 90;
+  if (str === "SE" || str === "SURESTE") return 135;
+  if (str === "S" || str === "SUR") return 180;
+  if (str === "SO" || str === "SW" || str === "SUROESTE" || str === "PONIENTE") return 225;
+  if (str === "O" || str === "W" || str === "OESTE") return 270;
+  if (str === "NO" || str === "NW" || str === "NOROESTE" || str === "TERRAL") return 315;
+  return parseBoyaNum(val, 0, 360);
+}
+
 function parseBoyaTemp(val) {
   return parseBoyaNum(val, 5, 35);
 }
@@ -546,23 +560,31 @@ export default function App() {
   const [latestBuoySource, setLatestBuoySource] = useState(null);
   const [showPuertosIframe, setShowPuertosIframe] = useState(false);
 
-      useEffect(() => {
+          useEffect(() => {
       const sortedNewestFirst = [...calibrationHistory].sort((a, b) => {
         const tsA = parseLogTimestamp(a);
         const tsB = parseLogTimestamp(b);
         return tsB - tsA;
       });
 
-      // Priorizar el reporte más reciente del Admin o de calibración manual
+      // 1. Filtrar ESTRICTAMENTE reportes manuales del Admin (descartar cualquier sincronización automática)
       const adminLog = sortedNewestFirst.find(item => {
         const orig = String(item.origenDato || '');
+        const notas = String(item.notas || item.notasCalibracion || '');
+        const sens = String(item.sensaciones || '');
+
+        // Excluir sincronizaciones automáticas
+        if (orig.indexOf('Sincronizaci') !== -1 || notas.indexOf('Sincronizaci') !== -1 || sens.indexOf('Sincronizaci') !== -1) {
+          return false;
+        }
+
         return orig.indexOf('Admin') !== -1 || orig.indexOf('Calibración') !== -1 || orig.indexOf('Manual') !== -1 || (item.boyaTemp && Number(item.boyaTemp) > 0);
-      }) || sortedNewestFirst[0];
+      });
 
       if (adminLog) {
         const h = parseBoyaNum(adminLog.boyaAltura, 0.01, 15) !== null ? parseBoyaNum(adminLog.boyaAltura, 0.01, 15).toFixed(2) : (adminLog.realOlas ? Number(String(adminLog.realOlas).replace(',', '.')).toFixed(2) : null);
         const t = parseBoyaNum(adminLog.boyaPeriodo, 1, 30) !== null ? parseBoyaNum(adminLog.boyaPeriodo, 1, 30).toFixed(1) : null;
-        const d = parseBoyaNum(adminLog.boyaDireccion, 0, 360) !== null ? parseBoyaNum(adminLog.boyaDireccion, 0, 360) : null;
+        const d = parseBoyaDir(adminLog.boyaDireccion);
         const temp = parseBoyaNum(adminLog.boyaTemp, 5, 35) !== null ? parseBoyaNum(adminLog.boyaTemp, 5, 35).toFixed(1) : null;
 
         setLatestBuoyHeight(h);
@@ -2275,7 +2297,7 @@ export default function App() {
                         title="Puertos del Estado - La Misericordia"
                       ></iframe>
                     </div>
-                  ) : (
+                                    ) : (
                     <div className="grid grid-cols-2 gap-2.5 pt-0.5 text-left">
                       <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hs)</span>
@@ -2296,7 +2318,7 @@ export default function App() {
                         <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
                           {(() => {
                             let activeDir = null;
-                            if (latestBuoyDir && Number(latestBuoyDir) !== 110) {
+                            if (latestBuoyDir !== null && latestBuoyDir !== undefined) {
                               activeDir = Number(latestBuoyDir);
                             } else if (currentDayData && currentDayData.hourly && currentDayData.hourly.length > 0) {
                               const nowH = new Date().getHours();
@@ -2305,7 +2327,7 @@ export default function App() {
                                 activeDir = Number(hourRec.swellDir);
                               }
                             }
-                            return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}º)` : '—';
+                            return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}°)` : '—';
                           })()}
                         </strong>
                       </div>
@@ -2313,7 +2335,7 @@ export default function App() {
                       <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
                         <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
-                          {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '—'}
+                          {latestBuoyTemp ? `${latestBuoyTemp}°C` : '—'}
                         </strong>
                       </div>
                     </div>
