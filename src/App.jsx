@@ -693,7 +693,6 @@ export default function App() {
 
   // Estado para las pestañas del Modal Admin ('factors' o 'report')
   const [adminTab, setAdminTab] = useState('factors');
-  const [factorFeedbackMsg, setFactorFeedbackMsg] = useState(null);
   const [expandedSectorAudit, setExpandedSectorAudit] = useState({});
   const [discardedReportIds, setDiscardedReportIds] = useState(() => {
     try {
@@ -715,6 +714,7 @@ export default function App() {
       return updated;
     });
   };
+  const [factorFeedbackMsg, setFactorFeedbackMsg] = useState(null);
 
   // Estado para los Factores de Escala Ajustados/Aprobados manualmente por el Administrador (PIN 6611)
   const [adminManualScaleFactors, setAdminManualScaleFactors] = useState(() => {
@@ -4338,14 +4338,7 @@ export default function App() {
                                     return logSec === sec.key;
                                   });
 
-                                    const validSectorLogs = allSectorLogs.filter(l => {
-                                      const repId = String(l.idRegistro || l.timestamp || l.horaNado || '');
-                                      if (discardedReportIds.includes(repId)) return false;
-                                      const audit = String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase();
-                                      if (audit.includes("DESCARTADO") || audit.includes("PRUEBA") || audit.includes("TEST")) return false;
-                                      return true;
-                                    });
-                                    const totalLogsCount = validSectorLogs.length;
+                                  const totalLogsCount = allSectorLogs.length;
 
                                   // Helper para obtener la previsión del satélite bruto registrada a la hora del nado
                                   function getLogSatHeight(l) {
@@ -4412,15 +4405,9 @@ export default function App() {
                                     <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2.5">
                                       <div className="flex justify-between items-center text-xs">
                                         <strong className="text-slate-800 font-extrabold">{sec.title}</strong>
-                                        <button 
-                                          type="button"
-                                          onClick={() => setExpandedSectorAudit(prev => ({ ...prev, [storageKey]: !prev[storageKey] }))}
-                                          className="text-[9px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-full flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
-                                          title="Click para ver y auditar los nados de este sector"
-                                        >
-                                          <span>{totalLogsCount} válidos ({allSectorLogs.length} tot.)</span>
-                                          <ChevronDown size={11} className={expandedSectorAudit && expandedSectorAudit[storageKey] ? "rotate-180 transition-transform" : "transition-transform"} />
-                                        </button>
+                                        <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                                          {totalLogsCount} nados totales
+                                        </span>
                                       </div>
 
                                       <div className="flex justify-between items-center text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
@@ -4584,11 +4571,19 @@ export default function App() {
                                               const repId = String(l.idRegistro || l.timestamp || l.horaNado || lIdx);
                                               const isDiscarded = discardedReportIds.includes(repId) || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("DESCARTADO") || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("PRUEBA");
                                               const waveVal = swimmerScaleToMeters(l.realOlas);
-                                              const swimTime = l.horaNado ? String(l.horaNado).substring(0, 5) : (l.timestamp ? formatFriendlyDate(l.timestamp).split(',')[0] : 'Hoy');
+                                              let rawH = l.horaNado ? String(l.horaNado) : '';
+                                              let cleanH = '';
+                                              if (rawH.includes('T')) {
+                                                cleanH = rawH.split('T')[1].substring(0, 5);
+                                              } else if (rawH.includes(':') && !rawH.includes('1899')) {
+                                                cleanH = rawH.substring(0, 5);
+                                              }
+                                              const datePrefix = l.timestamp ? formatFriendlyDate(l.timestamp).split(',')[0] : '';
+                                              const swimTime = datePrefix ? (datePrefix + (cleanH ? ' ' + cleanH : '')) : (cleanH || 'Hoy');
                                               const author = l.sensaciones ? (l.sensaciones.length > 35 ? l.sensaciones.substring(0, 35) + '...' : l.sensaciones) : (l.origenDato || 'Reporte');
 
                                               return (
-                                                <div key={repId + lIdx} className={`flex justify-between items-center p-2 rounded-lg border text-left transition-all ${isDiscarded ? 'bg-rose-50/60 border-rose-200 opacity-60' : 'bg-white border-slate-200 shadow-2xs'}`}>
+                                                <div key={repId + lIdx} className={'flex justify-between items-center p-2 rounded-lg border text-left transition-all ' + (isDiscarded ? 'bg-rose-50/60 border-rose-200 opacity-60' : 'bg-white border-slate-200 shadow-2xs')}>
                                                   <div className="space-y-0.5 flex-1 mr-2 min-w-0">
                                                     <div className="flex items-center gap-1.5">
                                                       <span className="text-[9px] font-black text-slate-800">{swimTime}</span>
@@ -4599,7 +4594,7 @@ export default function App() {
                                                   <button
                                                     type="button"
                                                     onClick={() => toggleDiscardReport(repId)}
-                                                    className={`text-[8px] font-extrabold px-2 py-1 rounded-md transition-all shrink-0 cursor-pointer ${isDiscarded ? 'bg-rose-100 text-rose-800 hover:bg-emerald-100 hover:text-emerald-800 border border-rose-300' : 'bg-emerald-100 text-emerald-800 hover:bg-rose-100 hover:text-rose-800 border border-emerald-300'}`}
+                                                    className={'text-[8px] font-extrabold px-2 py-1 rounded-md transition-all shrink-0 cursor-pointer ' + (isDiscarded ? 'bg-rose-100 text-rose-800 hover:bg-emerald-100 hover:text-emerald-800 border border-rose-300' : 'bg-emerald-100 text-emerald-800 hover:bg-rose-100 hover:text-rose-800 border border-emerald-300')}
                                                   >
                                                     {isDiscarded ? '🔴 Descartado' : '🟢 Válido'}
                                                   </button>
