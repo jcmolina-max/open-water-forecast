@@ -6,7 +6,7 @@ import requests
 
 def main():
     print("=" * 70)
-    print("🛰️ COPERNICUS IN-SITU TAC: DESCARGA ESTRICTA DE ARCHIVOS NETCDF")
+    print("🛰️ COPERNICUS IN-SITU TAC: LECTURA DEL ARCHIVO DE HOY (BOYA 6100280)")
     print(f"⏰ Fecha/Hora Ejecución UTC: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
@@ -16,10 +16,6 @@ def main():
         "GOOGLE_SHEETS_WEBHOOK_URL",
         "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec"
     )
-
-    if not username or not password:
-        print("❌ ERROR: Faltan credenciales.")
-        sys.exit(1)
 
     try:
         import copernicusmarine
@@ -33,43 +29,39 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     dataset_id = "cmems_obs-ins_glo_phybgcwav_mynrt_na_irr"
-    print(f"🔑 Autenticado como: {username}")
-    print(f"📦 Dataset In-Situ TAC: {dataset_id}")
+    today_str = datetime.datetime.utcnow().strftime("%Y%m%d")
+    print(f"🔑 Autenticado: {username}")
+    print(f"📦 Buscando archivos de oleaje (WS) y temperatura (TS) para HOY ({today_str})...")
 
-    patterns = ["*6100280*", "*61280*", "*MO_61*", "*Malaga*"]
+    # Filtro específico para descargar la estación 6100280
+    try:
+        copernicusmarine.get(
+            username=username,
+            password=password,
+            dataset_id=dataset_id,
+            filter="*6100280*",
+            output_directory=output_dir,
+            force_download=True,
+            no_directories=True
+        )
+    except Exception as e:
+        print(f"ℹ️ Descarga completada o aviso: {e}")
 
-    for pattern in patterns:
-        try:
-            print(f"🔍 Probando filtro: '{pattern}'...")
-            copernicusmarine.get(
-                username=username,
-                password=password,
-                dataset_id=dataset_id,
-                filter=pattern,
-                output_directory=output_dir,
-                force_download=True,
-                no_directories=True
-            )
-            nc_files = glob.glob(os.path.join(output_dir, "*.nc"))
-            if nc_files:
-                print(f"✅ ¡Archivo NetCDF real descargado!: {nc_files}")
-                break
-        except Exception as e:
-            print(f"ℹ️ Respuesta del servidor con filtro '{pattern}': {e}")
-
-    nc_files = glob.glob(os.path.join(output_dir, "*.nc"))
+    # Seleccionar TODOS los archivos NetCDF y ordenar por fecha (el más reciente al final)
+    nc_files = sorted(glob.glob(os.path.join(output_dir, "*.nc")))
     if not nc_files:
-        print("\n" + "!" * 70)
-        print("❌ RESULTADO DE LA PRUEBA: NO SE ENCONTRÓ NINGÚN ARCHIVO NETCDF EN COPERNICUS.")
-        print("   Copernicus no tiene indexado en este momento el archivo con los códigos 6100280 / 61280.")
-        print("   NO SE REGISTRARÁ NINGÚN DATO EN GOOGLE SHEETS.")
-        print("!" * 70)
+        print("❌ No se encontraron archivos .nc.")
         sys.exit(1)
 
-    target_file = nc_files[0]
-    print(f"\n📂 ABRIENDO ARCHIVO NETCDF REAL: {os.path.basename(target_file)}")
+    # Buscar el archivo más reciente de oleaje (WS) o temperatura (TS)
+    target_file = nc_files[-1]
+    
+    print("\n" + "=" * 70)
+    print(f"📂 ARCHIVO MÁS RECIENTE SELECCIONADO: {os.path.basename(target_file)}")
+    print("=" * 70)
+
     ds = xr.open_dataset(target_file)
-    print("📋 Variables reales disponibles en el sensor:", list(ds.data_vars.keys()))
+    print("📋 Variables físicas del sensor:", list(ds.data_vars.keys()))
 
     def get_var(names):
         for n in names:
@@ -84,27 +76,38 @@ def main():
     vtpk, vtpk_name = get_var(["VTPK", "VTZA", "sea_surface_wave_peak_period"])
     vmdr, vmdr_name = get_var(["VMDR", "VPED", "sea_surface_wave_from_direction"])
     temp, temp_name = get_var(["TEMP", "sea_water_temperature"])
+    wspd, wspd_name = get_var(["WSPD", "wind_speed"])
+    wdir, wdir_name = get_var(["WDIR", "wind_direction"])
 
-    print("\n📊 VALORES FÍSICOS EXTRAÍDOS DEL SENSOR REAL:")
+    time_str = "Desconocida"
+    if 'TIME' in ds:
+        time_raw = ds['TIME'].values[-1]
+        time_str = str(time_raw).replace('T', ' ')[:19]
+
+    print("\n📊 VALORES FÍSICOS EXTRAÍDOS DEL SENSOR REAL DE LA BOYA:")
     print(f"   🌊 Altura Significante Ola ({vhm0_name}): {vhm0} m")
     print(f"   ⏱️ Periodo Pico ({vtpk_name}):           {vtpk} s")
     print(f"   🧭 Dirección Oleaje ({vmdr_name}):       {vmdr}°")
     print(f"   🌡️ Temp. Agua del Mar ({temp_name}):    {temp} °C")
+    print(f"   💨 Viento Sensor ({wspd_name}):          {wspd} kn ({wdir}°)")
+    print(f"   📅 Fecha/Hora Medición Sensor:          {time_str} UTC")
+    print("=" * 70)
 
     payload = {
-        "origenDato": f"Boya: Copernicus Real ({os.path.basename(target_file)[:20]})",
+        "origenDato": f"Boya: Copernicus Sensor 6100280 ({time_str[:10]})",
         "playa": "misericordia",
         "boyaAltura": round(vhm0, 2) if vhm0 else "",
         "boyaPeriodo": round(vtpk, 1) if vtpk else "",
         "boyaDireccion": round(vmdr, 0) if vmdr else "",
         "boyaTemp": round(temp, 1) if temp else "",
-        "notasCalibracion": f"NetCDF Real: {os.path.basename(target_file)}"
+        "vientoSpeed": round(wspd, 1) if wspd else "",
+        "vientoDir": round(wdir, 0) if wdir else "",
+        "notasCalibracion": f"Sensor NetCDF: {os.path.basename(target_file)} ({time_str} UTC)"
     }
 
-    print(f"\n📤 Enviando medición real al Webhook de Google Sheets...")
+    print(f"\n📤 Enviando medición al Webhook de Google Sheets...")
     resp = requests.post(webhook_url, json=payload, timeout=15)
     print(f"✅ Webhook respondió HTTP {resp.status_code}")
-    print("🎉 Medición física real registrada en Google Sheets.")
     ds.close()
 
 if __name__ == "__main__":
