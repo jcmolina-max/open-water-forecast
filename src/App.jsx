@@ -847,16 +847,25 @@ export default function App() {
       return num;
     }
 
-    // 1. Buscar en calibrationHistory un registro de 'Boya: Sincronización' del MISMO DÍA y a la HORA MÁS CERCANA del nado
+    // 1. Buscar en calibrationHistory un registro de 'Admin: Calibración' o 'Web Admin' del MISMO DÍA y a la HORA MÁS CERCANA del nado
     const logDateTs = parseLogTimestamp(log);
 
     let closestBuoyLog = null;
     let minDiffMs = Infinity;
 
     calibrationHistory.forEach(item => {
-      const orig = item.origenDato || "";
-      const isBuoySync = orig.includes('Boya') && item.boyaAltura && Number(item.boyaAltura.toString().replace(",", ".")) > 0;
-      if (isBuoySync) {
+      const orig = String(item.origenDato || "").trim();
+      const notas = String(item.notas || item.notasCalibracion || "");
+      
+      // Excluir alertas y sincronizaciones satelitales
+      if (orig.includes('Alerta') || notas.includes('[ALERTA_OFICIAL]') || orig.includes('Open-Meteo')) {
+        return;
+      }
+
+      // Priorizar calibraciones del Admin con datos físicos de boya verificados
+      const hParsed = parseBoyaNum(item.boyaAltura, 0.01, 15);
+      const isAdminCal = (orig.includes('Admin') || orig.includes('Calibración')) && hParsed !== null;
+      if (isAdminCal) {
         const buoyTs = parseLogTimestamp(item);
         if (logDateTs > 0 && buoyTs > 0) {
           const d1 = new Date(logDateTs).toDateString();
@@ -873,28 +882,29 @@ export default function App() {
     });
 
     if (closestBuoyLog) {
+      const hVal = parseBoyaNum(closestBuoyLog.boyaAltura, 0.01, 15);
       return {
-        height: parseFloat((closestBuoyLog.boyaAltura || "").toString().replace(",", ".")).toFixed(2),
+        height: hVal !== null ? hVal.toFixed(2) : null,
         period: formatBoyaPeriod(closestBuoyLog.boyaPeriodo),
         dir: cleanDir(closestBuoyLog.boyaDireccion)
       };
     }
 
-    // 2. Si el propio registro ya tiene guardada una altura de boya válida (> 0) distinta de appOlas
-    const rawH = (log.boyaAltura || "").toString().replace(",", ".");
-    const appH = (log.appOlas || "").toString().replace(",", ".");
-    if (rawH && rawH !== appH && !isNaN(parseFloat(rawH)) && parseFloat(rawH) > 0) {
+    // 2. Si el propio registro ya tiene guardada una altura de boya física válida (> 0) distinta de appOlas
+    const rawHNum = parseBoyaNum(log.boyaAltura, 0.01, 15);
+    const appHNum = parseBoyaNum(log.appOlas, 0.01, 15);
+    if (rawHNum !== null && rawHNum !== appHNum && rawHNum > 0) {
       return {
-        height: parseFloat(rawH).toFixed(2),
+        height: rawHNum.toFixed(2),
         period: formatBoyaPeriod(log.boyaPeriodo),
         dir: cleanDir(log.boyaDireccion)
       };
     }
 
-    // 3. Fallback: modelo satélite ECMWF de esa hora
+    // 3. Si no hay boya física calibrada ese día, no inventar satélite en esta tarjeta
     return {
-      height: log.modelEcmwfOlas ? parseFloat(log.modelEcmwfOlas.toString().replace(",", ".")).toFixed(2) : null,
-      period: formatBoyaPeriod(log.boyaPeriodo),
+      height: null,
+      period: null,
       dir: cleanDir(log.boyaDireccion)
     };
   }
@@ -2996,9 +3006,11 @@ export default function App() {
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200/60 pb-4 mb-4 gap-4">
                           <div>
                             <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                              🏖️ {BEACHES[selectedHistoryLog.playa]?.name} ({selectedHistoryLog.horaNado})
+                              🏖️ {BEACHES[selectedHistoryLog.playa]?.name || selectedHistoryLog.playa} ({cleanHourString(selectedHistoryLog.horaNado) || 'Hora no registrada'})
                             </h4>
-                            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Sesión registrada el {new Date(selectedHistoryLog.fechaRegistro).toLocaleString('es-ES')}</p>
+                            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">
+                              Sesión registrada el {formatFriendlyDate(selectedHistoryLog.timestamp || selectedHistoryLog.fechaRegistro || selectedHistoryLog.fecha)}
+                            </p>
                           </div>
                           
                           <div className="flex flex-col items-end gap-1">
