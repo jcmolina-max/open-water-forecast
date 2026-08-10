@@ -1,33 +1,30 @@
-name: 🛰️ Copernicus In-Situ Buoy Worker 24/7
+name: Copernicus Buoy Worker
 
 on:
   schedule:
-    # Se ejecuta cada hora en el minuto 10 (ej: 08:10, 09:10, 10:10...)
     - cron: '10 * * * *'
-  # Permite ejecutarlo manualmente desde la pestaña Actions de GitHub con 1 clic
   workflow_dispatch:
 
 jobs:
   fetch-buoy-data:
-    name: 🌊 Extraer Sensores Boya Málaga (61280) y Guardar en Sheets
+    name: Extraer Sensores Boya Malaga
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Clonar Repositorio
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🐍 Configurar Entorno Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'
 
-      - name: 📦 Instalar Librería Oficial Copernicus Marine, xarray y netCDF4
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install copernicusmarine xarray netCDF4 requests pandas
 
-      - name: 🚀 Ejecutar Worker de Extracción y Envío a Google Sheets
+      - name: Run worker
         env:
           COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUS_USERNAME || 'jmolina12' }}
           COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD || '0018__Manger' }}
