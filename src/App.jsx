@@ -436,8 +436,11 @@ function parseSwimmerSensaciones(textVal) {
 };
 
 function formatFriendlyDate(dateString) {
+  if (!dateString) return 'Hoy';
   try {
     const regDate = new Date(dateString);
+    if (isNaN(regDate.getTime())) return 'Hoy';
+    
     const today = new Date();
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
@@ -454,7 +457,7 @@ function formatFriendlyDate(dateString) {
     const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
     return `${capitalizedDay}, ${regDate.getDate()} ${regDate.toLocaleString('es-ES', { month: 'short' })}`;
   } catch (e) {
-    return dateString || "";
+    return String(dateString) || "Hoy";
   }
 }
 
@@ -3337,7 +3340,7 @@ export default function App() {
                               <div className="mt-2 pt-2 border-t border-slate-200/20 flex justify-between items-center text-[9px] text-slate-400 font-medium">
                                 <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato.split(':')[0]}</strong></span>
                                 <span>
-                                  Reportado: <strong>{formatFriendlyDate(item.fechaRegistro)}</strong>
+                                  Reportado: <strong>{formatFriendlyDate(item.timestamp || item.fechaRegistro || item.fecha)}</strong>
                                 </span>
                               </div>
                             </div>
@@ -3487,7 +3490,7 @@ export default function App() {
                         {(latestAlert.notasCalibracion || '').replace('[ALERTA_OFICIAL]', '').trim() || (latestAlert.sensaciones || 'Aviso de seguridad')}
                       </p>
                       <span className="block text-[8px] text-rose-500/70 font-semibold mt-1">
-                        Registrado: {formatFriendlyDate(latestAlert.fechaRegistro)}
+                        Registrado: {formatFriendlyDate(latestAlert.timestamp || latestAlert.fechaRegistro || latestAlert.fecha)}
                       </span>
                     </div>
                   </div>
@@ -3629,7 +3632,7 @@ export default function App() {
                             <div className="mt-3 pt-3 border-t border-slate-200/40 flex justify-between items-center text-[9px] text-slate-400 font-semibold">
                               <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
                               <span>
-                                Reportado: <strong>{formatFriendlyDate(item.fechaRegistro)}</strong>
+                                Reportado: <strong>{formatFriendlyDate(item.timestamp || item.fechaRegistro || item.fecha)}</strong>
                               </span>
                             </div>
                           </div>
