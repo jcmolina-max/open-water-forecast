@@ -1,15 +1,14 @@
 import os
 import sys
 import datetime
-import json
 import glob
 import requests
 
 def main():
-    print("=" * 65)
-    print("🛰️ COPERNICUS IN-SITU TAC - EXTRACTOR BOYA MÁLAGA (61280 / 6100280)")
-    print(f"⏰ Fecha/Hora UTC: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 65)
+    print("=" * 70)
+    print("🛰️ COPERNICUS IN-SITU TAC: DESCARGA ESTRICTA DE ARCHIVOS NETCDF")
+    print(f"⏰ Fecha/Hora Ejecución UTC: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 70)
 
     username = os.environ.get("COPERNICUSMARINE_SERVICE_USERNAME", "jmolina12")
     password = os.environ.get("COPERNICUSMARINE_SERVICE_PASSWORD", "0018__Manger")
@@ -19,7 +18,7 @@ def main():
     )
 
     if not username or not password:
-        print("❌ ERROR: Credenciales no configuradas.")
+        print("❌ ERROR: Faltan credenciales.")
         sys.exit(1)
 
     try:
@@ -30,117 +29,83 @@ def main():
         print(f"❌ ERROR: Librerías faltantes ({e}).")
         sys.exit(1)
 
-    dataset_id = "cmems_obs-ins_glo_phybgcwav_mynrt_na_irr"
-    output_dir = "./copernicus_data"
+    output_dir = "./copernicus_raw_files"
     os.makedirs(output_dir, exist_ok=True)
 
+    dataset_id = "cmems_obs-ins_glo_phybgcwav_mynrt_na_irr"
     print(f"🔑 Autenticado como: {username}")
-    print(f"📦 Dataset oficial In-Situ TAC: {dataset_id}")
-    print(f"🎯 Buscando archivo de la Boya de Málaga...")
+    print(f"📦 Dataset In-Situ TAC: {dataset_id}")
 
-    patterns_to_try = ["*61280*", "*6100280*", "*Malaga*"]
-    for pattern in patterns_to_try:
+    patterns = ["*6100280*", "*61280*", "*MO_61*", "*Malaga*"]
+
+    for pattern in patterns:
         try:
-            print(f"🔍 Probando filtro: '{pattern}' en parte 'latest'...")
-            res = copernicusmarine.get(
+            print(f"🔍 Probando filtro: '{pattern}'...")
+            copernicusmarine.get(
                 username=username,
                 password=password,
                 dataset_id=dataset_id,
-                dataset_part="latest",
                 filter=pattern,
                 output_directory=output_dir,
-                overwrite_output_data=True,
+                force_download=True,
                 no_directories=True
             )
-            if res:
-                print(f"✅ ¡Archivos descargados con éxito!: {res}")
+            nc_files = glob.glob(os.path.join(output_dir, "*.nc"))
+            if nc_files:
+                print(f"✅ ¡Archivo NetCDF real descargado!: {nc_files}")
                 break
-        except Exception as err:
-            print(f"⚠️ Aviso con filtro '{pattern}': {err}")
+        except Exception as e:
+            print(f"ℹ️ Respuesta del servidor con filtro '{pattern}': {e}")
 
     nc_files = glob.glob(os.path.join(output_dir, "*.nc"))
-    reading = None
+    if not nc_files:
+        print("\n" + "!" * 70)
+        print("❌ RESULTADO DE LA PRUEBA: NO SE ENCONTRÓ NINGÚN ARCHIVO NETCDF EN COPERNICUS.")
+        print("   Copernicus no tiene indexado en este momento el archivo con los códigos 6100280 / 61280.")
+        print("   NO SE REGISTRARÁ NINGÚN DATO EN GOOGLE SHEETS.")
+        print("!" * 70)
+        sys.exit(1)
 
-    if nc_files:
-        latest_file = nc_files[0]
-        print(f"\n📂 Abriendo archivo NetCDF: {latest_file}")
-        try:
-            ds = xr.open_dataset(latest_file)
-            print("📋 Variables disponibles en el sensor:", list(ds.data_vars.keys()))
+    target_file = nc_files[0]
+    print(f"\n📂 ABRIENDO ARCHIVO NETCDF REAL: {os.path.basename(target_file)}")
+    ds = xr.open_dataset(target_file)
+    print("📋 Variables reales disponibles en el sensor:", list(ds.data_vars.keys()))
 
-            def get_latest_var(var_names, default_val):
-                for name in var_names:
-                    if name in ds:
-                        val = ds[name].values
-                        if len(val) > 0:
-                            valid_vals = val[~np.isnan(val)] if hasattr(val, '__iter__') else [val]
-                            if len(valid_vals) > 0:
-                                return float(valid_vals[-1])
-                return default_val
+    def get_var(names):
+        for n in names:
+            if n in ds:
+                v = ds[n].values
+                valid = v[~np.isnan(v)] if hasattr(v, '__iter__') else [v]
+                if len(valid) > 0:
+                    return float(valid[-1]), n
+        return None, None
 
-            vhm0 = get_latest_var(["VHM0", "VAVH", "sea_surface_wave_significant_height", "HCSP"], 0.35)
-            vtpk = get_latest_var(["VTPK", "VTZA", "sea_surface_wave_peak_period"], 4.2)
-            vmdr = get_latest_var(["VMDR", "VPED", "sea_surface_wave_from_direction"], 120.0)
-            temp = get_latest_var(["TEMP", "sea_water_temperature"], 23.5)
-            wspd = get_latest_var(["WSPD", "wind_speed"], 6.8)
-            wdir = get_latest_var(["WDIR", "wind_direction"], 120.0)
+    vhm0, vhm0_name = get_var(["VHM0", "VAVH", "sea_surface_wave_significant_height"])
+    vtpk, vtpk_name = get_var(["VTPK", "VTZA", "sea_surface_wave_peak_period"])
+    vmdr, vmdr_name = get_var(["VMDR", "VPED", "sea_surface_wave_from_direction"])
+    temp, temp_name = get_var(["TEMP", "sea_water_temperature"])
 
-            time_val = str(ds['TIME'].values[-1]) if 'TIME' in ds else datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-
-            reading = {
-                "vhm0": round(vhm0, 2),
-                "vtpk": round(vtpk, 1),
-                "vmdr": round(vmdr, 0),
-                "temp": round(temp, 1),
-                "wspd": round(wspd, 1),
-                "wdir": round(wdir, 0),
-                "time": time_val
-            }
-            ds.close()
-        except Exception as e:
-            print(f"⚠️ Error al parsear NetCDF: {e}")
-
-    if not reading:
-        print("ℹ️ Modo de contingencia activo...")
-        reading = {
-            "vhm0": 0.30,
-            "vtpk": 4.5,
-            "vmdr": 115,
-            "temp": 23.8,
-            "wspd": 7.2,
-            "wdir": 120,
-            "time": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        }
-
-    print("\n" + "=" * 65)
-    print("📊 LECTURA REAL EXTRAÍDA DE LOS SENSORES DE LA BOYA:")
-    print(f"   🌊 Altura Significante Ola (VHM0/VAVH): {reading['vhm0']} m")
-    print(f"   ⏱️ Periodo Pico (VTPK):                 {reading['vtpk']} s")
-    print(f"   🧭 Dirección Oleaje (VMDR):             {reading['vmdr']}°")
-    print(f"   🌡️ Temp. Agua del Mar (TEMP):          {reading['temp']} °C")
-    print(f"   💨 Viento Real Sensor:                  {reading['wspd']} kn ({reading['wdir']}°)")
-    print(f"   📅 Timestamp Sensor:                    {reading['time']}")
-    print("=" * 65)
+    print("\n📊 VALORES FÍSICOS EXTRAÍDOS DEL SENSOR REAL:")
+    print(f"   🌊 Altura Significante Ola ({vhm0_name}): {vhm0} m")
+    print(f"   ⏱️ Periodo Pico ({vtpk_name}):           {vtpk} s")
+    print(f"   🧭 Dirección Oleaje ({vmdr_name}):       {vmdr}°")
+    print(f"   🌡️ Temp. Agua del Mar ({temp_name}):    {temp} °C")
 
     payload = {
-        "origenDato": "Boya: Copernicus In-Situ Real (61280)",
+        "origenDato": f"Boya: Copernicus Real ({os.path.basename(target_file)[:20]})",
         "playa": "misericordia",
-        "boyaAltura": reading["vhm0"],
-        "boyaPeriodo": reading["vtpk"],
-        "boyaDireccion": reading["vmdr"],
-        "boyaTemp": reading["temp"],
-        "vientoSpeed": reading["wspd"],
-        "vientoDir": reading["wdir"],
-        "notasCalibracion": f"Worker GitHub Actions In-Situ TAC (Medición: {reading['time']})"
+        "boyaAltura": round(vhm0, 2) if vhm0 else "",
+        "boyaPeriodo": round(vtpk, 1) if vtpk else "",
+        "boyaDireccion": round(vmdr, 0) if vmdr else "",
+        "boyaTemp": round(temp, 1) if temp else "",
+        "notasCalibracion": f"NetCDF Real: {os.path.basename(target_file)}"
     }
 
-    print(f"\n📤 Enviando lectura al Webhook de Google Sheets...")
-    try:
-        resp = requests.post(webhook_url, json=payload, timeout=15)
-        print(f"✅ ¡Webhook respondió HTTP {resp.status_code}!")
-        print("🎉 Fila registrada con éxito en tu Google Sheets.")
-    except Exception as e:
-        print(f"❌ Error al enviar al Webhook: {e}")
+    print(f"\n📤 Enviando medición real al Webhook de Google Sheets...")
+    resp = requests.post(webhook_url, json=payload, timeout=15)
+    print(f"✅ Webhook respondió HTTP {resp.status_code}")
+    print("🎉 Medición física real registrada en Google Sheets.")
+    ds.close()
 
 if __name__ == "__main__":
     main()
