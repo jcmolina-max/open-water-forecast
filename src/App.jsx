@@ -320,11 +320,44 @@ function HourlySvgChart({ hourlyData }) {
 
 function parseBoyaNum(val, min = -100, max = 500) {
   if (val === undefined || val === null || val === "") return null;
+  
+  // Si Google Sheets mutó un número decimal en fecha ISO (ej: 20.7 -> 20 de julio)
+  if (typeof val === 'string' && (val.includes('T') && val.includes('Z'))) {
+    try {
+      const d = new Date(val);
+      if (!isNaN(d.getTime())) {
+        const day = d.getUTCDate() === 19 ? 20 : (d.getUTCDate() === 2 ? 3 : d.getUTCDate());
+        const month = d.getUTCMonth() + 1;
+        if (day > 0 && month > 0 && month <= 12) {
+          const reconstructed = parseFloat(`${day}.${month}`);
+          if (!isNaN(reconstructed) && reconstructed >= min && reconstructed <= max) {
+            return reconstructed;
+          }
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+
   const str = String(val).trim();
-  if (str.includes('T') || str.includes('Z') || str.length > 10) return null;
+  if (str.includes('T') || str.includes('Z') || str.length > 15) return null;
   const num = parseFloat(str.replace(',', '.'));
   if (isNaN(num) || num < min || num > max) return null;
   return num;
+}
+
+function parseBoyaDir(val) {
+  if (val === undefined || val === null || val === "") return null;
+  const str = String(val).trim().toUpperCase();
+  if (str === "N" || str === "NORTE") return 0;
+  if (str === "NE" || str === "NORESTE") return 45;
+  if (str === "E" || str === "ESTE" || str === "LEVANTE") return 90;
+  if (str === "SE" || str === "SURESTE") return 135;
+  if (str === "S" || str === "SUR") return 180;
+  if (str === "SO" || str === "SW" || str === "SUROESTE" || str === "PONIENTE") return 225;
+  if (str === "O" || str === "W" || str === "OESTE") return 270;
+  if (str === "NO" || str === "NW" || str === "NOROESTE" || str === "TERRAL") return 315;
+  return parseBoyaNum(val, 0, 360);
 }
 
 function parseBoyaTemp(val) {
@@ -403,8 +436,11 @@ function parseSwimmerSensaciones(textVal) {
 };
 
 function formatFriendlyDate(dateString) {
+  if (!dateString) return 'Hoy';
   try {
     const regDate = new Date(dateString);
+    if (isNaN(regDate.getTime())) return 'Hoy';
+    
     const today = new Date();
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
@@ -421,7 +457,7 @@ function formatFriendlyDate(dateString) {
     const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
     return `${capitalizedDay}, ${regDate.getDate()} ${regDate.toLocaleString('es-ES', { month: 'short' })}`;
   } catch (e) {
-    return dateString || "";
+    return String(dateString) || "Hoy";
   }
 }
 
@@ -546,38 +582,48 @@ export default function App() {
   const [latestBuoySource, setLatestBuoySource] = useState(null);
   const [showPuertosIframe, setShowPuertosIframe] = useState(false);
 
-  useEffect(() => {
-    // Ordenar explícitamente por timestamp descendente (los más recientes de hoy PRIMERO)
-    const sortedNewestFirst = [...calibrationHistory].sort((a, b) => {
-      const tsA = parseLogTimestamp(a);
-      const tsB = parseLogTimestamp(b);
-      return tsB - tsA;
-    });
+          useEffect(() => {
+      const sortedNewestFirst = [...calibrationHistory].sort((a, b) => {
+        const tsA = parseLogTimestamp(a);
+        const tsB = parseLogTimestamp(b);
+        return tsB - tsA;
+      });
 
-    // 1. Buscar última altura real de boya válida (0.05m a 15m)
-    const heightLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaAltura, 0.05, 15) !== null);
-    setLatestBuoyHeight(heightLog ? parseBoyaNum(heightLog.boyaAltura, 0.05, 15).toFixed(2) : null);
+      // 1. Filtrar ESTRICTAMENTE reportes de calibración física del Admin (descartar sincronizaciones y alertas de texto)
+      const adminLog = sortedNewestFirst.find(item => {
+        const orig = String(item.origenDato || '').trim();
+        const notas = String(item.notas || item.notasCalibracion || '');
+        const sens = String(item.sensaciones || '');
 
-    // 2. Buscar último periodo real de boya válido (1s a 30s)
-    const periodLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaPeriodo, 1, 30) !== null);
-    setLatestBuoyPeriod(periodLog ? `${parseBoyaNum(periodLog.boyaPeriodo, 1, 30).toFixed(1)}` : null);
+        // Excluir sincronizaciones automáticas
+        if (orig.indexOf('Sincronizaci') !== -1 || notas.indexOf('Sincronizaci') !== -1 || sens.indexOf('Sincronizaci') !== -1) {
+          return false;
+        }
 
-    // 3. Buscar última dirección real de boya válida (0º a 360º)
-    const dirLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaDireccion, 0, 360) !== null);
-    setLatestBuoyDir(dirLog ? parseBoyaNum(dirLog.boyaDireccion, 0, 360) : null);
+        // Excluir estrictamente Alertas informativas de texto, Copérnico residual y avisos oficiales
+        if (orig.indexOf('Alerta') !== -1 || orig.indexOf('Copernicus') !== -1 || notas.indexOf('[ALERTA_OFICIAL]') !== -1) {
+          return false;
+        }
 
-    // 4. Buscar última temperatura real de agua válida (5ºC a 35ºC)
-    const tempLog = sortedNewestFirst.find(item => parseBoyaNum(item.boyaTemp, 5, 35) !== null);
-    setLatestBuoyTemp(tempLog ? parseBoyaNum(tempLog.boyaTemp, 5, 35).toFixed(1) : null);
+        return orig.indexOf('Admin: Calibración') !== -1 || orig.indexOf('Web Admin') !== -1 || orig === 'Admin' || (orig.indexOf('Calibración') !== -1 && (item.boyaAltura || item.boyaTemp));
+      });
 
-    // 5. Fecha y Fuente de la última lectura física de la boya
-    const dateLog = heightLog || tempLog || periodLog || sortedNewestFirst[0];
-    setLatestBuoyDate(dateLog && dateLog.fechaRegistro ? new Date(dateLog.fechaRegistro) : null);
-    
-    const srcLog = heightLog || dateLog;
-    const srcText = srcLog ? (String(srcLog.origenDato || '') + ' ' + String(srcLog.notasCalibracion || '')) : '';
-    setLatestBuoySource(srcText);
-  }, [calibrationHistory]);
+      if (adminLog) {
+        const h = parseBoyaNum(adminLog.boyaAltura, 0.01, 15) !== null ? parseBoyaNum(adminLog.boyaAltura, 0.01, 15).toFixed(2) : (adminLog.realOlas ? Number(String(adminLog.realOlas).replace(',', '.')).toFixed(2) : null);
+        const t = parseBoyaNum(adminLog.boyaPeriodo, 1, 30) !== null ? parseBoyaNum(adminLog.boyaPeriodo, 1, 30).toFixed(1) : null;
+        const d = parseBoyaDir(adminLog.boyaDireccion);
+        const temp = parseBoyaNum(adminLog.boyaTemp, 5, 35) !== null ? parseBoyaNum(adminLog.boyaTemp, 5, 35).toFixed(1) : null;
+
+        setLatestBuoyHeight(h);
+        setLatestBuoyPeriod(t);
+        setLatestBuoyDir(d);
+        setLatestBuoyTemp(temp);
+
+        const dObj = adminLog.timestamp ? new Date(adminLog.timestamp) : (adminLog.fechaRegistro ? new Date(adminLog.fechaRegistro) : new Date());
+        setLatestBuoyDate(dObj);
+        setLatestBuoySource('✏️ Calibración Manual Admin');
+      }
+    }, [calibrationHistory]);
 
   // Sincronización Inteligente de Boya Real al abrir la App (Smart Throttle 15 min)
   useEffect(() => {
@@ -674,6 +720,27 @@ export default function App() {
 
   // Estado para las pestañas del Modal Admin ('factors' o 'report')
   const [adminTab, setAdminTab] = useState('factors');
+  const [expandedSectorAudit, setExpandedSectorAudit] = useState({});
+  const [discardedReportIds, setDiscardedReportIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_discarded_reports') || '[]');
+    } catch(e) {
+      return [];
+    }
+  });
+
+  const toggleDiscardReport = (repId) => {
+    setDiscardedReportIds(prev => {
+      let updated;
+      if (prev.includes(repId)) {
+        updated = prev.filter(id => id !== repId);
+      } else {
+        updated = [...prev, repId];
+      }
+      localStorage.setItem('openwater_discarded_reports', JSON.stringify(updated));
+      return updated;
+    });
+  };
   const [factorFeedbackMsg, setFactorFeedbackMsg] = useState(null);
 
   // Estado para los Factores de Escala Ajustados/Aprobados manualmente por el Administrador (PIN 6611)
@@ -783,16 +850,25 @@ export default function App() {
       return num;
     }
 
-    // 1. Buscar en calibrationHistory un registro de 'Boya: Sincronización' del MISMO DÍA y a la HORA MÁS CERCANA del nado
+    // 1. Buscar en calibrationHistory un registro de 'Admin: Calibración' o 'Web Admin' del MISMO DÍA y a la HORA MÁS CERCANA del nado
     const logDateTs = parseLogTimestamp(log);
 
     let closestBuoyLog = null;
     let minDiffMs = Infinity;
 
     calibrationHistory.forEach(item => {
-      const orig = item.origenDato || "";
-      const isBuoySync = orig.includes('Boya') && item.boyaAltura && Number(item.boyaAltura.toString().replace(",", ".")) > 0;
-      if (isBuoySync) {
+      const orig = String(item.origenDato || "").trim();
+      const notas = String(item.notas || item.notasCalibracion || "");
+      
+      // Excluir alertas y sincronizaciones satelitales
+      if (orig.includes('Alerta') || notas.includes('[ALERTA_OFICIAL]') || orig.includes('Open-Meteo')) {
+        return;
+      }
+
+      // Priorizar calibraciones del Admin con datos físicos de boya verificados
+      const hParsed = parseBoyaNum(item.boyaAltura, 0.01, 15);
+      const isAdminCal = (orig.includes('Admin') || orig.includes('Calibración')) && hParsed !== null;
+      if (isAdminCal) {
         const buoyTs = parseLogTimestamp(item);
         if (logDateTs > 0 && buoyTs > 0) {
           const d1 = new Date(logDateTs).toDateString();
@@ -809,28 +885,29 @@ export default function App() {
     });
 
     if (closestBuoyLog) {
+      const hVal = parseBoyaNum(closestBuoyLog.boyaAltura, 0.01, 15);
       return {
-        height: parseFloat((closestBuoyLog.boyaAltura || "").toString().replace(",", ".")).toFixed(2),
+        height: hVal !== null ? hVal.toFixed(2) : null,
         period: formatBoyaPeriod(closestBuoyLog.boyaPeriodo),
         dir: cleanDir(closestBuoyLog.boyaDireccion)
       };
     }
 
-    // 2. Si el propio registro ya tiene guardada una altura de boya válida (> 0) distinta de appOlas
-    const rawH = (log.boyaAltura || "").toString().replace(",", ".");
-    const appH = (log.appOlas || "").toString().replace(",", ".");
-    if (rawH && rawH !== appH && !isNaN(parseFloat(rawH)) && parseFloat(rawH) > 0) {
+    // 2. Si el propio registro ya tiene guardada una altura de boya física válida (> 0) distinta de appOlas
+    const rawHNum = parseBoyaNum(log.boyaAltura, 0.01, 15);
+    const appHNum = parseBoyaNum(log.appOlas, 0.01, 15);
+    if (rawHNum !== null && rawHNum !== appHNum && rawHNum > 0) {
       return {
-        height: parseFloat(rawH).toFixed(2),
+        height: rawHNum.toFixed(2),
         period: formatBoyaPeriod(log.boyaPeriodo),
         dir: cleanDir(log.boyaDireccion)
       };
     }
 
-    // 3. Fallback: modelo satélite ECMWF de esa hora
+    // 3. Si no hay boya física calibrada ese día, no inventar satélite en esta tarjeta
     return {
-      height: log.modelEcmwfOlas ? parseFloat(log.modelEcmwfOlas.toString().replace(",", ".")).toFixed(2) : null,
-      period: formatBoyaPeriod(log.boyaPeriodo),
+      height: null,
+      period: null,
       dir: cleanDir(log.boyaDireccion)
     };
   }
@@ -1553,7 +1630,7 @@ export default function App() {
             name: beach.name,
             score: avgScore,
             temps: { 
-                air: localClimateDown ? "-" : Math.round(weatherJson?.hourly?.temperature_2m?.[noonIndex] || 15), 
+                air: localClimateDown ? "-" : Math.round(weatherJson?.hourly?.temperature_2m?.[noonIndex] || (new Date().getMonth() >= 4 && new Date().getMonth() <= 8 ? 29 : 18)), 
                 water: waterTemp
             },
             hourly: translatedHourlyData,
@@ -1661,8 +1738,11 @@ export default function App() {
         const fetchedLogs = isArr ? json : (json.data || []);
         const sortedLogs = [...fetchedLogs].sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
         setCalibrationHistory(sortedLogs);
-        if (!isArr && json.visitasTotales !== undefined) {
-          setTotalVisits(Number(json.visitasTotales));
+        if (!isArr) {
+          const vCount = json.total_visitas !== undefined ? json.total_visitas : (json.totalVisitas !== undefined ? json.totalVisitas : json.visitasTotales);
+          if (vCount !== undefined && vCount !== null) {
+            setTotalVisits(Number(vCount));
+          }
         }
 
         // 1. Cargar factores y marcas de tiempo locales guardadas en localStorage
@@ -1838,9 +1918,9 @@ export default function App() {
     const payload = {
       horaNado: adminHoraNado,
       playa: adminPlaya,
-      realOlas: adminRealOlas,
-      realResaca: adminRealResaca,
-      realCorriente: adminRealCorriente,
+      realOlas: adminIsAlert ? "" : adminRealOlas,
+      realResaca: adminIsAlert ? "" : adminRealResaca,
+      realCorriente: adminIsAlert ? "" : adminRealCorriente,
       realVientoFza: adminRealVientoFza,
       realVientoDir: adminRealVientoDir,
       sensaciones: adminSensaciones,
@@ -2278,7 +2358,7 @@ export default function App() {
                         title="Puertos del Estado - La Misericordia"
                       ></iframe>
                     </div>
-                  ) : (
+                                    ) : (
                     <div className="grid grid-cols-2 gap-2.5 pt-0.5 text-left">
                       <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hs)</span>
@@ -2299,7 +2379,7 @@ export default function App() {
                         <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
                           {(() => {
                             let activeDir = null;
-                            if (latestBuoyDir && Number(latestBuoyDir) !== 110) {
+                            if (latestBuoyDir !== null && latestBuoyDir !== undefined) {
                               activeDir = Number(latestBuoyDir);
                             } else if (currentDayData && currentDayData.hourly && currentDayData.hourly.length > 0) {
                               const nowH = new Date().getHours();
@@ -2308,7 +2388,7 @@ export default function App() {
                                 activeDir = Number(hourRec.swellDir);
                               }
                             }
-                            return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}º)` : '—';
+                            return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}°)` : '—';
                           })()}
                         </strong>
                       </div>
@@ -2316,19 +2396,19 @@ export default function App() {
                       <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
                         <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
-                          {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '—'}
+                          {latestBuoyTemp ? `${latestBuoyTemp}°C` : '—'}
                         </strong>
                       </div>
                     </div>
                   )}
 
                   <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
-                    <span>
-                      Origen: {showPuertosIframe 
-                        ? '⚓ Puertos del Estado (Estación 2056 - Málaga)' 
-                        : '🌐 Open-Meteo (Modelo Marino)'}
-                    </span>
-                    <span>Última lectura: {latestBuoyDate ? formatFriendlyDate(latestBuoyDate) : 'Sin datos'}</span>
+                                          <span>
+                        Origen: {showPuertosIframe 
+                          ? '📡 Puertos del Estado (Estación 2056 - Málaga)' 
+                          : (latestBuoySource || '✏️ Calibración Manual Admin')}
+                      </span>
+                      <span>Última lectura: {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'Sin reporte hoy'}</span>
                   </div>
                 </div>
 
@@ -2929,9 +3009,11 @@ export default function App() {
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200/60 pb-4 mb-4 gap-4">
                           <div>
                             <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                              🏖️ {BEACHES[selectedHistoryLog.playa]?.name} ({selectedHistoryLog.horaNado})
+                              🏖️ {BEACHES[selectedHistoryLog.playa]?.name || selectedHistoryLog.playa} ({cleanHourString(selectedHistoryLog.horaNado) || 'Hora no registrada'})
                             </h4>
-                            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Sesión registrada el {new Date(selectedHistoryLog.fechaRegistro).toLocaleString('es-ES')}</p>
+                            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">
+                              Sesión registrada el {formatFriendlyDate(selectedHistoryLog.timestamp || selectedHistoryLog.fechaRegistro || selectedHistoryLog.fecha)}
+                            </p>
                           </div>
                           
                           <div className="flex flex-col items-end gap-1">
@@ -3258,7 +3340,7 @@ export default function App() {
                               <div className="mt-2 pt-2 border-t border-slate-200/20 flex justify-between items-center text-[9px] text-slate-400 font-medium">
                                 <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato.split(':')[0]}</strong></span>
                                 <span>
-                                  Reportado: <strong>{formatFriendlyDate(item.fechaRegistro)}</strong>
+                                  Reportado: <strong>{formatFriendlyDate(item.timestamp || item.fechaRegistro || item.fecha)}</strong>
                                 </span>
                               </div>
                             </div>
@@ -3408,7 +3490,7 @@ export default function App() {
                         {(latestAlert.notasCalibracion || '').replace('[ALERTA_OFICIAL]', '').trim() || (latestAlert.sensaciones || 'Aviso de seguridad')}
                       </p>
                       <span className="block text-[8px] text-rose-500/70 font-semibold mt-1">
-                        Registrado: {formatFriendlyDate(latestAlert.fechaRegistro)}
+                        Registrado: {formatFriendlyDate(latestAlert.timestamp || latestAlert.fechaRegistro || latestAlert.fecha)}
                       </span>
                     </div>
                   </div>
@@ -3550,7 +3632,7 @@ export default function App() {
                             <div className="mt-3 pt-3 border-t border-slate-200/40 flex justify-between items-center text-[9px] text-slate-400 font-semibold">
                               <span>Origen: <strong className="text-indigo-500 font-semibold">{item.origenDato}</strong></span>
                               <span>
-                                Reportado: <strong>{formatFriendlyDate(item.fechaRegistro)}</strong>
+                                Reportado: <strong>{formatFriendlyDate(item.timestamp || item.fechaRegistro || item.fecha)}</strong>
                               </span>
                             </div>
                           </div>
@@ -4248,33 +4330,69 @@ export default function App() {
                             } catch(e) {}
                           }
 
+                          const defaultFactoryMap = {
+                            misericordia:   { levante_fuerte: 0.85, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.35, terral: 0.15 },
+                            malagueta:      { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.30, terral: 0.15 },
+                            pedregalejo:    { levante_fuerte: 0.65, levante_suave: 0.50, poniente_fuerte: 0.40, poniente_suave: 0.30, terral: 0.15 },
+                            los_alamos:     { levante_fuerte: 0.90, levante_suave: 0.85, poniente_fuerte: 0.90, poniente_suave: 0.75, terral: 0.20 },
+                            bajondillo:     { levante_fuerte: 0.80, levante_suave: 0.70, poniente_fuerte: 0.70, poniente_suave: 0.60, terral: 0.20 },
+                            cala_del_moral: { levante_fuerte: 0.75, levante_suave: 0.65, poniente_fuerte: 0.70, poniente_suave: 0.45, terral: 0.15 },
+                            rincon_victoria:{ levante_fuerte: 0.85, levante_suave: 0.80, poniente_fuerte: 0.70, poniente_suave: 0.50, terral: 0.15 }
+                          };
+                          const bFact = defaultFactoryMap[bKey] || { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.50, poniente_suave: 0.35, terral: 0.15 };
                           const sectors = [
-                            { key: 'levante', title: '🌊 Sector Oleaje LEVANTE (Mar de Fondo E / SE)', isLevante: true, defaultFactor: bKey === 'misericordia' ? 0.60 : 1.00 },
-                            { key: 'poniente', title: '🌊 Sector Oleaje PONIENTE / SUR (Mar de Fondo S / SO)', isLevante: false, defaultFactor: bKey === 'misericordia' ? 0.50 : (bKey === 'malagueta' || bKey === 'pedregalejo' ? 0.70 : 1.00) }
+                            { key: 'levante_fuerte', title: '🌅 Sector LEVANTE FUERTE (E / SE ≥ 10 kn)', defaultFactor: bFact.levante_fuerte },
+                            { key: 'levante_suave',  title: '☀️ Sector LEVANTE SUAVE / BRISA (E / SE < 10 kn)', defaultFactor: bFact.levante_suave },
+                            { key: 'poniente_fuerte',title: '🌊 Sector PONIENTE FUERTE (S / SO ≥ 10 kn)', defaultFactor: bFact.poniente_fuerte },
+                            { key: 'poniente_suave', title: '🏖️ Sector PONIENTE SUAVE / RESACA (S / SO < 10 kn)', defaultFactor: bFact.poniente_suave },
+                            { key: 'terral',         title: '🔥 Sector Clima TERRAL (Viento NW / N de Tierra)', defaultFactor: bFact.terral }
                           ];
 
                           return (
                             <div key={bKey} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5">
                               <div className="border-b border-slate-200 pb-1.5 flex justify-between items-center">
                                 <strong className="text-slate-900 font-black text-sm">{bName}</strong>
-                                <span className="text-[9px] font-bold text-slate-400 uppercase">2 Sectores Marinos</span>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase">5 Sectores Marinos</span>
                               </div>
 
                               <div className="grid grid-cols-1 gap-2.5">
                                 {sectors.map(sec => {
                                   const storageKey = `${bKey}_${sec.key}`;
                                   
-                                  // 1. Obtener todos los reportes del sector basados estrictamente en la dirección del oleaje a la HORA DEL NADO
+                                  // 1. Obtener todos los reportes del sector clasificados en los 5 sectores por el viento de la hora
                                   const allSectorLogs = calibrationHistory.filter(l => {
-                                    if (l.playa !== bKey || !l.realOlas) return false;
-                                    const buoyData = getBuoyReadingForLog(l);
-                                    if (!buoyData.height || Number(buoyData.height) === 0) return false;
-                                    const dir = Number(buoyData.dir || l.boyaDireccion || 110);
-                                    const isL = dir >= 45 && dir <= 165;
-                                    return isL === sec.isLevante;
+                                    if (l.playa !== bKey) return false;
+                                    if (l.realOlas === undefined || l.realOlas === null || l.realOlas === "") return false;
+                                    if (l.origenDato && String(l.origenDato).indexOf("Sincronizaci") !== -1) return false;
+
+                                    // EXCLUIR ALERTAS DE TEXTO (Avisos de banderas/niebla sin medición real de ola)
+                                    const orig = String(l.origenDato || '').trim().toLowerCase();
+                                    if (orig.includes("alerta") || orig.includes("mensaje") || String(l.notasCalibracion || '').includes("[ALERTA_OFICIAL]")) return false;
+
+                                    const wDir = Number(l.realVientoDirGrados || l.appVientoDir || l.boyaDireccion || 120);
+                                    const wSpd = Number(l.realVientoKnots || l.appVientoNudos || 6.5);
+                                    const temp = Number(l.tempAire || 29);
+
+                                    let logSec = 'levante_suave';
+                                    if ((wDir >= 285 && wDir <= 360) || (wDir >= 0 && wDir <= 35) || (temp >= 27.5 && wDir >= 270)) {
+                                      logSec = 'terral';
+                                    } else if (wDir >= 45 && wDir <= 155) {
+                                      logSec = wSpd >= 10.0 ? 'levante_fuerte' : 'levante_suave';
+                                    } else if (wDir >= 175 && wDir <= 284) {
+                                      logSec = wSpd >= 10.0 ? 'poniente_fuerte' : 'poniente_suave';
+                                    }
+                                    return logSec === sec.key;
                                   });
 
-                                  const totalLogsCount = allSectorLogs.length;
+                                   // Filtrar los nados válidos excluyendo los descartados
+                                   const validSectorLogs = allSectorLogs.filter((l, idx) => {
+                                     const repId = String(l.idRegistro || l.timestamp || l.horaNado || idx);
+                                     if (discardedReportIds.includes(repId)) return false;
+                                     const audit = String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase();
+                                     if (audit.includes("DESCARTADO") || audit.includes("PRUEBA") || audit.includes("TEST")) return false;
+                                     return true;
+                                   });
+                                   const totalLogsCount = validSectorLogs.length;
 
                                   // Helper para obtener la previsión del satélite bruto registrada a la hora del nado
                                   function getLogSatHeight(l) {
@@ -4290,7 +4408,7 @@ export default function App() {
                                   let suggestedGlobalFactor = null;
                                   let cleanGlobalCount = 0;
                                   if (totalLogsCount >= 1) {
-                                    const allRatios = allSectorLogs.map(l => {
+                                    const allRatios = validSectorLogs.map(l => {
                                       return scaleToMeters(l.realOlas) / getLogSatHeight(l);
                                     }).filter(r => !isNaN(r) && isFinite(r) && r > 0);
                                     const cleanRatios = totalLogsCount >= 5 ? filterOutliers(allRatios) : allRatios;
@@ -4304,7 +4422,7 @@ export default function App() {
                                   // B) CALCULO RECIENTE (Sugerencia progresiva desde el Nado #1 post-ajuste)
                                   const approvalTime = adminFactorApprovalTimes && adminFactorApprovalTimes[storageKey] ? Number(adminFactorApprovalTimes[storageKey]) : 0;
                                   
-                                  const postApprovalLogs = allSectorLogs.filter(l => {
+                                  const postApprovalLogs = validSectorLogs.filter(l => {
                                     if (approvalTime > 0) {
                                       const logTs = parseLogTimestamp(l);
                                       if (logTs === 0 || logTs <= approvalTime) return false;
@@ -4341,9 +4459,15 @@ export default function App() {
                                     <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2.5">
                                       <div className="flex justify-between items-center text-xs">
                                         <strong className="text-slate-800 font-extrabold">{sec.title}</strong>
-                                        <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                                          {totalLogsCount} nados totales
-                                        </span>
+                                        <button 
+                                          type="button"
+                                          onClick={() => setExpandedSectorAudit(prev => ({ ...prev, [storageKey]: !prev[storageKey] }))}
+                                          className="text-[9px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-full flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
+                                          title="Click para ver y auditar los nados de este sector"
+                                        >
+                                          <span>{totalLogsCount} válidos ({allSectorLogs.length} tot.)</span>
+                                          <ChevronDown size={11} className={expandedSectorAudit && expandedSectorAudit[storageKey] ? "rotate-180 transition-transform" : "transition-transform"} />
+                                        </button>
                                       </div>
 
                                       <div className="flex justify-between items-center text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
@@ -4394,101 +4518,164 @@ export default function App() {
                                         </div>
                                       </div>
 
-                                      {/* BOTONES DE ACCIÓN */}
-                                      <div className="flex items-center justify-between gap-1.5 pt-1 flex-wrap">
-                                        {suggestedRecentFactor !== null && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const fixedVal = parseFloat(suggestedRecentFactor.toFixed(2));
-                                              const nowTs = Date.now();
-                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
-                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
-                                              setAdminManualScaleFactors(updated);
-                                              setAdminFactorApprovalTimes(updatedTimes);
-                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                              saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
-                                              setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🟢 ¡Aprobado Factor Reciente (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
-                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
-                                            }}
-                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm flex-1 min-w-[120px] text-center"
-                                          >
-                                            {countRecent >= 5 ? `🟢 Aprobar Consolidado (${suggestedRecentFactor.toFixed(2)}x)` : `⚡ Aprobar Reciente (${suggestedRecentFactor.toFixed(2)}x)`}
-                                          </button>
-                                        )}
-
-                                        {suggestedGlobalFactor !== null && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const fixedVal = parseFloat(suggestedGlobalFactor.toFixed(2));
-                                              const nowTs = Date.now();
-                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
-                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
-                                              setAdminManualScaleFactors(updated);
-                                              setAdminFactorApprovalTimes(updatedTimes);
-                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                              saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
-                                              setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🔵 ¡Aprobada Sugerencia Global (${fixedVal}x) para ${bName} (${sec.key.toUpperCase()})! Sincronizado en la nube.`);
-                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
-                                            }}
-                                            className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm flex-1 min-w-[120px] text-center"
-                                          >
-                                            🔵 Aprobar Global ({suggestedGlobalFactor.toFixed(2)}x)
-                                          </button>
-                                        )}
-
-                                        {isOverridden && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const nowTs = Date.now();
-                                              const updated = { ...adminManualScaleFactors };
-                                              delete updated[storageKey];
-                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
-                                              setAdminManualScaleFactors(updated);
-                                              setAdminFactorApprovalTimes(updatedTimes);
-                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                              saveFactorChangeToCloud(bKey, sec.key, null, nowTs, bName);
-                                              setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`🔄 Restablecido factor por defecto (${sec.defaultFactor.toFixed(2)}x) para ${bName} (${sec.key.toUpperCase()}). Sincronizado en la nube.`);
-                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
-                                            }}
-                                            className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border border-red-200 transition-colors"
-                                          >
-                                            ↩ Reset ({sec.defaultFactor.toFixed(2)}x)
-                                          </button>
-                                        )}
+                                      {/* BOTONES DE ACCION PERMANENTES (4 ACTIVOS EN GRID 2x2) */}
+                                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const fixedVal = parseFloat((suggestedRecentFactor !== null ? suggestedRecentFactor : Number(activeFactor)).toFixed(2));
+                                            const nowTs = Date.now();
+                                            const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                            const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                            setAdminManualScaleFactors(updated);
+                                            setAdminFactorApprovalTimes(updatedTimes);
+                                            localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                            localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                            saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
+                                            setDataRefreshKey(k => k + 1);
+                                            setFactorFeedbackMsg(`🟢 ¡Aprobado Factor (${fixedVal}x) para ${bName}! Sincronizado.`);
+                                            setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                          }}
+                                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm text-center flex items-center justify-center gap-1 cursor-pointer"
+                                        >
+                                          {suggestedRecentFactor !== null 
+                                            ? (countRecent >= 5 ? `🟢 Aprobar Consolidado (${suggestedRecentFactor.toFixed(2)}x)` : `⚡ Aprobar Reciente (${suggestedRecentFactor.toFixed(2)}x)`)
+                                            : `🟢 Aprobar (${Number(activeFactor).toFixed(2)}x)`}
+                                        </button>
 
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            const val = prompt(`Factor manual para ${bName} (${sec.key.toUpperCase()}):`, activeFactor);
-                                            if (val !== null && !isNaN(parseFloat(val))) {
-                                              const fixedVal = parseFloat(parseFloat(val).toFixed(2));
-                                              const nowTs = Date.now();
-                                              const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
-                                              const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
-                                              setAdminManualScaleFactors(updated);
-                                              setAdminFactorApprovalTimes(updatedTimes);
-                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                              saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
-                                              setDataRefreshKey(k => k + 1);
-                                              setFactorFeedbackMsg(`✏️ ¡Factor manual para ${bName} (${sec.key.toUpperCase()}) fijado a ${fixedVal}x! Sincronizado en la nube.`);
-                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                            const fixedVal = parseFloat((suggestedGlobalFactor !== null ? suggestedGlobalFactor : Number(activeFactor)).toFixed(2));
+                                            const nowTs = Date.now();
+                                            const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
+                                            const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                            setAdminManualScaleFactors(updated);
+                                            setAdminFactorApprovalTimes(updatedTimes);
+                                            localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                            localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                            saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
+                                            setDataRefreshKey(k => k + 1);
+                                            setFactorFeedbackMsg(`🔵 ¡Aprobada Sugerencia Global (${fixedVal}x) para ${bName}! Sincronizado.`);
+                                            setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                          }}
+                                          className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm text-center flex items-center justify-center gap-1 cursor-pointer"
+                                        >
+                                          {suggestedGlobalFactor !== null 
+                                            ? `🔵 Aprobar Global (${suggestedGlobalFactor.toFixed(2)}x)`
+                                            : `🔵 Aprobar Global (${Number(activeFactor).toFixed(2)}x)`}
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nowTs = Date.now();
+                                            const updated = { ...adminManualScaleFactors };
+                                            delete updated[storageKey];
+                                            const updatedTimes = { ...adminFactorApprovalTimes };
+                                            delete updatedTimes[storageKey];
+                                            setAdminManualScaleFactors(updated);
+                                            setAdminFactorApprovalTimes(updatedTimes);
+                                            localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                            localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                            saveFactorChangeToCloud(bKey, sec.key, null, nowTs, bName);
+                                            setDataRefreshKey(k => k + 1);
+                                            setFactorFeedbackMsg(`🔄 ¡Reset a Fábrica (${sec.defaultFactor.toFixed(2)}x) para ${bName}! Sincronizado.`);
+                                            setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                          }}
+                                          className="bg-rose-50 text-rose-700 hover:bg-rose-100 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold border border-rose-200 transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
+                                        >
+                                          🔄 Reset ({sec.defaultFactor.toFixed(2)}x)
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const current = activeFactor;
+                                            const input = prompt(`✏️ Introduce el factor manual exacto para ${bName} (${sec.title}):`, current.toString());
+                                            if (input !== null && input.trim() !== "") {
+                                              const parsed = parseFloat(input.replace(",", "."));
+                                              if (!isNaN(parsed) && parsed > 0 && parsed <= 3.0) {
+                                                const nowTs = Date.now();
+                                                const updated = { ...adminManualScaleFactors, [storageKey]: parsed };
+                                                const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                                setAdminManualScaleFactors(updated);
+                                                setAdminFactorApprovalTimes(updatedTimes);
+                                                localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                                localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                                saveFactorChangeToCloud(bKey, sec.key, parsed, nowTs, bName);
+                                                setDataRefreshKey(k => k + 1);
+                                                setFactorFeedbackMsg(`✏️ ¡Factor Manual fijado en ${parsed}x para ${bName}!`);
+                                                setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                              } else {
+                                                alert("Por favor, introduce un número válido entre 0.1 y 3.0");
+                                              }
                                             }
                                           }}
-                                          className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-indigo-200 transition-colors ml-auto"
+                                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
                                         >
                                           ✏️ Manual
                                         </button>
                                       </div>
+
+                                      {expandedSectorAudit && expandedSectorAudit[storageKey] && (
+                                        <div className="mt-2.5 pt-2.5 border-t border-slate-200 space-y-1.5 bg-slate-100/80 p-2.5 rounded-xl text-left">
+                                          <div className="flex justify-between items-center mb-1">
+                                            <span className="text-[9px] font-extrabold text-slate-700 uppercase tracking-wider">
+                                              📋 Auditoría de Nados ({totalLogsCount} válidos / {allSectorLogs.length} tot.)
+                                            </span>
+                                            <span className="text-[8px] text-slate-500 font-semibold">Click para descartar/activar</span>
+                                          </div>
+                                          <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                                            {allSectorLogs.map((l, lIdx) => {
+                                              const repId = String(l.idRegistro || l.timestamp || l.horaNado || lIdx);
+                                              const isDiscarded = discardedReportIds.includes(repId) || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("DESCARTADO") || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("PRUEBA");
+                                              const waveVal = swimmerScaleToMeters(l.realOlas);
+                                              let rawH = l.horaNado ? String(l.horaNado) : '';
+                                              let cleanH = '';
+                                              if (rawH.includes('T')) {
+                                                cleanH = rawH.split('T')[1].substring(0, 5);
+                                              } else if (rawH.includes(':') && !rawH.includes('1899')) {
+                                                cleanH = rawH.substring(0, 5);
+                                              }
+                                              const datePrefix = l.timestamp ? formatFriendlyDate(l.timestamp).split(',')[0] : '';
+                                              const swimTime = datePrefix ? (datePrefix + (cleanH ? ' ' + cleanH : '')) : (cleanH || 'Hoy');
+                                              const author = l.sensaciones ? (l.sensaciones.length > 35 ? l.sensaciones.substring(0, 35) + '...' : l.sensaciones) : (l.origenDato || 'Reporte');
+
+                                              const orig = String(l.origenDato || '').trim().toLowerCase();
+                                              let badgeLabel = '👤 Nadador';
+                                              let badgeStyle = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                                              if (orig.includes('admin: calibraci') || orig.includes('web admin') || orig.includes('admin: factor')) {
+                                                badgeLabel = '⚙️ Admin Calibración';
+                                                badgeStyle = 'bg-purple-50 text-purple-700 border-purple-200';
+                                              } else if (orig.includes('alerta')) {
+                                                badgeLabel = '📢 Alerta';
+                                                badgeStyle = 'bg-amber-50 text-amber-700 border-amber-200';
+                                              }
+
+                                              return (
+                                                <div key={repId + lIdx} className={'flex justify-between items-center p-2 rounded-lg border text-left transition-all ' + (isDiscarded ? 'bg-rose-50/60 border-rose-200 opacity-60' : 'bg-white border-slate-200 shadow-2xs')}>
+                                                  <div className="space-y-0.5 flex-1 mr-2 min-w-0">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                      <span className="text-[9px] font-black text-slate-800">{swimTime}</span>
+                                                      <span className={'text-[7.5px] font-extrabold px-1.5 py-0.2 rounded border ' + badgeStyle}>{badgeLabel}</span>
+                                                      <span className="text-[8px] font-extrabold text-cyan-700 bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-100">Ola: {waveVal.toFixed(2)}m</span>
+                                                    </div>
+                                                    <p className="text-[9px] text-slate-600 truncate font-medium">{author}</p>
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => toggleDiscardReport(repId)}
+                                                    className={'text-[8px] font-extrabold px-2 py-1 rounded-md transition-all shrink-0 cursor-pointer ' + (isDiscarded ? 'bg-rose-100 text-rose-800 hover:bg-emerald-100 hover:text-emerald-800 border border-rose-300' : 'bg-emerald-100 text-emerald-800 hover:bg-rose-100 hover:text-rose-800 border border-emerald-300')}
+                                                  >
+                                                    {isDiscarded ? '🔴 Descartado' : '🟢 Válido'}
+                                                  </button>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 })}
@@ -4917,7 +5104,7 @@ export default function App() {
           <>
             <span className="hidden sm:inline">•</span>
             <span className="bg-slate-50 border border-slate-200/50 px-2 py-0.5 rounded text-[9px] text-slate-500 font-extrabold normal-case">
-              ⚡ {totalVisits.toLocaleString('es-ES')} visitas
+              👥 {totalVisits.toLocaleString('es-ES')} visitas
             </span>
           </>
         )}
