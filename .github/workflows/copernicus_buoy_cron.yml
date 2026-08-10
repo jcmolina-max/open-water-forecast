@@ -1,196 +1,33 @@
-import os
-import sys
-import datetime
-import json
-import glob
-import requests
+name: Copernicus Buoy Worker
 
-def main():
-    print("=" * 70)
-    print("🛰️ COPERNICUS IN-SITU TAC: DESCARGA Y LECTURA ESTRICTA DE ARCHIVOS NETCDF")
-    print(f"⏰ Fecha/Hora Ejecución UTC: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 70)
+on:
+  schedule:
+    - cron: '10 * * * *'
+  workflow_dispatch:
 
-    username = os.environ.get("COPERNICUSMARINE_SERVICE_USERNAME", "jmolina12")
-    password = os.environ.get("COPERNICUSMARINE_SERVICE_PASSWORD", "0018__Manger")
-    webhook_url = os.environ.get(
-        "GOOGLE_SHEETS_WEBHOOK_URL",
-        "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec"
-    )
+jobs:
+  fetch-buoy-data:
+    name: Extraer Sensores Boya Malaga
+    runs-on: ubuntu-latest
 
-    if not username or not password:
-        print("❌ ERROR CRÍTICO: Faltan credenciales de Copernicus.")
-        sys.exit(1)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    try:
-        import copernicusmarine
-        import xarray as xr
-        import numpy as np
-    except ImportError as e:
-        print(f"❌ ERROR: Librerías faltantes ({e}).")
-        sys.exit(1)
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    output_dir = "./copernicus_raw_files"
-    os.makedirs(output_dir, exist_ok=True)
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install copernicusmarine xarray netCDF4 requests pandas
 
-    datasets_to_check = [
-        "cmems_obs-ins_glo_phybgcwav_mynrt_na_irr",
-        "cmems_obs-ins_ibi_phybgcwav_mynrt_na_irr",
-        "cmems_obs-ins_med_phybgcwav_mynrt_na_irr"
-    ]
-
-    file_filters = [
-        "*6100280*",
-        "*61280*",
-        "*MO_61*",
-        "*Malaga*"
-    ]
-
-    downloaded_files = []
-    found_dataset = None
-
-    print(f"🔑 Autenticando con usuario: {username}")
-
-    for d_id in datasets_to_check:
-        print(f"\n📦 Explorando Dataset In-Situ: {d_id}...")
-        for pattern in file_filters:
-            try:
-                print(f"   🔍 Buscando archivos con filtro: '{pattern}'...")
-                res = copernicusmarine.get(
-                    username=username,
-                    password=password,
-                    dataset_id=d_id,
-                    dataset_part="latest",
-                    filter=pattern,
-                    output_directory=output_dir,
-                    overwrite_output_data=True,
-                    no_directories=True
-                )
-                if res:
-                    files_list = res if isinstance(res, list) else [res]
-                    if len(files_list) > 0:
-                        print(f"   ✅ ¡ENCONTRADO Y DESCARGADO!: {files_list}")
-                        downloaded_files = files_list
-                        found_dataset = d_id
-                        break
-            except Exception as e:
-                print(f"   ℹ️ Sin coincidencias para '{pattern}' en este dataset ({e})")
-        if downloaded_files:
-            break
-
-    if not downloaded_files:
-        print("\n🔍 Buscando en partición 'history'...")
-        for d_id in datasets_to_check:
-            for pattern in ["*6100280*", "*61280*"]:
-                try:
-                    res = copernicusmarine.get(
-                        username=username,
-                        password=password,
-                        dataset_id=d_id,
-                        dataset_part="history",
-                        filter=pattern,
-                        output_directory=output_dir,
-                        overwrite_output_data=True,
-                        no_directories=True
-                    )
-                    if res:
-                        files_list = res if isinstance(res, list) else [res]
-                        if len(files_list) > 0:
-                            print(f"   ✅ ¡ENCONTRADO EN HISTORIAL!: {files_list}")
-                            downloaded_files = files_list
-                            found_dataset = d_id
-                            break
-                except Exception:
-                    pass
-            if downloaded_files:
-                break
-
-    nc_files = glob.glob(os.path.join(output_dir, "*.nc"))
-
-    if not nc_files:
-        print("\n" + "!" * 70)
-        print("❌ RESULTADO: NO SE ENCONTRÓ NINGÚN ARCHIVO NETCDF EN COPERNICUS.")
-        print("   Copernicus no tiene indexado en este momento el archivo de la boya de Málaga.")
-        print("   NO SE GUARDARÁ NINGÚN DATO EN GOOGLE SHEETS.")
-        print("!" * 70)
-        sys.exit(1)
-
-    target_nc = nc_files[0]
-    file_size_kb = os.path.getsize(target_nc) / 1024.0
-    print("\n" + "=" * 70)
-    print(f"📂 ABRIENDO ARCHIVO CIENTÍFICO NETCDF REAL:")
-    print(f"   • Archivo: {os.path.basename(target_nc)}")
-    print(f"   • Tamaño:  {file_size_kb:.1f} KB")
-    print(f"   • Dataset: {found_dataset}")
-    print("=" * 70)
-
-    try:
-        ds = xr.open_dataset(target_nc)
-        
-        print("\n📋 METADATOS OFICIALES DEL ARCHIVO:")
-        print(f"   • Institución:     {ds.attrs.get('institution', ds.attrs.get('institution_name', 'No especificada'))}")
-        print(f"   • Plataforma/Boya: {ds.attrs.get('platform_code', ds.attrs.get('site_code', 'Desconocido'))}")
-        print(f"   • Título Dataset:  {ds.attrs.get('title', 'N/A')}")
-        print(f"   • Coordenadas:     Lat {ds.attrs.get('geospatial_lat_min', 'N/A')} | Lon {ds.attrs.get('geospatial_lon_min', 'N/A')}")
-        print(f"   • Variables Físicas en el Sensor: {list(ds.data_vars.keys())}")
-
-        def extract_clean_numeric(var_names):
-            for name in var_names:
-                if name in ds:
-                    vals = ds[name].values
-                    valid = vals[~np.isnan(vals)] if hasattr(vals, '__iter__') else ([vals] if not np.isnan(vals) else [])
-                    if len(valid) > 0:
-                        return float(valid[-1]), name
-            return None, None
-
-        vhm0, vhm0_var = extract_clean_numeric(["VHM0", "VAVH", "sea_surface_wave_significant_height", "HCSP"])
-        vtpk, vtpk_var = extract_clean_numeric(["VTPK", "VTZA", "sea_surface_wave_peak_period"])
-        vmdr, vmdr_var = extract_clean_numeric(["VMDR", "VPED", "sea_surface_wave_from_direction"])
-        temp, temp_var = extract_clean_numeric(["TEMP", "sea_water_temperature"])
-        wspd, wspd_var = extract_clean_numeric(["WSPD", "wind_speed"])
-        wdir, wdir_var = extract_clean_numeric(["WDIR", "wind_direction"])
-
-        if 'TIME' in ds:
-            time_raw = ds['TIME'].values[-1]
-            time_str = str(time_raw).replace('T', ' ')[:19]
-        else:
-            time_str = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-
-        print("\n📊 MEDICIONES REALES EXTRAÍDAS DEL SENSOR:")
-        print(f"   🌊 Altura Significante Ola ({vhm0_var}): {vhm0 if vhm0 is not None else 'No disponible'} m")
-        print(f"   ⏱️ Periodo Pico ({vtpk_var}):           {vtpk if vtpk is not None else 'No disponible'} s")
-        print(f"   🧭 Dirección Oleaje ({vmdr_var}):       {vmdr if vmdr is not None else 'No disponible'}°")
-        print(f"   🌡️ Temp. Agua del Mar ({temp_var}):    {temp if temp is not None else 'No disponible'} °C")
-        print(f"   💨 Viento ({wspd_var}):                 {wspd if wspd is not None else 'No disponible'} kn ({wdir if wdir is not None else '—'}°)")
-        print(f"   📅 Fecha/Hora de la Medición Sensor:   {time_str} UTC")
-        print("=" * 70)
-
-        if vhm0 is None and temp is None:
-            print("⚠️ El archivo NetCDF no contiene variables de ola ni temperatura válidas.")
-            ds.close()
-            sys.exit(1)
-
-        payload = {
-            "origenDato": f"Boya: Copernicus In-Situ Sensor ({ds.attrs.get('platform_code', 'NetCDF')})",
-            "playa": "misericordia",
-            "boyaAltura": round(vhm0, 2) if vhm0 is not None else "",
-            "boyaPeriodo": round(vtpk, 1) if vtpk is not None else "",
-            "boyaDireccion": round(vmdr, 0) if vmdr is not None else "",
-            "boyaTemp": round(temp, 1) if temp is not None else "",
-            "vientoSpeed": round(wspd, 1) if wspd is not None else "",
-            "vientoDir": round(wdir, 0) if wdir is not None else "",
-            "notasCalibracion": f"Sensor Real NetCDF: {os.path.basename(target_nc)} ({time_str} UTC)"
-        }
-
-        print(f"\n📤 Enviando medición real al Webhook de Google Sheets...")
-        resp = requests.post(webhook_url, json=payload, timeout=15)
-        print(f"✅ Respuesta Webhook: HTTP {resp.status_code}")
-        print("🎉 Medición física real registrada en Google Sheets.")
-        ds.close()
-
-    except Exception as e:
-        print(f"❌ Error al procesar el archivo NetCDF: {e}")
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
+      - name: Run worker
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUS_USERNAME || 'jmolina12' }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD || '0018__Manger' }}
+          GOOGLE_SHEETS_WEBHOOK_URL: "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec"
+        run: |
+          python scripts/copernicus_worker/fetch_buoy_copernicus.py
