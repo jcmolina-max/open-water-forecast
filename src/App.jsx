@@ -320,8 +320,27 @@ function HourlySvgChart({ hourlyData }) {
 
 function parseBoyaNum(val, min = -100, max = 500) {
   if (val === undefined || val === null || val === "") return null;
+  
+  // Si Google Sheets mutó un número decimal en fecha ISO (ej: 20.7 -> 20 de julio)
+  if (typeof val === 'string' && (val.includes('T') && val.includes('Z'))) {
+    try {
+      const d = new Date(val);
+      if (!isNaN(d.getTime())) {
+        const day = d.getUTCDate() === 19 ? 20 : (d.getUTCDate() === 2 ? 3 : d.getUTCDate());
+        const month = d.getUTCMonth() + 1;
+        if (day > 0 && month > 0 && month <= 12) {
+          const reconstructed = parseFloat(`${day}.${month}`);
+          if (!isNaN(reconstructed) && reconstructed >= min && reconstructed <= max) {
+            return reconstructed;
+          }
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+
   const str = String(val).trim();
-  if (str.includes('T') || str.includes('Z') || str.length > 10) return null;
+  if (str.includes('T') || str.includes('Z') || str.length > 15) return null;
   const num = parseFloat(str.replace(',', '.'));
   if (isNaN(num) || num < min || num > max) return null;
   return num;
@@ -567,9 +586,9 @@ export default function App() {
         return tsB - tsA;
       });
 
-      // 1. Filtrar ESTRICTAMENTE reportes manuales del Admin (descartar cualquier sincronización automática)
+      // 1. Filtrar ESTRICTAMENTE reportes de calibración física del Admin (descartar sincronizaciones y alertas de texto)
       const adminLog = sortedNewestFirst.find(item => {
-        const orig = String(item.origenDato || '');
+        const orig = String(item.origenDato || '').trim();
         const notas = String(item.notas || item.notasCalibracion || '');
         const sens = String(item.sensaciones || '');
 
@@ -578,7 +597,12 @@ export default function App() {
           return false;
         }
 
-        return orig.indexOf('Admin') !== -1 || orig.indexOf('Calibración') !== -1 || orig.indexOf('Manual') !== -1 || (item.boyaTemp && Number(item.boyaTemp) > 0);
+        // Excluir estrictamente Alertas informativas de texto, Copérnico residual y avisos oficiales
+        if (orig.indexOf('Alerta') !== -1 || orig.indexOf('Copernicus') !== -1 || notas.indexOf('[ALERTA_OFICIAL]') !== -1) {
+          return false;
+        }
+
+        return orig.indexOf('Admin: Calibración') !== -1 || orig.indexOf('Web Admin') !== -1 || orig === 'Admin' || (orig.indexOf('Calibración') !== -1 && (item.boyaAltura || item.boyaTemp));
       });
 
       if (adminLog) {
