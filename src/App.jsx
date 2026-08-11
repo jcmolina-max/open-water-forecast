@@ -684,6 +684,8 @@ export default function App() {
   const [adminBoyaPeriodo, setAdminBoyaPeriodo] = useState('');
   const [adminBoyaDireccion, setAdminBoyaDireccion] = useState('');
   const [adminBoyaTemp, setAdminBoyaTemp] = useState('');
+  const [showAdminPortusWidget, setShowAdminPortusWidget] = useState(false);
+  const [adminVientoMs, setAdminVientoMs] = useState('');
 
   // Estados para el reporte público de nadadores (Comunidad)
   const [isSwimmerModalOpen, setIsSwimmerModalOpen] = useState(false);
@@ -1957,6 +1959,7 @@ export default function App() {
       setAdminBoyaPeriodo('');
       setAdminBoyaDireccion('');
       setAdminBoyaTemp('');
+      setAdminVientoMs('');
       
       // Esperar 2.5 segundos para dar tiempo a que Google Sheets inserte la fila antes de refrescar el historial
       setTimeout(() => {
@@ -3947,7 +3950,7 @@ export default function App() {
           onClick={() => setIsAdminModalOpen(false)}
         >
           <div
-            className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200"
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-lg md:max-w-2xl overflow-hidden relative flex flex-col max-h-[92vh] animate-in fade-in zoom-in duration-200"
             role="dialog"
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
@@ -4134,67 +4137,158 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100/60 space-y-2 text-left">
-                        <span className="block text-[10px] font-black text-blue-700 uppercase tracking-wider mb-1">⚓ Datos de la Boya Real (Málaga) - Opcional</span>
-                        
-                        <div className="grid grid-cols-2 gap-3">
+                      {/* SECCIÓN ASISTIDA DE BOYA REAL (PORTUS + CONVERSORES) */}
+                      <div className="bg-gradient-to-br from-blue-50/70 to-indigo-50/40 p-3.5 rounded-2xl border border-blue-200/70 space-y-3 text-left shadow-xs">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-1.5">
+                            <Anchor size={14} className="text-blue-600 shrink-0" />
+                            <span className="text-[10px] font-black text-blue-800 uppercase tracking-wider">
+                              ⚓ Boya Real Portus (Málaga 2056)
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowAdminPortusWidget(!showAdminPortusWidget)}
+                            className="text-[9px] font-black bg-white hover:bg-blue-50 text-blue-700 border border-blue-300 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                          >
+                            {showAdminPortusWidget ? '▲ Ocultar Portus' : '👁️ Ver Widget Portus'}
+                          </button>
+                        </div>
+
+                        {/* VISOR PLEGABLE PORTUS EN VIVO */}
+                        {showAdminPortusWidget && (
+                          <div className="rounded-xl overflow-hidden border border-blue-200 bg-white shadow-inner animate-in fade-in zoom-in duration-200">
+                            <div className="bg-slate-900 text-white px-3 py-1.5 text-[9px] font-bold flex justify-between items-center">
+                              <span>🏛️ Puertos del Estado - Estación Málaga 35218</span>
+                              <span className="text-[8px] text-emerald-400 font-mono flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                EN VIVO
+                              </span>
+                            </div>
+                            <iframe
+                              src="https://portus.puertos.es/#/locationsWidget?code=35218"
+                              title="Widget Oficial Portus Málaga"
+                              className="w-full h-72 md:h-80 border-0"
+                              loading="lazy"
+                            />
+                          </div>
+                        )}
+
+                        {/* CAMPOS NUMÉRICOS DE BOYA */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                           <div>
-                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Altura Boya (m)</label>
+                            <label className="block text-[8.5px] font-extrabold text-slate-600 uppercase mb-1">🌊 Altura (Hs m)</label>
                             <input 
                               type="text" 
                               value={adminBoyaAltura}
                               onChange={(e) => setAdminBoyaAltura(e.target.value)}
-                              placeholder="Ej: 0.45"
-                              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                              placeholder="Ej: 0.22"
+                              className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-black text-blue-700 bg-white shadow-2xs focus:border-blue-500 outline-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Periodo Boya (s)</label>
+                            <label className="block text-[8.5px] font-extrabold text-slate-600 uppercase mb-1">⏱️ Periodo (Tp s)</label>
                             <input 
                               type="text" 
                               value={adminBoyaPeriodo}
                               onChange={(e) => setAdminBoyaPeriodo(e.target.value)}
-                              placeholder="Ej: 4.2"
-                              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
-                            />
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Dirección Boya (º)</label>
-                            <input 
-                              type="text" 
-                              value={adminBoyaDireccion}
-                              onChange={(e) => setAdminBoyaDireccion(e.target.value)}
-                              placeholder="Ej: 110"
-                              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                              placeholder="Ej: 3.1"
+                              className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-black text-indigo-700 bg-white shadow-2xs focus:border-indigo-500 outline-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Temp Agua (ºC)</label>
+                            <label className="block text-[8.5px] font-extrabold text-slate-600 uppercase mb-1">🌡️ Temp Agua (ºC)</label>
                             <input 
                               type="text" 
                               value={adminBoyaTemp}
                               onChange={(e) => setAdminBoyaTemp(e.target.value)}
-                              placeholder="Ej: 21.5"
-                              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                              placeholder="Ej: 20.4"
+                              className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-black text-cyan-700 bg-white shadow-2xs focus:border-cyan-500 outline-none"
                             />
+                          </div>
+                          <div>
+                            <label className="block text-[8.5px] font-extrabold text-slate-600 uppercase mb-1">🧭 Rumbo (º)</label>
+                            <input 
+                              type="text" 
+                              value={adminBoyaDireccion}
+                              onChange={(e) => setAdminBoyaDireccion(e.target.value)}
+                              placeholder="Ej: 135"
+                              className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-black text-slate-800 bg-white shadow-2xs focus:border-indigo-500 outline-none text-center"
+                            />
+                          </div>
+                        </div>
+
+                        {/* BOTONERA RÁPIDA DE RUMBOS (ROSA DE LOS VIENTOS TOUCH) */}
+                        <div>
+                          <span className="block text-[8px] font-black text-slate-500 uppercase mb-1">⚡ Selector Rápido de Rumbo (Toca para fijar grados):</span>
+                          <div className="grid grid-cols-4 sm:grid-cols-8 gap-1">
+                            {[
+                              { code: 'SE', deg: '135', label: '↖️ SE 135º' },
+                              { code: 'E', deg: '90', label: '⬅️ E 90º' },
+                              { code: 'ESE', deg: '112', label: '↖️ ESE 112º' },
+                              { code: 'SO', deg: '225', label: '↗️ SO 225º' },
+                              { code: 'S', deg: '180', label: '⬆️ S 180º' },
+                              { code: 'O', deg: '270', label: '➡️ O 270º' },
+                              { code: 'NE', deg: '45', label: '↙️ NE 45º' },
+                              { code: 'NO', deg: '315', label: '↘️ NO 315º' }
+                            ].map(r => (
+                              <button
+                                key={r.code}
+                                type="button"
+                                onClick={() => {
+                                  setAdminBoyaDireccion(r.deg);
+                                  setAdminRealVientoDir(r.code);
+                                }}
+                                className={`py-1 px-1 rounded-lg text-[8.5px] font-extrabold transition-all border text-center cursor-pointer ${adminBoyaDireccion === r.deg ? 'bg-blue-600 text-white border-blue-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-blue-50 border-slate-200'}`}
+                              >
+                                {r.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* AUTO-CONVERSOR DE VIENTO: M/S A NUDOS */}
+                        <div className="bg-white/90 p-2.5 rounded-xl border border-blue-100/80 space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[8.5px] font-black text-slate-600 uppercase">💨 Viento Portus (Auto-conversor m/s ➔ Nudos)</span>
+                            {adminVientoMs && !isNaN(parseFloat(adminVientoMs.replace(',', '.'))) && (
+                              <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                ≈ {(parseFloat(adminVientoMs.replace(',', '.')) * 1.94384).toFixed(1)} nudos
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <input 
+                                type="text" 
+                                value={adminVientoMs}
+                                onChange={(e) => {
+                                  const vMs = e.target.value;
+                                  setAdminVientoMs(vMs);
+                                  const num = parseFloat(vMs.replace(',', '.'));
+                                  if (!isNaN(num)) {
+                                    const kts = (num * 1.94384).toFixed(1);
+                                    setAdminRealVientoFza(`${kts} kts (${vMs} m/s)`);
+                                  }
+                                }}
+                                placeholder="Ej: 3.5 m/s"
+                                className="w-full border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-white"
+                              />
+                            </div>
+                            <div>
+                              <input 
+                                type="text" 
+                                value={adminRealVientoFza}
+                                onChange={(e) => setAdminRealVientoFza(e.target.value)}
+                                placeholder="Fuerza manual o en nudos"
+                                className="w-full border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-white"
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Fza (Fuerza)</label>
-                          <input 
-                            type="text" 
-                            value={adminRealVientoFza}
-                            onChange={(e) => setAdminRealVientoFza(e.target.value)}
-                            placeholder="Suave / Fuerte / Medio"
-                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
-                          />
-                        </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Dir (Dirección)</label>
                           <input 
@@ -4202,7 +4296,7 @@ export default function App() {
                             value={adminRealVientoDir}
                             onChange={(e) => setAdminRealVientoDir(e.target.value)}
                             placeholder="S/SO, Levante, Poniente..."
-                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
+                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
                           />
                         </div>
                       </div>
