@@ -1788,8 +1788,9 @@ export default function App() {
         const mergedFactors = { ...localFactors };
         const mergedTimes = { ...localTimes };
 
-        // 2. Extraer marcas de tiempo y factores guardados por el supervisor desde Google Sheets
-        fetchedLogs.forEach(item => {
+        // 2. Extraer marcas de tiempo y factores guardados por el supervisor desde Google Sheets en orden cronológico
+        const chronoLogs = [...fetchedLogs].sort((a, b) => parseLogTimestamp(a) - parseLogTimestamp(b));
+        chronoLogs.forEach(item => {
           const itemOrig = String(item.origenDato || "");
           const itemSens = String(item.sensaciones || "");
           if (itemOrig === 'Admin: Factor' || itemSens.startsWith('[FactorConfig:')) {
@@ -1802,8 +1803,12 @@ export default function App() {
                   const localTs = Number(localTimes[parsed.storageKey] || 0);
                   // Solo aceptar la actualización de la nube si es más reciente o igual a la marca de tiempo local
                   if (cloudTs >= localTs) {
-                    if (parsed.factor !== undefined && parsed.factor !== null) {
-                      mergedFactors[parsed.storageKey] = parsed.factor;
+                    if (parsed.factor !== undefined && parsed.factor !== null && !isNaN(Number(parsed.factor))) {
+                      mergedFactors[parsed.storageKey] = parseFloat(parsed.factor);
+                      mergedTimes[parsed.storageKey] = cloudTs;
+                    } else {
+                      // RESET A FÁBRICA: Eliminar la sobreescritura manual
+                      delete mergedFactors[parsed.storageKey];
                       mergedTimes[parsed.storageKey] = cloudTs;
                     }
                   }
