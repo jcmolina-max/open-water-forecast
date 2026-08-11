@@ -927,32 +927,61 @@ export default function App() {
     return filtered.length > 0 ? filtered : valid;
   }
 
-  // Dynamic Buoy Scale Factor por Sector (Levante 🌅 vs Poniente 🌇)
-  function getBoyaScaleFactor(beachKey, currentDirection) {
-    const dir = currentDirection || 110; // Default Levante si no se proporciona dirección
-    const isLevante = dir >= 45 && dir <= 165;
-    const sectorKey = isLevante ? 'levante' : 'poniente';
+  // Clasificador Físico de los 5 Sectores Meteorológicos
+  function getSectorKeyForHour(waveDir, windDir, windKnots, tempAire) {
+    const wDir = Number(windDir !== undefined && windDir !== null && !isNaN(windDir) ? windDir : (waveDir || 120));
+    const wSpd = Number(windKnots || 6.5);
+    const temp = Number(tempAire || 26);
+
+    // 1. Terral Puro: Viento N/NW de tierra o viento oeste con alta temperatura térmica
+    if ((wDir >= 285 && wDir <= 360) || (wDir >= 0 && wDir <= 35) || (temp >= 27.5 && wDir >= 270)) {
+      return 'terral';
+    } 
+    // 2. Levante: E/SE (45° a 155°)
+    else if (wDir >= 45 && wDir <= 155) {
+      return wSpd >= 10.0 ? 'levante_fuerte' : 'levante_suave';
+    } 
+    // 3. Poniente: S/SO/W (175° a 284°)
+    else if (wDir >= 175 && wDir <= 284) {
+      return wSpd >= 10.0 ? 'poniente_fuerte' : 'poniente_suave';
+    }
+    // 4. Default según intensidad
+    return wSpd >= 10.0 ? 'levante_fuerte' : 'levante_suave';
+  }
+
+  // Dynamic Buoy Scale Factor por 5 Sectores (Conexión Directa Panel Admin ↔ Portada)
+  function getBoyaScaleFactor(beachKey, waveDir, windDir, windKnots, tempAire) {
+    const sectorKey = getSectorKeyForHour(waveDir, windDir, windKnots, tempAire);
     const storageKey = `${beachKey}_${sectorKey}`;
 
-    // 1. Si el Administrador fijó un factor manual o aprobó uno específico para este sector
+    // 1. Si el Administrador fijó un factor manual o aprobó una sugerencia para este sector de 5
     if (adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null) {
       return parseFloat(adminManualScaleFactors[storageKey]);
     }
-    // Compatibilidad por si hay fijado un factor general sin sector
+
+    // 2. Compatibilidad retroactiva si hay fijado un factor antiguo de 2 sectores (levante / poniente)
+    const isLevante = (windDir || waveDir || 110) >= 45 && (windDir || waveDir || 110) <= 165;
+    const legacyStorageKey = `${beachKey}_${isLevante ? 'levante' : 'poniente'}`;
+    if (adminManualScaleFactors && adminManualScaleFactors[legacyStorageKey] !== undefined && adminManualScaleFactors[legacyStorageKey] !== null) {
+      return parseFloat(adminManualScaleFactors[legacyStorageKey]);
+    }
     if (adminManualScaleFactors && adminManualScaleFactors[beachKey] !== undefined && adminManualScaleFactors[beachKey] !== null) {
       return parseFloat(adminManualScaleFactors[beachKey]);
     }
 
-    // Factor por defecto de fábrica según playa y sector de viento
-    let defaultFactor = 1.0;
-    if (beachKey === 'misericordia') {
-      defaultFactor = isLevante ? 0.60 : 0.50;
-    } else if (beachKey === 'malagueta' || beachKey === 'pedregalejo') {
-      defaultFactor = isLevante ? 1.00 : 0.70;
-    }
+    // 3. Factores de fábrica calibrados por playa y sector
+    const defaultFactoryMap = {
+      misericordia:   { levante_fuerte: 0.85, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.35, terral: 0.15 },
+      malagueta:      { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.30, terral: 0.15 },
+      pedregalejo:    { levante_fuerte: 0.65, levante_suave: 0.50, poniente_fuerte: 0.40, poniente_suave: 0.30, terral: 0.15 },
+      los_alamos:     { levante_fuerte: 0.90, levante_suave: 0.85, poniente_fuerte: 0.90, poniente_suave: 0.75, terral: 0.20 },
+      bajondillo:     { levante_fuerte: 0.80, levante_suave: 0.70, poniente_fuerte: 0.70, poniente_suave: 0.60, terral: 0.20 },
+      cala_del_moral: { levante_fuerte: 0.75, levante_suave: 0.65, poniente_fuerte: 0.70, poniente_suave: 0.45, terral: 0.15 },
+      rincon_victoria:{ levante_fuerte: 0.85, levante_suave: 0.80, poniente_fuerte: 0.70, poniente_suave: 0.50, terral: 0.15 }
+    };
 
-    // La web pública aplica el factor por defecto de fábrica hasta que el Administrador apruebe explícitamente una sugerencia
-    return defaultFactor;
+    const bMap = defaultFactoryMap[beachKey] || { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.50, poniente_suave: 0.35, terral: 0.15 };
+    return bMap[sectorKey] !== undefined ? bMap[sectorKey] : 0.50;
   }
 
   // Dynamic Sector Satellite Bias Factor (F_sesgo = Boya Real / Satélite Promedio)
@@ -1293,8 +1322,9 @@ export default function App() {
             let localRule = null;
             let ruleColor = "";
 
-            // Dynamic Scale Factor por Sector (F_orilla)
-            const scaleFactor = getBoyaScaleFactor(selectedBeach, waveDir);
+            // Dynamic Scale Factor por 5 Sectores (F_orilla)
+            const hourAirTemp = localClimateDown ? 26 : (weatherJson?.hourly?.temperature_2m?.[i] || 26);
+            const scaleFactor = getBoyaScaleFactor(selectedBeach, waveDir, windDir, windKnots, hourAirTemp);
             
             // La clasificación del sector y el factor de escala aplicado dependen 100% EXCLUSIVAMENTE de la dirección real de la ola (waveDir)
             if ((selectedBeach === 'malagueta' || selectedBeach === 'pedregalejo') && waveDir >= 200 && waveDir <= 300) {
