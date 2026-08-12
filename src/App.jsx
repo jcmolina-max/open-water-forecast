@@ -596,13 +596,14 @@ function getRecordType(item) {
 }
 
 function swimmerScaleToMeters(v) {
-  const val = parseFloat((v || "0").toString().replace(",", "."));
+  if (v === null || v === undefined || v === "" || v === 0 || v === "0") return null;
+  const val = parseFloat(v.toString().replace(",", "."));
   if (val === 1) return 0.05;
   if (val === 2) return 0.20;
   if (val === 3) return 0.45;
   if (val === 4) return 0.80;
   if (val === 5) return 1.20;
-  return 0.3;
+  return null;
 };
 
 export default function App() {
@@ -5064,15 +5065,23 @@ export default function App() {
                           const dateFmt = formatFriendlyDate(dObj).split(',')[0];
                           const label = `${dateFmt} ${hClean}`;
 
-                          // Ola Satélite Bruto
-                          const rawSat = parseFloat((item.modelEcmwfOlas || item.prevOlaSat || (item.appOlas ? Number(item.appOlas) * 1.6 : 0.25)).toString().replace(',', '.'));
-                          // Ola Nuestra App
-                          const ourApp = parseFloat((item.appOlas || item.prevOlaApp || (rawSat * 0.65)).toString().replace(',', '.'));
-                          // Ola Boya Real
+                          // Ola Satélite Bruto (filtrar anomalías > 2.5m)
+                          const rawSatParsed = parseFloat((item.modelEcmwfOlas || item.prevOlaSat || (item.appOlas ? Number(item.appOlas) * 1.6 : 0.25)).toString().replace(',', '.'));
+                          const rawSat = !isNaN(rawSatParsed) && rawSatParsed > 0 && rawSatParsed <= 2.5 ? rawSatParsed : 0.25;
+
+                          // Ola Nuestra App (filtrar anomalías > 2.5m)
+                          const ourAppParsed = parseFloat((item.appOlas || item.prevOlaApp || (rawSat * 0.65)).toString().replace(',', '.'));
+                          const ourApp = !isNaN(ourAppParsed) && ourAppParsed > 0 && ourAppParsed <= 2.5 ? ourAppParsed : (rawSat * 0.65);
+
+                          // Ola Boya Real (filtrar estrictamente anomalías > 2.5m para eliminar picos de prueba)
                           const buoyInfo = getBuoyReadingForLog(item);
-                          const bH = parseBoyaNum(buoyInfo.height || item.boyaAltura, 0.01, 15);
-                          // Ola Nadador
-                          const swimmerH = swimmerScaleToMeters(item.realOlas);
+                          const bH = parseBoyaNum(buoyInfo.height || item.boyaAltura, 0.01, 2.5);
+
+                          // Ola Nadador: Estrictamente solo si viene de un reporte de nadador con escala válida
+                          const isSwimmerReport = (item.origenDato && String(item.origenDato).toLowerCase().includes('nadador')) || 
+                                                  (item.sensaciones && String(item.sensaciones).includes('[Nombre:'));
+                          const swimmerH = isSwimmerReport && item.realOlas ? swimmerScaleToMeters(item.realOlas) : null;
+
                           // Nombre nadador
                           const sens = String(item.sensaciones || '');
                           let swName = 'Nadador';
@@ -5095,10 +5104,10 @@ export default function App() {
                             id: `log-${idx}-${ts}`,
                             timestamp: ts,
                             label,
-                            rawSatWave: !isNaN(rawSat) && rawSat > 0 ? parseFloat(rawSat.toFixed(2)) : 0.20,
-                            ourAppWave: !isNaN(ourApp) && ourApp > 0 ? parseFloat(ourApp.toFixed(2)) : 0.12,
+                            rawSatWave: parseFloat(rawSat.toFixed(2)),
+                            ourAppWave: parseFloat(ourApp.toFixed(2)),
                             buoyWave: bH !== null ? parseFloat(bH.toFixed(2)) : null,
-                            swimmerWave: swimmerH > 0 ? parseFloat(swimmerH.toFixed(2)) : null,
+                            swimmerWave: swimmerH !== null && swimmerH > 0 ? parseFloat(swimmerH.toFixed(2)) : null,
                             swimmerName: swName,
                             satTemp: satT !== null ? parseFloat(satT.toFixed(1)) : 23.5,
                             buoyTemp: buoyT !== null ? parseFloat(buoyT.toFixed(1)) : 21.6,
@@ -5124,8 +5133,8 @@ export default function App() {
                                 rawSatWave: parseFloat((0.25 + (hIdx * 0.04)).toFixed(2)),
                                 ourAppWave: parseFloat((0.14 + (hIdx * 0.02)).toFixed(2)),
                                 buoyWave: parseFloat((0.12 + (hIdx * 0.02)).toFixed(2)),
-                                swimmerWave: h === '21:00' || h === '11:00' ? 0.10 : null,
-                                swimmerName: 'Nadador Anónimo',
+                                swimmerWave: null,
+                                swimmerName: 'Nadador',
                                 satTemp: 23.5,
                                 buoyTemp: 21.6,
                                 satWind: 7.2,
@@ -5145,7 +5154,7 @@ export default function App() {
                                 rawSatWave: parseFloat((0.22 + (hIdx * 0.03)).toFixed(2)),
                                 ourAppWave: parseFloat((0.13 + (hIdx * 0.02)).toFixed(2)),
                                 buoyWave: hIdx <= 2 ? parseFloat((0.11 + (hIdx * 0.02)).toFixed(2)) : null,
-                                swimmerWave: h === '08:00' ? 0.10 : null,
+                                swimmerWave: null,
                                 swimmerName: 'Club OpenWater',
                                 satTemp: 23.8,
                                 buoyTemp: 21.6,
@@ -5366,26 +5375,17 @@ export default function App() {
                                     />
                                   ))}
 
-                                  {/* PUNTOS 4: 🟢 Nadadores (Nodos Brillantes) */}
+                                  {/* PUNTOS 4: 🟢 Nadadores (Nodos Estáticos Esmeralda) */}
                                   {chartMetric === 'waves' && swimmerCoords.map((c, i) => (
                                     <g key={`swimmer-node-${i}`}>
                                       <circle
                                         cx={c.x}
                                         cy={c.y}
-                                        r="6.5"
+                                        r="5.5"
                                         fill="#10b981"
                                         stroke="#ffffff"
                                         strokeWidth="2"
-                                        className="cursor-pointer hover:scale-125 transition-transform"
-                                      />
-                                      <circle
-                                        cx={c.x}
-                                        cy={c.y}
-                                        r="9"
-                                        fill="none"
-                                        stroke="#34d399"
-                                        strokeWidth="1.5"
-                                        className="animate-ping opacity-60"
+                                        className="cursor-pointer"
                                       />
                                     </g>
                                   ))}
