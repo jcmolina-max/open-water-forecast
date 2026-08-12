@@ -500,12 +500,30 @@ function formatSwimFriendly(dateVal, swimHourRaw) {
   const swimHour = cleanHourString(swimHourRaw);
   if (!dateVal) return swimHour || '—';
   try {
-    const regDate = new Date(dateVal);
+    const rawStr = String(dateVal).trim();
+    const todayStr = getIsoDateString();
+    const yestStr = getYesterdayIsoString();
+    const hourSuffix = swimHour ? `, ${swimHour}` : '';
+
+    if (rawStr.startsWith(todayStr)) {
+      return `Hoy${hourSuffix}`;
+    } else if (rawStr.startsWith(yestStr)) {
+      return `Ayer${hourSuffix}`;
+    }
+
+    let regDate;
+    if (/^\d{4}-\d{2}-\d{2}/.test(rawStr)) {
+      const parts = rawStr.split('T')[0].split(' ')[0].split('-');
+      regDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    } else {
+      regDate = new Date(rawStr);
+    }
+    
+    if (isNaN(regDate.getTime())) return `${rawStr}${hourSuffix}`;
+
     const today = new Date();
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
-    
-    const hourSuffix = swimHour ? `, ${swimHour}` : '';
     
     if (regDate.toDateString() === today.toDateString()) {
       return `Hoy${hourSuffix}`;
@@ -4165,7 +4183,14 @@ export default function App() {
                           <input 
                             type="text" 
                             value={adminHoraNado}
-                            onChange={(e) => setAdminHoraNado(e.target.value)}
+                            onChange={(e) => {
+                              const newHourStr = e.target.value;
+                              setAdminHoraNado(newHourStr);
+                              const hourNum = parseInt((newHourStr || '').split(':')[0]);
+                              if (!isNaN(hourNum) && hourNum > new Date().getHours() && adminFechaNado === getIsoDateString()) {
+                                setAdminFechaNado(getYesterdayIsoString());
+                              }
+                            }}
                             placeholder="11:00"
                             className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 text-center"
                           />
@@ -5162,7 +5187,14 @@ export default function App() {
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Hora de Nado</label>
                     <select 
                       value={swimmerHoraNado}
-                      onChange={(e) => setSwimmerHoraNado(e.target.value)}
+                      onChange={(e) => {
+                        const newHourStr = e.target.value;
+                        setSwimmerHoraNado(newHourStr);
+                        const hourNum = parseInt(newHourStr.split(':')[0]);
+                        if (hourNum > new Date().getHours() && swimmerFechaNado === getIsoDateString()) {
+                          setSwimmerFechaNado(getYesterdayIsoString());
+                        }
+                      }}
                       className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
                     >
                       {Array.from({ length: 16 }, (_, i) => i + 6).map(h => {
