@@ -485,6 +485,10 @@ function formatFriendlyDate(dateString) {
 function cleanHourString(raw) {
   if (!raw) return '';
   const str = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2}[ T](\d{1,2}:\d{2})/.test(str)) {
+    const m = str.match(/^\d{4}-\d{2}-\d{2}[ T](\d{1,2}:\d{2})/);
+    if (m && m[1]) return m[1].padStart(5, '0');
+  }
   if (str.includes('1899') || str.includes('GMT') || str.includes('T')) {
     const d = new Date(raw);
     if (!isNaN(d.getTime())) {
@@ -493,33 +497,41 @@ function cleanHourString(raw) {
       return `${hh}:${mm}`;
     }
   }
-  return str;
+  return str.length >= 5 ? str.substring(0, 5) : str;
 }
 
 function formatSwimFriendly(dateVal, swimHourRaw) {
-  const swimHour = cleanHourString(swimHourRaw);
-  if (!dateVal) return swimHour || '—';
+  let rawDateStr = String(dateVal || '').trim();
+  const rawHourStr = String(swimHourRaw || '').trim();
+  
+  // Si swimHourRaw contiene la fecha real del nado (ej: "2026-08-11 21:00"), esa es la fecha REAL de la sesión
+  if (/^\d{4}-\d{2}-\d{2}/.test(rawHourStr)) {
+    rawDateStr = rawHourStr.split(' ')[0].split('T')[0];
+  }
+
+  const swimHour = cleanHourString(rawHourStr);
+  if (!rawDateStr) return swimHour || '—';
+  
+  const hourSuffix = swimHour ? `, ${swimHour}` : '';
+  const todayStr = getIsoDateString();
+  const yestStr = getYesterdayIsoString();
+
+  if (rawDateStr.startsWith(todayStr)) {
+    return `Hoy${hourSuffix}`;
+  } else if (rawDateStr.startsWith(yestStr)) {
+    return `Ayer${hourSuffix}`;
+  }
+
   try {
-    const rawStr = String(dateVal).trim();
-    const todayStr = getIsoDateString();
-    const yestStr = getYesterdayIsoString();
-    const hourSuffix = swimHour ? `, ${swimHour}` : '';
-
-    if (rawStr.startsWith(todayStr)) {
-      return `Hoy${hourSuffix}`;
-    } else if (rawStr.startsWith(yestStr)) {
-      return `Ayer${hourSuffix}`;
-    }
-
     let regDate;
-    if (/^\d{4}-\d{2}-\d{2}/.test(rawStr)) {
-      const parts = rawStr.split('T')[0].split(' ')[0].split('-');
+    if (/^\d{4}-\d{2}-\d{2}/.test(rawDateStr)) {
+      const parts = rawDateStr.split('T')[0].split(' ')[0].split('-');
       regDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
     } else {
-      regDate = new Date(rawStr);
+      regDate = new Date(rawDateStr);
     }
     
-    if (isNaN(regDate.getTime())) return `${rawStr}${hourSuffix}`;
+    if (isNaN(regDate.getTime())) return `${rawDateStr}${hourSuffix}`;
 
     const today = new Date();
     const yesterday = new Date();
@@ -537,7 +549,7 @@ function formatSwimFriendly(dateVal, swimHourRaw) {
       return `${capitalizedDay} ${dayNum} ${monthName}${hourSuffix}`;
     }
   } catch (e) {
-    return dateVal || swimHour || '—';
+    return `${rawDateStr}${hourSuffix}`;
   }
 }
 
