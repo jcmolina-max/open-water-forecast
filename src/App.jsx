@@ -1978,6 +1978,8 @@ export default function App() {
     const slotId = generateCanonicalSlotId(adminPlaya, adminFechaNado, adminHoraNado);
     const payload = {
       idRegistro: slotId,
+      fechaHora: `${adminFechaNado} ${adminHoraNado}`,
+      fecha: adminFechaNado,
       fechaNado: adminFechaNado,
       horaNado: adminHoraNado,
       playa: adminPlaya,
@@ -2081,6 +2083,8 @@ export default function App() {
     const slotId = generateCanonicalSlotId(swimmerPlaya, swimmerFechaNado, swimmerHoraNado);
     const payload = {
       idRegistro: slotId,
+      fechaHora: `${swimmerFechaNado} ${swimmerHoraNado}`,
+      fecha: swimmerFechaNado,
       fechaNado: swimmerFechaNado,
       horaNado: swimmerHoraNado,
       playa: swimmerPlaya,
@@ -4092,9 +4096,12 @@ export default function App() {
                     <form onSubmit={handleSendReport} className="space-y-4 text-left">
                       {/* SELECTOR TÁCTIL DE FECHA DEL NADO / CALIBRACIÓN (ADMIN) */}
                       <div className="space-y-1.5 mb-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
-                        <label className="block text-[10px] font-black text-slate-600 uppercase">
-                          📅 Fecha de la Sesión de Nado / Calibración
-                        </label>
+                        <div className="flex justify-between items-center text-[10px] font-black text-slate-600 uppercase">
+                          <span>📅 Fecha de la Sesión / Calibración</span>
+                          <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                            {adminFechaNado === getIsoDateString() ? '☀️ Hoy' : adminFechaNado === getYesterdayIsoString() ? '⛅ Ayer' : adminFechaNado}, {adminHoraNado}
+                          </span>
+                        </div>
                         <div className="grid grid-cols-3 gap-1.5">
                           <button
                             type="button"
@@ -4120,6 +4127,20 @@ export default function App() {
                             />
                           </div>
                         </div>
+
+                        {/* Aviso inteligente de hora futura */}
+                        {adminFechaNado === getIsoDateString() && parseInt((adminHoraNado || '').split(':')[0]) > new Date().getHours() && (
+                          <div className="bg-amber-50 border border-amber-200 text-amber-900 px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-between mt-1">
+                            <span>⚠️ {adminHoraNado} es una hora futura de hoy. ¿Nado de ayer?</span>
+                            <button
+                              type="button"
+                              onClick={() => setAdminFechaNado(getYesterdayIsoString())}
+                              className="bg-amber-600 hover:bg-amber-700 text-white text-[9px] font-black px-2 py-0.5 rounded ml-1.5 shrink-0 cursor-pointer"
+                            >
+                              ⛅ Cambiar a Ayer
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
@@ -5073,9 +5094,12 @@ export default function App() {
               <form onSubmit={handleSendSwimmerReport} className="space-y-4 text-left">
                 {/* SELECTOR TÁCTIL DE FECHA DEL NADO (NADADOR) */}
                 <div className="space-y-1.5 mb-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
-                  <label className="block text-[10px] font-black text-slate-600 uppercase">
-                    📅 ¿Cuándo fue tu sesión de nado?
-                  </label>
+                  <div className="flex justify-between items-center text-[10px] font-black text-slate-600 uppercase">
+                    <span>📅 ¿Cuándo fue tu sesión de nado?</span>
+                    <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                      {swimmerFechaNado === getIsoDateString() ? '☀️ Hoy' : swimmerFechaNado === getYesterdayIsoString() ? '⛅ Ayer' : swimmerFechaNado}, {swimmerHoraNado}
+                    </span>
+                  </div>
                   <div className="grid grid-cols-3 gap-1.5">
                     <button
                       type="button"
@@ -5101,6 +5125,20 @@ export default function App() {
                       />
                     </div>
                   </div>
+
+                  {/* Aviso inteligente de hora futura */}
+                  {swimmerFechaNado === getIsoDateString() && parseInt((swimmerHoraNado || '').split(':')[0]) > new Date().getHours() && (
+                    <div className="bg-amber-50 border border-amber-200 text-amber-900 px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-between mt-1">
+                      <span>⚠️ Las {swimmerHoraNado} es una hora futura de hoy. ¿Nadaste anoche?</span>
+                      <button
+                        type="button"
+                        onClick={() => setSwimmerFechaNado(getYesterdayIsoString())}
+                        className="bg-amber-600 hover:bg-amber-700 text-white text-[9px] font-black px-2 py-0.5 rounded ml-1.5 shrink-0 cursor-pointer"
+                      >
+                        ⛅ Cambiar a Ayer
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
