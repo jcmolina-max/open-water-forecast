@@ -435,6 +435,27 @@ function parseSwimmerSensaciones(textVal) {
   };
 };
 
+function getIsoDateString(dateObj = new Date()) {
+  const d = new Date(dateObj);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getYesterdayIsoString() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return getIsoDateString(d);
+}
+
+function generateCanonicalSlotId(playaKey, dateStr, hourStr) {
+  const cleanPlaya = (playaKey || 'mis').substring(0, 3).toUpperCase();
+  const cleanDate = (dateStr || getIsoDateString()).replace(/-/g, '');
+  const cleanHour = (hourStr || '11:00').replace(':', '').padStart(4, '0').substring(0, 4);
+  return `${cleanPlaya}-${cleanDate}-${cleanHour}`;
+}
+
 function formatFriendlyDate(dateString) {
   if (!dateString) return 'Hoy';
   try {
@@ -667,6 +688,7 @@ export default function App() {
   
   // Formulario del Administrador
   const [adminPlaya, setAdminPlaya] = useState('misericordia');
+  const [adminFechaNado, setAdminFechaNado] = useState(() => getIsoDateString());
   const [adminHoraNado, setAdminHoraNado] = useState('11:00');
   const [adminRealOlas, setAdminRealOlas] = useState(3);
   const [adminRealResaca, setAdminRealResaca] = useState(1);
@@ -690,6 +712,7 @@ export default function App() {
   // Estados para el reporte público de nadadores (Comunidad)
   const [isSwimmerModalOpen, setIsSwimmerModalOpen] = useState(false);
   const [swimmerPlaya, setSwimmerPlaya] = useState('misericordia');
+  const [swimmerFechaNado, setSwimmerFechaNado] = useState(() => getIsoDateString());
   const [swimmerHoraNado, setSwimmerHoraNado] = useState('11:00');
   const [swimmerRealOlas, setSwimmerRealOlas] = useState(3);
   const [swimmerRealResaca, setSwimmerRealResaca] = useState(1);
@@ -1952,7 +1975,10 @@ export default function App() {
       }
     }
 
+    const slotId = generateCanonicalSlotId(adminPlaya, adminFechaNado, adminHoraNado);
     const payload = {
+      idRegistro: slotId,
+      fechaNado: adminFechaNado,
       horaNado: adminHoraNado,
       playa: adminPlaya,
       realOlas: adminIsAlert ? "" : adminRealOlas,
@@ -2052,7 +2078,10 @@ export default function App() {
       }
     }
 
+    const slotId = generateCanonicalSlotId(swimmerPlaya, swimmerFechaNado, swimmerHoraNado);
     const payload = {
+      idRegistro: slotId,
+      fechaNado: swimmerFechaNado,
       horaNado: swimmerHoraNado,
       playa: swimmerPlaya,
       realOlas: swimmerIsOnlyMessage ? "" : swimmerRealOlas,
@@ -3279,7 +3308,7 @@ export default function App() {
                                   </div>
                                 </div>
                                 <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded leading-none shrink-0" title="Día y hora de la sesión de nado">
-                                  Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
+                                  Nado: {formatSwimFriendly(item.fechaNado || item.fechaRegistro || item.timestamp || item.fecha, item.horaNado)}
                                 </span>
                               </div>
 
@@ -3599,7 +3628,7 @@ export default function App() {
                                   {typeBadge}
                                 </div>
                                 <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-                                  Nado: {formatSwimFriendly(item.fechaRegistro, item.horaNado)}
+                                  Nado: {formatSwimFriendly(item.fechaNado || item.fechaRegistro || item.timestamp || item.fecha, item.horaNado)}
                                 </span>
                               </div>
 
@@ -4061,6 +4090,38 @@ export default function App() {
                   {/* PESTAÑA 1: REGISTRAR NADO O ALERTA OFICIAL */}
                   {adminTab === 'report' && (
                     <form onSubmit={handleSendReport} className="space-y-4 text-left">
+                      {/* SELECTOR TÁCTIL DE FECHA DEL NADO / CALIBRACIÓN (ADMIN) */}
+                      <div className="space-y-1.5 mb-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
+                        <label className="block text-[10px] font-black text-slate-600 uppercase">
+                          📅 Fecha de la Sesión de Nado / Calibración
+                        </label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setAdminFechaNado(getIsoDateString())}
+                            className={`py-1.5 px-2 rounded-xl text-xs font-black transition-all border text-center cursor-pointer ${adminFechaNado === getIsoDateString() ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'}`}
+                          >
+                            ☀️ Hoy
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAdminFechaNado(getYesterdayIsoString())}
+                            className={`py-1.5 px-2 rounded-xl text-xs font-black transition-all border text-center cursor-pointer ${adminFechaNado === getYesterdayIsoString() ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'}`}
+                          >
+                            ⛅ Ayer
+                          </button>
+                          <div className="relative">
+                            <input
+                              type="date"
+                              value={adminFechaNado}
+                              onChange={(e) => setAdminFechaNado(e.target.value)}
+                              max={getIsoDateString()}
+                              className="w-full bg-white border border-slate-300 rounded-xl px-2 py-1 text-xs font-extrabold text-indigo-700 outline-none cursor-pointer text-center"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Playa</label>
@@ -5010,8 +5071,38 @@ export default function App() {
             
             <div className="p-6 overflow-y-auto">
               <form onSubmit={handleSendSwimmerReport} className="space-y-4 text-left">
-                <p className="text-xs text-slate-500 font-medium">Ayuda a otros nadadores compartiendo las condiciones actuales del agua en esta playa.</p>
-                
+                {/* SELECTOR TÁCTIL DE FECHA DEL NADO (NADADOR) */}
+                <div className="space-y-1.5 mb-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
+                  <label className="block text-[10px] font-black text-slate-600 uppercase">
+                    📅 ¿Cuándo fue tu sesión de nado?
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSwimmerFechaNado(getIsoDateString())}
+                      className={`py-1.5 px-2 rounded-xl text-xs font-black transition-all border text-center cursor-pointer ${swimmerFechaNado === getIsoDateString() ? 'bg-blue-600 text-white border-blue-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'}`}
+                    >
+                      ☀️ Hoy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSwimmerFechaNado(getYesterdayIsoString())}
+                      className={`py-1.5 px-2 rounded-xl text-xs font-black transition-all border text-center cursor-pointer ${swimmerFechaNado === getYesterdayIsoString() ? 'bg-blue-600 text-white border-blue-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'}`}
+                    >
+                      ⛅ Ayer
+                    </button>
+                    <div className="relative">
+                      <input
+                        type="date"
+                        value={swimmerFechaNado}
+                        onChange={(e) => setSwimmerFechaNado(e.target.value)}
+                        max={getIsoDateString()}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-2 py-1 text-xs font-extrabold text-blue-700 outline-none cursor-pointer text-center"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Playa</label>
