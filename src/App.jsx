@@ -5553,9 +5553,14 @@ export default function App() {
                           </div>
                         );
                       })()}
+                    </div>
+                  )}
+
                   {/* PESTAÑA: LABORATORIO VISUAL DE CALIBRACIÓN COSTERA (ROSA NÁUTICA & SATÉLITE HD) */}
-                  {adminTab === 'compass' && (() => {
-                    const BEACH_COASTAL_DEFS = {
+                  {adminTab === 'compass' && (
+                    <div className="text-left space-y-4">
+                      {(() => {
+                        const BEACH_COASTAL_DEFS = {
                       misericordia: {
                         name: "La Misericordia, Málaga",
                         lat: 36.6960,
@@ -6104,6 +6109,8 @@ export default function App() {
                       </div>
                     );
                   })()}
+                </div>
+              )}
 
                   {adminTab === 'telemetry' && (
                     <div className="text-left space-y-4">
