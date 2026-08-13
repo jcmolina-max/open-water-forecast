@@ -774,8 +774,12 @@ export default function App() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
-  // Estado para las pestañas del Modal Admin ('factors' o 'report')
+  // Estado para las pestañas del Modal Admin ('factors', 'chart', 'compass', 'telemetry' o 'report')
   const [adminTab, setAdminTab] = useState('factors');
+  const [compassBeachKey, setCompassBeachKey] = useState('misericordia');
+  const [compassCustomFacing, setCompassCustomFacing] = useState({});
+  const [compassCustomSectors, setCompassCustomSectors] = useState({});
+  const [compassCopiedToast, setCompassCopiedToast] = useState(false);
   const [expandedSectorAudit, setExpandedSectorAudit] = useState({});
   const [discardedReportIds, setDiscardedReportIds] = useState(() => {
     try {
@@ -4122,6 +4126,13 @@ export default function App() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => setAdminTab('compass')}
+                      className={`flex-1 py-2 px-2 rounded-xl font-extrabold text-[11px] transition-all flex items-center justify-center gap-1 shrink-0 cursor-pointer ${adminTab === 'compass' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      🧭 Brújula Costera
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setAdminTab('telemetry')}
                       className={`flex-1 py-2 px-2 rounded-xl font-extrabold text-[11px] transition-all flex items-center justify-center gap-1 shrink-0 cursor-pointer ${adminTab === 'telemetry' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
                     >
@@ -5542,8 +5553,557 @@ export default function App() {
                           </div>
                         );
                       })()}
-                    </div>
-                  )}
+                  {/* PESTAÑA: LABORATORIO VISUAL DE CALIBRACIÓN COSTERA (ROSA NÁUTICA & SATÉLITE HD) */}
+                  {adminTab === 'compass' && (() => {
+                    const BEACH_COASTAL_DEFS = {
+                      misericordia: {
+                        name: "La Misericordia, Málaga",
+                        lat: 36.6960,
+                        lon: -4.4440,
+                        facing: 117,
+                        shelters: "Dique Levante (50º) al Este, Espigón Térmica/Sacaba al Oeste",
+                        sectors: {
+                          lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada tierra/mar. Poco oleaje." },
+                          levante:      { min: 50, max: 170, label: "Levante (Mar de Fondo)", color: "#3b82f6", desc: "Swell con masa, rompiente orillera pesada." },
+                          sur:          { min: 171, max: 190, label: "Sur (Amplificador)", color: "#8b5cf6", desc: "Mar picado e incómodo por virazón térmica." },
+                          poniente:     { min: 191, max: 215, label: "Poniente (Viento Reciente)", color: "#10b981", desc: "Chop rápido, subida térmica al mediodía." },
+                          terral:       { min: 216, max: 360, label: "Poniente-Terral", color: "#f97316", desc: "Orilla balsa/piscina, precaución mar adentro." }
+                        }
+                      },
+                      malagueta: {
+                        name: "La Malagueta, Málaga",
+                        lat: 36.7180,
+                        lon: -4.4070,
+                        facing: 90,
+                        shelters: "Encajada tras Dique de Levante del Puerto de Málaga",
+                        sectors: {
+                          lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por la Farola." },
+                          levante:      { min: 50, max: 150, label: "Levante Franco", color: "#3b82f6", desc: "Entrada frontal directa de Levante." },
+                          sur:          { min: 151, max: 180, label: "Sur", color: "#8b5cf6", desc: "Entrada oblicua al dique del puerto." },
+                          poniente:     { min: 181, max: 215, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida totalmente por el Puerto." },
+                          terral:       { min: 216, max: 360, label: "Terral de Gibralfaro", color: "#f97316", desc: "Viento seco de los montes." }
+                        }
+                      },
+                      pedregalejo: {
+                        name: "Pedregalejo, Málaga",
+                        lat: 36.7210,
+                        lon: -4.3860,
+                        facing: 180,
+                        shelters: "6 calas protegidas por espigones en T/Y",
+                        sectors: {
+                          lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por El Morlaco." },
+                          levante:      { min: 50, max: 170, label: "Levante Calas", color: "#3b82f6", desc: "Espigones frenan el 70% del oleaje." },
+                          sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada directa por las bocanas." },
+                          poniente:     { min: 191, max: 225, label: "Poniente Calas", color: "#10b981", desc: "Calas tipo piscina." },
+                          terral:       { min: 226, max: 360, label: "Terral / Viento Tierra", color: "#f97316", desc: "Mar plano absoluto." }
+                        }
+                      },
+                      los_alamos: {
+                        name: "Los Álamos, Torremolinos",
+                        lat: 36.6398,
+                        lon: -4.4815,
+                        facing: 120,
+                        shelters: "Playa abierta rectilínea sin espigones",
+                        sectors: {
+                          lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra-mar." },
+                          levante:      { min: 50, max: 170, label: "Levante Abierto", color: "#3b82f6", desc: "Olas con máxima energía y rompiente." },
+                          sur:          { min: 171, max: 195, label: "Sur Abierto", color: "#8b5cf6", desc: "Mar de fondo frontal sin abrigo." },
+                          poniente:     { min: 196, max: 230, label: "Poniente", color: "#10b981", desc: "Viento de costado." },
+                          terral:       { min: 231, max: 360, label: "Terral", color: "#f97316", desc: "Viento de la sierra de Mijas." }
+                        }
+                      },
+                      bajondillo: {
+                        name: "El Bajondillo, Torremolinos",
+                        lat: 36.6271,
+                        lon: -4.4916,
+                        facing: 115,
+                        shelters: "Punta de Torremolinos / Castillo Santa Clara",
+                        sectors: {
+                          lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada oblicua." },
+                          levante:      { min: 50, max: 165, label: "Levante", color: "#3b82f6", desc: "Entrada franca de Levante." },
+                          sur:          { min: 166, max: 190, label: "Sur", color: "#8b5cf6", desc: "Entrada de mar de fondo." },
+                          poniente:     { min: 191, max: 220, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida por la Punta de Torremolinos." },
+                          terral:       { min: 221, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
+                        }
+                      },
+                      cala_del_moral: {
+                        name: "La Cala del Moral",
+                        lat: 36.7148,
+                        lon: -4.3100,
+                        facing: 155,
+                        shelters: "Acantilados de El Cantal al Oeste",
+                        sectors: {
+                          lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra de la Axarquía." },
+                          levante:      { min: 50, max: 165, label: "Levante Concha", color: "#3b82f6", desc: "Entrada franca de Levante." },
+                          sur:          { min: 166, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada frontal a la concha." },
+                          poniente:     { min: 191, max: 225, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida del Poniente por El Cantal." },
+                          terral:       { min: 226, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
+                        }
+                      },
+                      rincon_victoria: {
+                        name: "Rincón de la Victoria",
+                        lat: 36.7131,
+                        lon: -4.2743,
+                        facing: 170,
+                        shelters: "Gran playa rectilínea, montes de la Axarquía",
+                        sectors: {
+                          lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra." },
+                          levante:      { min: 50, max: 170, label: "Levante Axarquía", color: "#3b82f6", desc: "Playa abierta muy expuesta al Levante." },
+                          sur:          { min: 171, max: 190, label: "Sur", color: "#8b5cf6", desc: "Mar de fondo de Alborán." },
+                          poniente:     { min: 191, max: 220, label: "Poniente Tendido", color: "#10b981", desc: "Oleaje paralelo a la costa." },
+                          terral:       { min: 221, max: 360, label: "Terral", color: "#f97316", desc: "Viento de las montañas." }
+                        }
+                      }
+                    };
+
+                    const bDef = BEACH_COASTAL_DEFS[compassBeachKey] || BEACH_COASTAL_DEFS.misericordia;
+                    const activeFacing = compassCustomFacing[compassBeachKey] !== undefined ? compassCustomFacing[compassBeachKey] : bDef.facing;
+                    const customSecs = compassCustomSectors[compassBeachKey] || {};
+
+                    const sLevAnortadoMax = customSecs.lev_anortado !== undefined ? customSecs.lev_anortado : bDef.sectors.lev_anortado.max;
+                    const sLevanteMax     = customSecs.levante !== undefined ? customSecs.levante : bDef.sectors.levante.max;
+                    const sSurMax         = customSecs.sur !== undefined ? customSecs.sur : bDef.sectors.sur.max;
+                    const sPonienteMax    = customSecs.poniente !== undefined ? customSecs.poniente : bDef.sectors.poniente.max;
+
+                    // Cálculo matemático de teselas satelitales Esri
+                    const zoom = 15;
+                    const nTiles = Math.pow(2, zoom);
+                    const tileX = Math.floor((bDef.lon + 180.0) / 360.0 * nTiles);
+                    const latRad = bDef.lat * Math.PI / 180.0;
+                    const tileY = Math.floor((1.0 - Math.log(Math.tan(latRad) + 1.0 / Math.cos(latRad)) / Math.PI) / 2.0 * nTiles);
+                    const satTileUrl = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${tileY}/${tileX}`;
+
+                    // Helpers para geometría de la Rosa de Rumbos SVG
+                    const cx = 200;
+                    const cy = 200;
+                    const radius = 165;
+
+                    function degToCartesian(angleDeg, rDist) {
+                      const rad = (angleDeg - 90) * Math.PI / 180.0;
+                      return {
+                        x: cx + (rDist * Math.cos(rad)),
+                        y: cy + (rDist * Math.sin(rad))
+                      };
+                    }
+
+                    function makeSectorPath(startDeg, endDeg, rDist) {
+                      let delta = endDeg - startDeg;
+                      if (delta < 0) delta += 360;
+                      if (delta >= 360) delta = 359.99;
+                      const pStart = degToCartesian(startDeg, rDist);
+                      const pEnd = degToCartesian(endDeg, rDist);
+                      const largeArc = delta > 180 ? 1 : 0;
+                      return `M ${cx} ${cy} L ${pStart.x} ${pStart.y} A ${rDist} ${rDist} 0 ${largeArc} 1 ${pEnd.x} ${pEnd.y} Z`;
+                    }
+
+                    // Línea de Costa Tangente (perpendicular al Facing)
+                    const coastAngle1 = (activeFacing + 90) % 360;
+                    const coastAngle2 = (activeFacing + 270) % 360;
+                    const pCoast1 = degToCartesian(coastAngle1, radius * 1.15);
+                    const pCoast2 = degToCartesian(coastAngle2, radius * 1.15);
+                    const pFacingEnd = degToCartesian(activeFacing, radius * 1.05);
+
+                    // Previsión horaria en vivo de viento y ola para superponer flechas
+                    const currentWaveDir = (typeof beachData?.waveDir === 'number') ? beachData.waveDir : 120;
+                    const currentWindDir = (typeof beachData?.windDir === 'number') ? beachData.windDir : 100;
+                    const currentWindSpd = beachData?.windKnots || 5;
+                    const currentWaveH = beachData?.waveHeight || 0.1;
+
+                    const pWindVector = degToCartesian(currentWindDir, radius * 0.75);
+                    const pWaveVector = degToCartesian(currentWaveDir, radius * 0.85);
+
+                    // Función para copiar la calibración a formato Google Sheets
+                    const copyConfigForSheets = () => {
+                      const csvText = [
+                        `ID_Playa;ID_Sector;Nombre_Sector;Grado_Min;Grado_Max;Factor_Suave;Factor_Fuerte;Umbral_Viento_Knots;Aviso_Especial_Nadador`,
+                        `${compassBeachKey};lev_anortado;🧭 Levante Anortado;1;${sLevAnortadoMax};0.40;0.60;10;Entrada cerrada tierra/mar.`,
+                        `${compassBeachKey};levante;🌊 Levante;${sLevAnortadoMax + 1};${sLevanteMax};0.60;0.85;10;Mar de fondo / Rompiente orillera.`,
+                        `${compassBeachKey};sur;⚓ Sur;${sLevanteMax + 1};${sSurMax};0.50;0.70;8;Amplificador térmico / Mar picado.`,
+                        `${compassBeachKey};poniente;💨 Poniente;${sSurMax + 1};${sPonienteMax};0.35;0.45;8;Chop rápido / Boost térmico mediodía.`,
+                        `${compassBeachKey};terral;🏔️ Poniente-Terral;${sPonienteMax + 1};360;0.15;0.20;12;Orilla plato / balsa total.`
+                      ].join('\n');
+
+                      try {
+                        navigator.clipboard.writeText(csvText);
+                        setCompassCopiedToast(true);
+                        setTimeout(() => setCompassCopiedToast(false), 3000);
+                      } catch(e) {}
+                    };
+
+                    return (
+                      <div className="text-left space-y-4">
+                        {/* CABECERA Y SELECTOR DE PLAYAS */}
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200 pb-3">
+                          <div>
+                            <h4 className="text-xs font-black uppercase text-indigo-800 tracking-wider flex items-center gap-1.5">
+                              <Compass size={16} className="text-indigo-600 animate-spin" style={{ animationDuration: '12s' }} />
+                              <span>Laboratorio Visual de Calibración Costera (Rosa Náutica & Satélite HD)</span>
+                            </h4>
+                            <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                              Inspecciona la orografía real, espigones y orientaciones para calibrar los 5 sectores de cada playa.
+                            </p>
+                          </div>
+                          {compassCopiedToast && (
+                            <span className="text-[10px] font-black bg-emerald-600 text-white px-3 py-1 rounded-full animate-bounce shadow-md">
+                              ✓ ¡Copiado para Google Sheets!
+                            </span>
+                          )}
+                        </div>
+
+                        {/* SELECTOR DE LAS 7 PLAYAS */}
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                          {Object.keys(BEACH_COASTAL_DEFS).map(key => {
+                            const isSel = compassBeachKey === key;
+                            const bObj = BEACH_COASTAL_DEFS[key];
+                            return (
+                              <button
+                                key={key}
+                                type="button"
+                                onClick={() => setCompassBeachKey(key)}
+                                className={`py-1.5 px-3 rounded-xl text-[11px] font-black tracking-tight shrink-0 transition-all cursor-pointer ${
+                                  isSel 
+                                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-slate-200/80'
+                                }`}
+                              >
+                                {bObj.name.split(',')[0]}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* TARJETA DE FICHA TÉCNICA DE LA PLAYA ACTIVA */}
+                        <div className="bg-slate-900 text-slate-100 p-3.5 rounded-2xl border border-slate-800 shadow-md space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-black text-white">{bDef.name}</span>
+                            <span className="text-[10px] font-extrabold bg-indigo-500/30 text-indigo-300 border border-indigo-500/50 px-2 py-0.5 rounded-full">
+                              Frente Marino: {activeFacing}º ({activeFacing >= 45 && activeFacing <= 135 ? 'Levante' : activeFacing > 135 && activeFacing <= 225 ? 'Sur' : 'Poniente'})
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-300 font-medium">
+                            <strong className="text-slate-400">Abrigos & Orografía:</strong> {bDef.shelters}
+                          </p>
+                        </div>
+
+                        {/* VISOR PRINCIPAL: MAPA SATELITAL HD + ROSA NÁUTICA AZIMUTAL SVG */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                          {/* COLUMNA MAPA SATÉLITE CON SVG */}
+                          <div className="lg:col-span-7 flex flex-col items-center">
+                            <div className="w-full max-w-[420px] aspect-square rounded-3xl overflow-hidden relative shadow-2xl border-4 border-slate-800 bg-slate-950">
+                              {/* Capa de Fondo Satelital de Alta Resolución */}
+                              <div 
+                                className="absolute inset-0 bg-cover bg-center transition-all duration-500"
+                                style={{
+                                  backgroundImage: `url(${satTileUrl})`,
+                                  filter: 'brightness(0.9) contrast(1.15)'
+                                }}
+                              />
+
+                              {/* Capa SVG: Rosa de Rumbos, Sectores y Vectores */}
+                              <svg viewBox="0 0 400 400" className="absolute inset-0 w-full h-full select-none pointer-events-none">
+                                {/* Anillos de Distancia Concéntricos */}
+                                <circle cx={cx} cy={cy} r={radius * 0.4} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1" strokeDasharray="3 3" />
+                                <circle cx={cx} cy={cy} r={radius * 0.75} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="1" strokeDasharray="3 3" />
+                                <circle cx={cx} cy={cy} r={radius} fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2" />
+
+                                {/* 1. CONOS DE LOS 5 SECTORES PROYECTADOS SOBRE EL AGUA */}
+                                {/* Levante Anortado (1º a Max) */}
+                                <path 
+                                  d={makeSectorPath(1, sLevAnortadoMax, radius)} 
+                                  fill="rgba(245, 158, 11, 0.28)" 
+                                  stroke="#f59e0b" 
+                                  strokeWidth="1.5" 
+                                />
+                                {/* Levante (Max Anortado a Max Levante) */}
+                                <path 
+                                  d={makeSectorPath(sLevAnortadoMax, sLevanteMax, radius)} 
+                                  fill="rgba(59, 130, 246, 0.32)" 
+                                  stroke="#3b82f6" 
+                                  strokeWidth="2" 
+                                />
+                                {/* Sur (Max Levante a Max Sur) */}
+                                <path 
+                                  d={makeSectorPath(sLevanteMax, sSurMax, radius)} 
+                                  fill="rgba(139, 92, 246, 0.35)" 
+                                  stroke="#8b5cf6" 
+                                  strokeWidth="2" 
+                                />
+                                {/* Poniente (Max Sur a Max Poniente) */}
+                                <path 
+                                  d={makeSectorPath(sSurMax, sPonienteMax, radius)} 
+                                  fill="rgba(16, 185, 129, 0.30)" 
+                                  stroke="#10b981" 
+                                  strokeWidth="2" 
+                                />
+                                {/* Poniente-Terral (Max Poniente a 360º) */}
+                                <path 
+                                  d={makeSectorPath(sPonienteMax, 360, radius)} 
+                                  fill="rgba(249, 115, 22, 0.25)" 
+                                  stroke="#f97316" 
+                                  strokeWidth="1.5" 
+                                />
+
+                                {/* Graduaciones de Grados en el Limbo */}
+                                {Array.from({ length: 36 }).map((_, idx) => {
+                                  const deg = idx * 10;
+                                  const isMajor = deg % 30 === 0;
+                                  const p1 = degToCartesian(deg, radius);
+                                  const p2 = degToCartesian(deg, radius - (isMajor ? 10 : 5));
+                                  const pText = degToCartesian(deg, radius + 14);
+
+                                  return (
+                                    <g key={deg}>
+                                      <line 
+                                        x1={p1.x} y1={p1.y} 
+                                        x2={p2.x} y2={p2.y} 
+                                        stroke={isMajor ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)"} 
+                                        strokeWidth={isMajor ? "1.5" : "1"} 
+                                      />
+                                      {isMajor && (
+                                        <text 
+                                          x={pText.x} y={pText.y} 
+                                          fill="rgba(255,255,255,0.85)" 
+                                          fontSize="8" 
+                                          fontWeight="bold" 
+                                          textAnchor="middle" 
+                                          dominantBaseline="central"
+                                        >
+                                          {deg}º
+                                        </text>
+                                      )}
+                                    </g>
+                                  );
+                                })}
+
+                                {/* Puntos Cardinales Principales */}
+                                <text x={cx} y={cy - radius - 16} fill="#ef4444" fontSize="13" fontWeight="900" textAnchor="middle" dominantBaseline="central">N (0º)</text>
+                                <text x={cx + radius + 18} y={cy} fill="#38bdf8" fontSize="11" fontWeight="900" textAnchor="middle" dominantBaseline="central">E (90º)</text>
+                                <text x={cx} y={cy + radius + 16} fill="#a855f7" fontSize="11" fontWeight="900" textAnchor="middle" dominantBaseline="central">S (180º)</text>
+                                <text x={cx - radius - 18} y={cy} fill="#34d399" fontSize="11" fontWeight="900" textAnchor="middle" dominantBaseline="central">O (270º)</text>
+
+                                {/* 2. LÍNEA DORADA DE COSTA (TANGENTE DE LA ARENA) */}
+                                <line 
+                                  x1={pCoast1.x} y1={pCoast1.y} 
+                                  x2={pCoast2.x} y2={pCoast2.y} 
+                                  stroke="#fbbf24" 
+                                  strokeWidth="3" 
+                                  strokeDasharray="6 4"
+                                />
+                                <text 
+                                  x={pCoast1.x} y={pCoast1.y - 6} 
+                                  fill="#fbbf24" 
+                                  fontSize="9" 
+                                  fontWeight="900" 
+                                  textAnchor="middle"
+                                >
+                                  Línea de Costa
+                                </text>
+
+                                {/* 3. VECTOR PERPENDICULAR HACIA EL MAR (FACING) */}
+                                <line 
+                                  x1={cx} y1={cy} 
+                                  x2={pFacingEnd.x} y2={pFacingEnd.y} 
+                                  stroke="#ffffff" 
+                                  strokeWidth="3.5" 
+                                  strokeLinecap="round"
+                                />
+                                <circle cx={pFacingEnd.x} cy={pFacingEnd.y} r="5" fill="#f59e0b" stroke="#ffffff" strokeWidth="2" />
+                                <text 
+                                  x={pFacingEnd.x} y={pFacingEnd.y + (activeFacing >= 90 && activeFacing <= 270 ? 14 : -12)} 
+                                  fill="#ffffff" 
+                                  fontSize="10" 
+                                  fontWeight="900" 
+                                  textAnchor="middle"
+                                  className="bg-slate-900"
+                                >
+                                  Frente {activeFacing}º
+                                </text>
+
+                                {/* 4. FLECHA EN VIVO DE VIENTO DE HOY */}
+                                <line 
+                                  x1={cx} y1={cy} 
+                                  x2={pWindVector.x} y2={pWindVector.y} 
+                                  stroke="#06b6d4" 
+                                  strokeWidth="3" 
+                                  strokeDasharray="4 2"
+                                />
+                                <circle cx={pWindVector.x} cy={pWindVector.y} r="4" fill="#06b6d4" />
+                                <text x={pWindVector.x} y={pWindVector.y - 8} fill="#22d3ee" fontSize="8" fontWeight="bold" textAnchor="middle">
+                                  💨 Viento {currentWindSpd}kt ({currentWindDir}º)
+                                </text>
+
+                                {/* 5. FLECHA EN VIVO DE OLEAJE DE HOY */}
+                                <line 
+                                  x1={cx} y1={cy} 
+                                  x2={pWaveVector.x} y2={pWaveVector.y} 
+                                  stroke="#60a5fa" 
+                                  strokeWidth="3.5" 
+                                />
+                                <polygon 
+                                  points={`${pWaveVector.x},${pWaveVector.y} ${pWaveVector.x - 5},${pWaveVector.y + 7} ${pWaveVector.x + 5},${pWaveVector.y + 7}`} 
+                                  fill="#60a5fa" 
+                                />
+                                <text x={pWaveVector.x} y={pWaveVector.y + 12} fill="#93c5fd" fontSize="8" fontWeight="bold" textAnchor="middle">
+                                  🌊 Ola {currentWaveH}m ({currentWaveDir}º)
+                                </text>
+
+                                {/* Centro: Pinpoint en la Arena */}
+                                <circle cx={cx} cy={cy} r="6" fill="#ef4444" stroke="#ffffff" strokeWidth="2" />
+                                <circle cx={cx} cy={cy} r="10" fill="none" stroke="#ef4444" strokeWidth="1.5" className="animate-ping" style={{ transformOrigin: `${cx}px ${cy}px` }} />
+                              </svg>
+
+                              {/* Badge de Referencia Inferior */}
+                              <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center text-[9px] font-bold text-slate-300 bg-slate-950/85 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-slate-700/80">
+                                <span>📍 Satélite Esri HD Zoom 15</span>
+                                <span>🧭 Orientación Frontal: <strong className="text-amber-400">{activeFacing}º</strong></span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* COLUMNA DE CONTROLES DESLIZANTES Y RESUMEN */}
+                          <div className="lg:col-span-5 space-y-3">
+                            {/* AJUSTE INTERACTIVO DE ORIENTACIÓN (FACING) */}
+                            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
+                              <div className="flex justify-between items-center">
+                                <label className="text-xs font-black text-slate-800 flex items-center gap-1">
+                                  <span>🧭 Orientación Frontal (Facing):</span>
+                                </label>
+                                <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg">
+                                  {activeFacing}º
+                                </span>
+                              </div>
+                              <input 
+                                type="range" 
+                                min="0" 
+                                max="360" 
+                                value={activeFacing} 
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  setCompassCustomFacing(prev => ({ ...prev, [compassBeachKey]: val }));
+                                }}
+                                className="w-full accent-indigo-600 cursor-pointer" 
+                              />
+                              <p className="text-[9px] text-slate-500">
+                                Mueve el control para alinear la flecha blanca exactamente perpendicular a la arena hacia el mar abierto.
+                              </p>
+                            </div>
+
+                            {/* CONTROLES DE LOS 5 SECTORES */}
+                            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2.5">
+                              <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+                                <span className="text-xs font-black text-slate-800">📐 Calibración de Grados de Sectores:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCompassCustomFacing(prev => {
+                                      const next = { ...prev };
+                                      delete next[compassBeachKey];
+                                      return next;
+                                    });
+                                    setCompassCustomSectors(prev => {
+                                      const next = { ...prev };
+                                      delete next[compassBeachKey];
+                                      return next;
+                                    });
+                                  }}
+                                  className="text-[9px] font-bold text-slate-500 hover:text-red-600 underline cursor-pointer"
+                                >
+                                  Restablecer
+                                </button>
+                              </div>
+
+                              {/* Sector 1: Levante Anortado */}
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[11px] font-bold">
+                                  <span className="text-amber-700">🧭 Levante Anortado: 1º a {sLevAnortadoMax}º</span>
+                                </div>
+                                <input 
+                                  type="range" min="10" max="70" value={sLevAnortadoMax}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    setCompassCustomSectors(prev => ({
+                                      ...prev,
+                                      [compassBeachKey]: { ...(prev[compassBeachKey] || {}), lev_anortado: val }
+                                    }));
+                                  }}
+                                  className="w-full accent-amber-500 cursor-pointer" 
+                                />
+                              </div>
+
+                              {/* Sector 2: Levante */}
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[11px] font-bold">
+                                  <span className="text-blue-700">🌊 Levante: {sLevAnortadoMax + 1}º a {sLevanteMax}º</span>
+                                </div>
+                                <input 
+                                  type="range" min="90" max="185" value={sLevanteMax}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    setCompassCustomSectors(prev => ({
+                                      ...prev,
+                                      [compassBeachKey]: { ...(prev[compassBeachKey] || {}), levante: val }
+                                    }));
+                                  }}
+                                  className="w-full accent-blue-600 cursor-pointer" 
+                                />
+                              </div>
+
+                              {/* Sector 3: Sur */}
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[11px] font-bold">
+                                  <span className="text-purple-700">⚓ Sur: {sLevanteMax + 1}º a {sSurMax}º</span>
+                                </div>
+                                <input 
+                                  type="range" min="160" max="210" value={sSurMax}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    setCompassCustomSectors(prev => ({
+                                      ...prev,
+                                      [compassBeachKey]: { ...(prev[compassBeachKey] || {}), sur: val }
+                                    }));
+                                  }}
+                                  className="w-full accent-purple-600 cursor-pointer" 
+                                />
+                              </div>
+
+                              {/* Sector 4: Poniente */}
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[11px] font-bold">
+                                  <span className="text-emerald-700">💨 Poniente: {sSurMax + 1}º a {sPonienteMax}º</span>
+                                </div>
+                                <input 
+                                  type="range" min="195" max="250" value={sPonienteMax}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    setCompassCustomSectors(prev => ({
+                                      ...prev,
+                                      [compassBeachKey]: { ...(prev[compassBeachKey] || {}), poniente: val }
+                                    }));
+                                  }}
+                                  className="w-full accent-emerald-600 cursor-pointer" 
+                                />
+                              </div>
+
+                              {/* Sector 5: Poniente-Terral */}
+                              <div className="pt-1 text-[11px] font-black text-orange-700">
+                                🏔️ Poniente-Terral: {sPonienteMax + 1}º a 360º (y 0º)
+                              </div>
+                            </div>
+
+                            {/* BOTÓN COPIAR PARA GOOGLE SHEETS */}
+                            <button
+                              type="button"
+                              onClick={copyConfigForSheets}
+                              className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-black text-xs shadow-md hover:from-emerald-700 hover:to-teal-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              <Database size={15} />
+                              <span>Copiar Configuración para Google Sheets</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {adminTab === 'telemetry' && (
                     <div className="text-left space-y-4">
