@@ -783,6 +783,23 @@ export default function App() {
   const [compassZoom, setCompassZoom] = useState(16);
   const [compassOffsets, setCompassOffsets] = useState({});
   const [compassCopiedToast, setCompassCopiedToast] = useState(false);
+  const [compassSavedToast, setCompassSavedToast] = useState(false);
+  const [isSavingToSheets, setIsSavingToSheets] = useState(false);
+  const [cloudConfigPlayas, setCloudConfigPlayas] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_config_playas') || '{}');
+    } catch(e) { return {}; }
+  });
+  const [cloudConfigSectores, setCloudConfigSectores] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_config_sectores') || '{}');
+    } catch(e) { return {}; }
+  });
+  const [cloudConfigAlertas, setCloudConfigAlertas] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_config_alertas') || '[]');
+    } catch(e) { return []; }
+  });
   const [expandedSectorAudit, setExpandedSectorAudit] = useState({});
   const [discardedReportIds, setDiscardedReportIds] = useState(() => {
     try {
@@ -1842,6 +1859,22 @@ export default function App() {
           const vCount = json.total_visitas !== undefined ? json.total_visitas : (json.totalVisitas !== undefined ? json.totalVisitas : json.visitasTotales);
           if (vCount !== undefined && vCount !== null) {
             setTotalVisits(Number(vCount));
+          }
+        }
+
+        // Cargar Configuración Dinámica de Google Sheets (Data-Driven)
+        if (json && json.config) {
+          if (json.config.playas && Object.keys(json.config.playas).length > 0) {
+            setCloudConfigPlayas(json.config.playas);
+            try { localStorage.setItem('openwater_config_playas', JSON.stringify(json.config.playas)); } catch(e) {}
+          }
+          if (json.config.sectores && Object.keys(json.config.sectores).length > 0) {
+            setCloudConfigSectores(json.config.sectores);
+            try { localStorage.setItem('openwater_config_sectores', JSON.stringify(json.config.sectores)); } catch(e) {}
+          }
+          if (json.config.alertas && Array.isArray(json.config.alertas) && json.config.alertas.length > 0) {
+            setCloudConfigAlertas(json.config.alertas);
+            try { localStorage.setItem('openwater_config_alertas', JSON.stringify(json.config.alertas)); } catch(e) {}
           }
         }
 
@@ -5751,6 +5784,41 @@ export default function App() {
                           });
                         };
 
+                        // Función para guardar en Google Sheets directamente
+                        const saveConfigToGoogleSheets = async () => {
+                          setIsSavingToSheets(true);
+                          try {
+                            const payload = {
+                              action: 'save_beach_config',
+                              playa: compassBeachKey,
+                              lat: effectiveLat,
+                              lon: effectiveLon,
+                              facing: activeFacing,
+                              sectors: {
+                                lev_anortado: { min: 1, max: sLevAnortadoMax },
+                                levante:      { min: sLevAnortadoMax + 1, max: sLevanteMax },
+                                sur:          { min: sLevanteMax + 1, max: sSurMax },
+                                poniente:     { min: sSurMax + 1, max: sPonienteMax },
+                                terral:       { min: sPonienteMax + 1, max: 360 }
+                              }
+                            };
+
+                            await fetch(WEBHOOK_URL, {
+                              method: 'POST',
+                              mode: 'no-cors',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(payload)
+                            });
+
+                            setCompassSavedToast(true);
+                            setTimeout(() => setCompassSavedToast(false), 3500);
+                          } catch(e) {
+                            console.error(e);
+                          } finally {
+                            setIsSavingToSheets(false);
+                          }
+                        };
+
                         // Función para copiar la calibración a formato Google Sheets
                         const copyConfigForSheets = () => {
                           const csvText = [
@@ -5782,9 +5850,14 @@ export default function App() {
                                   Inspecciona la orografía real, espigones y orientaciones para calibrar los 5 sectores de cada playa.
                                 </p>
                               </div>
-                              {compassCopiedToast && (
+                              {compassSavedToast && (
                                 <span className="text-[10px] font-black bg-emerald-600 text-white px-3 py-1 rounded-full animate-bounce shadow-md">
-                                  ✓ ¡Copiado para Google Sheets!
+                                  ✓ ¡Guardado en Google Sheets con éxito!
+                                </span>
+                              )}
+                              {compassCopiedToast && !compassSavedToast && (
+                                <span className="text-[10px] font-black bg-blue-600 text-white px-3 py-1 rounded-full animate-bounce shadow-md">
+                                  ✓ ¡CSV Copiado al Portapapeles!
                                 </span>
                               )}
                             </div>
@@ -6178,15 +6251,27 @@ export default function App() {
                                   </div>
                                 </div>
 
-                                {/* BOTÓN COPIAR PARA GOOGLE SHEETS */}
-                                <button
-                                  type="button"
-                                  onClick={copyConfigForSheets}
-                                  className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-black text-xs shadow-md hover:from-emerald-700 hover:to-teal-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                                >
-                                  <Database size={15} />
-                                  <span>Copiar Configuración para Google Sheets</span>
-                                </button>
+                                {/* BOTONES DE ACCIÓN (GUARDAR EN NUBE + COPIAR CSV) */}
+                                <div className="space-y-2 pt-1">
+                                  <button
+                                    type="button"
+                                    disabled={isSavingToSheets}
+                                    onClick={saveConfigToGoogleSheets}
+                                    className="w-full py-2.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-black text-xs shadow-md hover:from-blue-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                                  >
+                                    {isSavingToSheets ? <Loader2 size={15} className="animate-spin" /> : <Database size={15} />}
+                                    <span>{isSavingToSheets ? 'Guardando en Google Sheets...' : '☁️ Guardar y Aplicar en Google Sheets'}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={copyConfigForSheets}
+                                    className="w-full py-1.5 px-3 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200"
+                                  >
+                                    <Copy size={13} />
+                                    <span>Copiar Formato CSV al Portapapeles</span>
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
