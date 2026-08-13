@@ -39,14 +39,14 @@ import { Analytics } from '@vercel/analytics/react';
 
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
 const BEACHES = {
-  misericordia: { name: "La Misericordia, Málaga", lat: 36.696, lon: -4.444, facing: 135 },
-  malagueta: { name: "La Malagueta, Málaga", lat: 36.718, lon: -4.407, facing: 180 },
-  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386, facing: 180 },
+  misericordia: { name: "La Misericordia, Málaga", lat: 36.6918, lon: -4.4385, facing: 117 },
+  malagueta: { name: "La Malagueta, Málaga", lat: 36.7180, lon: -4.4070, facing: 140 },
+  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.7215, lon: -4.3850, facing: 180 },
   // v9.4+ — expansión costera (Open-Meteo: mismos endpoints, lat/lon por playa)
-  los_alamos: { name: "Los Álamos, Torremolinos", lat: 36.6398, lon: -4.4815, facing: 188 },
-  bajondillo: { name: "El Bajondillo, Torremolinos", lat: 36.6271, lon: -4.4916, facing: 182 },
-  rincon_victoria: { name: "Rincón de la Victoria, Málaga", lat: 36.7131, lon: -4.2743, facing: 162 },
-  cala_del_moral: { name: "La Cala del Moral, Rincón de la Victoria", lat: 36.7148, lon: -4.31, facing: 148 }
+  los_alamos: { name: "Los Álamos, Torremolinos", lat: 36.6375, lon: -4.4840, facing: 120 },
+  bajondillo: { name: "El Bajondillo, Torremolinos", lat: 36.6235, lon: -4.4960, facing: 120 },
+  rincon_victoria: { name: "Rincón de la Victoria, Málaga", lat: 36.7150, lon: -4.2780, facing: 190 },
+  cala_del_moral: { name: "La Cala del Moral, Rincón de la Victoria", lat: 36.7135, lon: -4.3115, facing: 180 }
 };
 
 // Generador de etiquetas de fecha
@@ -5626,7 +5626,7 @@ export default function App() {
                             name: "La Malagueta, Málaga",
                             lat: 36.7180,
                             lon: -4.4070,
-                            facing: 90,
+                            facing: 140,
                             shelters: "Encajada tras Dique de Levante del Puerto de Málaga",
                             sectors: {
                               lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por la Farola." },
@@ -5668,7 +5668,7 @@ export default function App() {
                             name: "El Bajondillo, Torremolinos",
                             lat: 36.6235,
                             lon: -4.4960,
-                            facing: 115,
+                            facing: 120,
                             shelters: "Punta de Torremolinos / Castillo Santa Clara",
                             sectors: {
                               lev_anortado: { min: 1, max: 29, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada oblicua." },
@@ -5682,7 +5682,7 @@ export default function App() {
                             name: "La Cala del Moral",
                             lat: 36.7135,
                             lon: -4.3115,
-                            facing: 155,
+                            facing: 180,
                             shelters: "Acantilados de El Cantal al Oeste",
                             sectors: {
                               lev_anortado: { min: 1, max: 70, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra de la Axarquía." },
@@ -5696,7 +5696,7 @@ export default function App() {
                             name: "Rincón de la Victoria",
                             lat: 36.7150,
                             lon: -4.2780,
-                            facing: 170,
+                            facing: 190,
                             shelters: "Gran playa rectilínea, montes de la Axarquía",
                             sectors: {
                               lev_anortado: { min: 1, max: 70, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra / abrigo." },
