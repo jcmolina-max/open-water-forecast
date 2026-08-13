@@ -778,10 +778,22 @@ export default function App() {
   // Estado para las pestañas del Modal Admin ('factors', 'chart', 'compass', 'telemetry' o 'report')
   const [adminTab, setAdminTab] = useState('factors');
   const [compassBeachKey, setCompassBeachKey] = useState('misericordia');
-  const [compassCustomFacing, setCompassCustomFacing] = useState({});
-  const [compassCustomSectors, setCompassCustomSectors] = useState({});
+  const [compassCustomFacing, setCompassCustomFacing] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_compass_facing') || '{}');
+    } catch(e) { return {}; }
+  });
+  const [compassCustomSectors, setCompassCustomSectors] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_compass_sectors') || '{}');
+    } catch(e) { return {}; }
+  });
   const [compassZoom, setCompassZoom] = useState(16);
-  const [compassOffsets, setCompassOffsets] = useState({});
+  const [compassOffsets, setCompassOffsets] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_compass_offsets') || '{}');
+    } catch(e) { return {}; }
+  });
   const [compassCopiedToast, setCompassCopiedToast] = useState(false);
   const [compassSavedToast, setCompassSavedToast] = useState(false);
   const [isSavingToSheets, setIsSavingToSheets] = useState(false);
@@ -5567,7 +5579,6 @@ export default function App() {
                                     </strong>
                                     <span className="text-[8px] text-slate-500 block">Relación Boya / Satélite</span>
                                   </div>
-
                                   <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                                     <span className="text-[8.5px] font-bold text-slate-500 uppercase block">🏊 Precisión Nadador</span>
                                     <strong className="text-sm font-black text-blue-700 block mt-0.5">
@@ -5619,10 +5630,10 @@ export default function App() {
                             shelters: "Encajada tras Dique de Levante del Puerto de Málaga",
                             sectors: {
                               lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por la Farola." },
-                              levante:      { min: 50, max: 150, label: "Levante Franco", color: "#3b82f6", desc: "Entrada frontal directa de Levante." },
-                              sur:          { min: 151, max: 180, label: "Sur", color: "#8b5cf6", desc: "Entrada oblicua al dique del puerto." },
-                              poniente:     { min: 181, max: 215, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida totalmente por el Puerto." },
-                              terral:       { min: 216, max: 360, label: "Terral de Gibralfaro", color: "#f97316", desc: "Viento seco de los montes." }
+                              levante:      { min: 50, max: 170, label: "Levante Franco", color: "#3b82f6", desc: "Entrada directa de Levante / Mar de fondo." },
+                              sur:          { min: 171, max: 190, label: "Sur", color: "#8b5cf6", desc: "Entrada oblicua al dique del puerto." },
+                              poniente:     { min: 191, max: 229, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida por el Dique y Puerto." },
+                              terral:       { min: 230, max: 360, label: "Terral de Gibralfaro", color: "#f97316", desc: "Viento seco de tierra / balsa." }
                             }
                           },
                           pedregalejo: {
@@ -5632,11 +5643,11 @@ export default function App() {
                             facing: 180,
                             shelters: "6 calas protegidas por espigones en T/Y",
                             sectors: {
-                              lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por El Morlaco." },
-                              levante:      { min: 50, max: 170, label: "Levante Calas", color: "#3b82f6", desc: "Espigones frenan el 70% del oleaje." },
+                              lev_anortado: { min: 1, max: 70, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por El Morlaco." },
+                              levante:      { min: 71, max: 170, label: "Levante Calas", color: "#3b82f6", desc: "Espigones frenan el oleaje." },
                               sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada directa por las bocanas." },
-                              poniente:     { min: 191, max: 225, label: "Poniente Calas", color: "#10b981", desc: "Calas tipo piscina." },
-                              terral:       { min: 226, max: 360, label: "Terral / Viento Tierra", color: "#f97316", desc: "Mar plano absoluto." }
+                              poniente:     { min: 191, max: 250, label: "Poniente Calas", color: "#10b981", desc: "Calas tipo piscina por abrigo." },
+                              terral:       { min: 251, max: 360, label: "Terral / Viento Tierra", color: "#f97316", desc: "Mar plano absoluto." }
                             }
                           },
                           los_alamos: {
@@ -5646,11 +5657,11 @@ export default function App() {
                             facing: 120,
                             shelters: "Playa abierta rectilínea sin espigones",
                             sectors: {
-                              lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra-mar." },
-                              levante:      { min: 50, max: 170, label: "Levante Abierto", color: "#3b82f6", desc: "Olas con máxima energía y rompiente." },
-                              sur:          { min: 171, max: 195, label: "Sur Abierto", color: "#8b5cf6", desc: "Mar de fondo frontal sin abrigo." },
-                              poniente:     { min: 196, max: 230, label: "Poniente", color: "#10b981", desc: "Viento de costado." },
-                              terral:       { min: 231, max: 360, label: "Terral", color: "#f97316", desc: "Viento de la sierra de Mijas." }
+                              lev_anortado: { min: 1, max: 30, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra-mar." },
+                              levante:      { min: 31, max: 170, label: "Levante Abierto", color: "#3b82f6", desc: "Olas con máxima energía y rompiente." },
+                              sur:          { min: 171, max: 190, label: "Sur Abierto", color: "#8b5cf6", desc: "Mar de fondo frontal sin abrigo." },
+                              poniente:     { min: 191, max: 219, label: "Poniente", color: "#10b981", desc: "Viento de costado / chop." },
+                              terral:       { min: 220, max: 360, label: "Terral", color: "#f97316", desc: "Viento de la sierra de Mijas / balsa." }
                             }
                           },
                           bajondillo: {
@@ -5660,11 +5671,11 @@ export default function App() {
                             facing: 115,
                             shelters: "Punta de Torremolinos / Castillo Santa Clara",
                             sectors: {
-                              lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada oblicua." },
-                              levante:      { min: 50, max: 165, label: "Levante", color: "#3b82f6", desc: "Entrada franca de Levante." },
-                              sur:          { min: 166, max: 190, label: "Sur", color: "#8b5cf6", desc: "Entrada de mar de fondo." },
-                              poniente:     { min: 191, max: 220, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida por la Punta de Torremolinos." },
-                              terral:       { min: 221, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
+                              lev_anortado: { min: 1, max: 29, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada oblicua." },
+                              levante:      { min: 30, max: 170, label: "Levante", color: "#3b82f6", desc: "Entrada franca de Levante." },
+                              sur:          { min: 171, max: 190, label: "Sur", color: "#8b5cf6", desc: "Entrada de mar de fondo." },
+                              poniente:     { min: 191, max: 215, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida por la Punta de Torremolinos." },
+                              terral:       { min: 216, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
                             }
                           },
                           cala_del_moral: {
@@ -5674,11 +5685,11 @@ export default function App() {
                             facing: 155,
                             shelters: "Acantilados de El Cantal al Oeste",
                             sectors: {
-                              lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra de la Axarquía." },
-                              levante:      { min: 50, max: 165, label: "Levante Concha", color: "#3b82f6", desc: "Entrada franca de Levante." },
-                              sur:          { min: 166, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada frontal a la concha." },
-                              poniente:     { min: 191, max: 225, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida del Poniente por El Cantal." },
-                              terral:       { min: 226, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
+                              lev_anortado: { min: 1, max: 70, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra de la Axarquía." },
+                              levante:      { min: 71, max: 170, label: "Levante Concha", color: "#3b82f6", desc: "Entrada franca de Levante." },
+                              sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada frontal a la concha." },
+                              poniente:     { min: 191, max: 250, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida del Poniente por El Cantal." },
+                              terral:       { min: 251, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra / orilla balsa." }
                             }
                           },
                           rincon_victoria: {
@@ -5688,11 +5699,11 @@ export default function App() {
                             facing: 170,
                             shelters: "Gran playa rectilínea, montes de la Axarquía",
                             sectors: {
-                              lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra." },
-                              levante:      { min: 50, max: 170, label: "Levante Axarquía", color: "#3b82f6", desc: "Playa abierta muy expuesta al Levante." },
-                              sur:          { min: 171, max: 190, label: "Sur", color: "#8b5cf6", desc: "Mar de fondo de Alborán." },
-                              poniente:     { min: 191, max: 220, label: "Poniente Tendido", color: "#10b981", desc: "Oleaje paralelo a la costa." },
-                              terral:       { min: 221, max: 360, label: "Terral", color: "#f97316", desc: "Viento de las montañas." }
+                              lev_anortado: { min: 1, max: 70, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra / abrigo." },
+                              levante:      { min: 71, max: 170, label: "Levante", color: "#3b82f6", desc: "Entrada franca de Levante." },
+                              sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada directa a la arena." },
+                              poniente:     { min: 191, max: 250, label: "Poniente", color: "#10b981", desc: "Protegida por El Cantal." },
+                              terral:       { min: 251, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
                             }
                           }
                         };
@@ -5766,13 +5777,15 @@ export default function App() {
                         const nudge = (dLatDelta, dLonDelta) => {
                           setCompassOffsets(prev => {
                             const cur = prev[compassBeachKey] || { dLat: 0, dLon: 0 };
-                            return {
+                            const next = {
                               ...prev,
                               [compassBeachKey]: {
                                 dLat: cur.dLat + dLatDelta,
                                 dLon: cur.dLon + dLonDelta
                               }
                             };
+                            try { localStorage.setItem('openwater_compass_offsets', JSON.stringify(next)); } catch(e) {}
+                            return next;
                           });
                         };
 
@@ -5780,6 +5793,26 @@ export default function App() {
                           setCompassOffsets(prev => {
                             const next = { ...prev };
                             delete next[compassBeachKey];
+                            try { localStorage.setItem('openwater_compass_offsets', JSON.stringify(next)); } catch(e) {}
+                            return next;
+                          });
+                        };
+
+                        const updateFacing = (val) => {
+                          setCompassCustomFacing(prev => {
+                            const next = { ...prev, [compassBeachKey]: val };
+                            try { localStorage.setItem('openwater_compass_facing', JSON.stringify(next)); } catch(e) {}
+                            return next;
+                          });
+                        };
+
+                        const updateSector = (secKey, val) => {
+                          setCompassCustomSectors(prev => {
+                            const next = {
+                              ...prev,
+                              [compassBeachKey]: { ...(prev[compassBeachKey] || {}), [secKey]: val }
+                            };
+                            try { localStorage.setItem('openwater_compass_sectors', JSON.stringify(next)); } catch(e) {}
                             return next;
                           });
                         };
@@ -6138,10 +6171,7 @@ export default function App() {
                                     min="0" 
                                     max="360" 
                                     value={activeFacing} 
-                                    onChange={(e) => {
-                                      const val = parseInt(e.target.value);
-                                      setCompassCustomFacing(prev => ({ ...prev, [compassBeachKey]: val }));
-                                    }}
+                                    onChange={(e) => updateFacing(parseInt(e.target.value))}
                                     className="w-full accent-indigo-600 cursor-pointer" 
                                   />
                                   <p className="text-[9px] text-slate-500">
@@ -6159,11 +6189,13 @@ export default function App() {
                                         setCompassCustomFacing(prev => {
                                           const next = { ...prev };
                                           delete next[compassBeachKey];
+                                          try { localStorage.setItem('openwater_compass_facing', JSON.stringify(next)); } catch(e) {}
                                           return next;
                                         });
                                         setCompassCustomSectors(prev => {
                                           const next = { ...prev };
                                           delete next[compassBeachKey];
+                                          try { localStorage.setItem('openwater_compass_sectors', JSON.stringify(next)); } catch(e) {}
                                           return next;
                                         });
                                       }}
@@ -6179,14 +6211,8 @@ export default function App() {
                                       <span className="text-amber-700">🧭 Levante Anortado: 1º a {sLevAnortadoMax}º</span>
                                     </div>
                                     <input 
-                                      type="range" min="10" max="70" value={sLevAnortadoMax}
-                                      onChange={(e) => {
-                                        const val = parseInt(e.target.value);
-                                        setCompassCustomSectors(prev => ({
-                                          ...prev,
-                                          [compassBeachKey]: { ...(prev[compassBeachKey] || {}), lev_anortado: val }
-                                        }));
-                                      }}
+                                      type="range" min="5" max="90" value={sLevAnortadoMax}
+                                      onChange={(e) => updateSector('lev_anortado', parseInt(e.target.value))}
                                       className="w-full accent-amber-500 cursor-pointer" 
                                     />
                                   </div>
@@ -6197,14 +6223,8 @@ export default function App() {
                                       <span className="text-blue-700">🌊 Levante: {sLevAnortadoMax + 1}º a {sLevanteMax}º</span>
                                     </div>
                                     <input 
-                                      type="range" min="90" max="185" value={sLevanteMax}
-                                      onChange={(e) => {
-                                        const val = parseInt(e.target.value);
-                                        setCompassCustomSectors(prev => ({
-                                          ...prev,
-                                          [compassBeachKey]: { ...(prev[compassBeachKey] || {}), levante: val }
-                                        }));
-                                      }}
+                                      type="range" min="40" max="190" value={sLevanteMax}
+                                      onChange={(e) => updateSector('levante', parseInt(e.target.value))}
                                       className="w-full accent-blue-600 cursor-pointer" 
                                     />
                                   </div>
@@ -6215,14 +6235,8 @@ export default function App() {
                                       <span className="text-purple-700">⚓ Sur: {sLevanteMax + 1}º a {sSurMax}º</span>
                                     </div>
                                     <input 
-                                      type="range" min="160" max="210" value={sSurMax}
-                                      onChange={(e) => {
-                                        const val = parseInt(e.target.value);
-                                        setCompassCustomSectors(prev => ({
-                                          ...prev,
-                                          [compassBeachKey]: { ...(prev[compassBeachKey] || {}), sur: val }
-                                        }));
-                                      }}
+                                      type="range" min="150" max="220" value={sSurMax}
+                                      onChange={(e) => updateSector('sur', parseInt(e.target.value))}
                                       className="w-full accent-purple-600 cursor-pointer" 
                                     />
                                   </div>
@@ -6233,14 +6247,8 @@ export default function App() {
                                       <span className="text-emerald-700">💨 Poniente: {sSurMax + 1}º a {sPonienteMax}º</span>
                                     </div>
                                     <input 
-                                      type="range" min="195" max="250" value={sPonienteMax}
-                                      onChange={(e) => {
-                                        const val = parseInt(e.target.value);
-                                        setCompassCustomSectors(prev => ({
-                                          ...prev,
-                                          [compassBeachKey]: { ...(prev[compassBeachKey] || {}), poniente: val }
-                                        }));
-                                      }}
+                                      type="range" min="180" max="280" value={sPonienteMax}
+                                      onChange={(e) => updateSector('poniente', parseInt(e.target.value))}
                                       className="w-full accent-emerald-600 cursor-pointer" 
                                     />
                                   </div>
