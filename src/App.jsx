@@ -32,7 +32,8 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
-  Users
+  Users,
+  Database
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
