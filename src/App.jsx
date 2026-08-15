@@ -39,7 +39,7 @@ import { Analytics } from '@vercel/analytics/react';
 
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
 const BEACHES = {
-  misericordia: { name: "La Misericordia, Málaga", lat: 36.6918, lon: -4.4385, facing: 117 },
+  misericordia: { name: "La Misericordia, Málaga", lat: 36.6918, lon: -4.4385, facing: 115 },
   malagueta: { name: "La Malagueta, Málaga", lat: 36.7180, lon: -4.4070, facing: 140 },
   pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.7215, lon: -4.3850, facing: 180 },
   // v9.4+ — expansión costera (Open-Meteo: mismos endpoints, lat/lon por playa)
@@ -6438,50 +6438,69 @@ export default function App() {
                           {(() => {
                             const bKey = telemetryBeachFilter;
                             const bObj = BEACHES[bKey];
-                            const facing = bObj?.facing || 115;
-                            const ejeEste = ((facing - 90 + 360) % 360) || 25;
-                            const ejeOeste = (facing + 90) % 360 || 205;
+                            const activeFacing = (compassCustomFacing && compassCustomFacing[bKey] !== undefined)
+                              ? compassCustomFacing[bKey] 
+                              : (bObj?.facing || 115);
+                            
+                            const customSecs = (compassCustomSectors && compassCustomSectors[bKey]) || {};
+
+                            // Límites angulares calibrados por playa
+                            const defaultSectors = {
+                              misericordia:   { levAnortado: 25,  levante: 170, sur: 190, poniente: 205 },
+                              malagueta:      { levAnortado: 50,  levante: 170, sur: 190, poniente: 230 },
+                              pedregalejo:    { levAnortado: 90,  levante: 170, sur: 190, poniente: 270 },
+                              los_alamos:     { levAnortado: 30,  levante: 170, sur: 190, poniente: 210 },
+                              bajondillo:     { levAnortado: 30,  levante: 170, sur: 190, poniente: 210 },
+                              cala_del_moral: { levAnortado: 90,  levante: 170, sur: 190, poniente: 270 },
+                              rincon_victoria:{ levAnortado: 100, levante: 170, sur: 190, poniente: 280 }
+                            };
+
+                            const bDefaults = defaultSectors[bKey] || defaultSectors.misericordia;
+                            const sLevAnortadoMax = customSecs.lev_anortado !== undefined ? customSecs.lev_anortado : bDefaults.levAnortado;
+                            const sLevanteMax     = customSecs.levante !== undefined ? customSecs.levante : bDefaults.levante;
+                            const sSurMax         = customSecs.sur !== undefined ? customSecs.sur : bDefaults.sur;
+                            const sPonienteMax    = customSecs.poniente !== undefined ? customSecs.poniente : bDefaults.poniente;
 
                             const sectorsDef = [
                               { 
                                 key: 'lev_anortado', 
                                 name: '🧭 Levante Anortado', 
-                                range: `1º a ${ejeEste}º`, 
+                                range: `1º a ${sLevAnortadoMax}º`, 
                                 masa: 'Offshore / Tierra-Mar',
                                 ruleFactor: 0.40,
-                                isMatch: (dir) => dir >= 1 && dir <= ejeEste
+                                isMatch: (dir) => dir >= 1 && dir <= sLevAnortadoMax
                               },
                               { 
                                 key: 'levante', 
                                 name: '🌊 Levante Swell', 
-                                range: `${ejeEste + 1}º a 170º`, 
+                                range: `${sLevAnortadoMax + 1}º a ${sLevanteMax}º`, 
                                 masa: 'Onshore / Swell Mar',
                                 ruleFactor: 0.60,
-                                isMatch: (dir) => dir > ejeEste && dir <= 170
+                                isMatch: (dir) => dir > sLevAnortadoMax && dir <= sLevanteMax
                               },
                               { 
                                 key: 'sur', 
                                 name: '⚓ Sur / Térmico', 
-                                range: '171º a 190º', 
+                                range: `${sLevanteMax + 1}º a ${sSurMax}º`, 
                                 masa: 'Frontal (+8kt térmico)',
                                 ruleFactor: 0.50,
-                                isMatch: (dir) => dir >= 171 && dir <= 190
+                                isMatch: (dir) => dir > sLevanteMax && dir <= sSurMax
                               },
                               { 
                                 key: 'poniente', 
                                 name: '💨 Poniente Chop', 
-                                range: `191º a ${ejeOeste}º`, 
+                                range: `${sSurMax + 1}º a ${sPonienteMax}º`, 
                                 masa: 'Cross-shore / Mar',
-                                ruleFactor: bKey === 'malagueta' || bKey === 'pedregalejo' ? 0.25 : 0.40,
-                                isMatch: (dir) => dir >= 191 && dir <= ejeOeste
+                                ruleFactor: (bKey === 'malagueta' || bKey === 'pedregalejo') ? 0.25 : 0.40,
+                                isMatch: (dir) => dir > sSurMax && dir <= sPonienteMax
                               },
                               { 
                                 key: 'terral', 
                                 name: '🏔️ Poniente-Terral', 
-                                range: `${ejeOeste + 1}º a 360º`, 
+                                range: `${sPonienteMax + 1}º a 360º`, 
                                 masa: 'Offshore / Tierra (Regla 0.30)',
                                 ruleFactor: 0.15,
-                                isMatch: (dir) => dir > ejeOeste || dir === 0
+                                isMatch: (dir) => dir > sPonienteMax || dir === 0
                               }
                             ];
 
