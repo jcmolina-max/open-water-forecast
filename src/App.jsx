@@ -319,6 +319,247 @@ function HourlySvgChart({ hourlyData }) {
   );
 };
 
+function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }) {
+  if (!hourlyData || hourlyData.length === 0) return null;
+
+  const activeIdx = (selectedIdx !== null && selectedIdx >= 0 && selectedIdx < hourlyData.length) ? selectedIdx : 0;
+  const currentHour = hourlyData[activeIdx] || hourlyData[0];
+  const bObj = BEACHES[beachKey] || BEACHES.misericordia;
+  const facing = bObj?.facing || 115;
+  const ejeEste = ((facing - 90 + 360) % 360) || 25;
+  const ejeOeste = (facing + 90) % 360 || 205;
+
+  const wSpd = parseFloat((currentHour.viento || currentHour.windS || 0).toString().replace(',', '.'));
+  const wDir = parseFloat((currentHour.vientoDir !== undefined ? currentHour.vientoDir : (currentHour.windD || 210)).toString().replace(',', '.'));
+  const sH = parseFloat((currentHour.olas || currentHour.swellH || 0).toString().replace(',', '.'));
+  const sP = parseFloat((currentHour.periodo || currentHour.swellP || 0).toString().replace(',', '.'));
+  const sDir = parseFloat((currentHour.olaDir !== undefined ? currentHour.olaDir : (currentHour.swellD || 115)).toString().replace(',', '.'));
+
+  let windColor = '#06b6d4';
+  if (wSpd >= 18) windColor = '#ef4444';
+  else if (wSpd >= 13) windColor = '#f59e0b';
+  else if (wSpd >= 7) windColor = '#10b981';
+
+  let diagTitle = "Condición Estable";
+  let diagDesc = "Mar calmo en orilla";
+  let diagBadgeClass = "bg-blue-50 text-blue-800 border-blue-200";
+
+  const isOffshore = wDir > ejeOeste || wDir < ejeEste;
+  const isLevante = sDir >= ejeEste && sDir <= 170;
+  const isPoniente = wDir >= 191 && wDir <= ejeOeste;
+  const isSur = wDir >= 171 && wDir <= 190;
+
+  if (isOffshore && wSpd >= 8) {
+    diagTitle = "🏔️ Viento de Tierra (Terral)";
+    diagDesc = "Orilla plato / Balsa total. Precaución mar adentro.";
+    diagBadgeClass = "bg-emerald-50 text-emerald-800 border-emerald-200";
+  } else if (isLevante && (sH >= 0.5 || sP >= 5.0)) {
+    diagTitle = "🌊 Mar de Fondo de Levante";
+    diagDesc = "Rompiente orillera activa. Olas con masa.";
+    diagBadgeClass = "bg-indigo-50 text-indigo-800 border-indigo-200";
+  } else if (isPoniente && wSpd >= 9) {
+    diagTitle = "💨 Poniente Costero";
+    diagDesc = "Chop rápido lateral y corriente hacia Levante.";
+    diagBadgeClass = "bg-teal-50 text-teal-800 border-teal-200";
+  } else if (isSur) {
+    diagTitle = "⚓ Sur / Virazón Térmica";
+    diagDesc = "Mar picado e incómodo en la orilla.";
+    diagBadgeClass = "bg-purple-50 text-purple-800 border-purple-200";
+  } else if (sH <= 0.25 && wSpd <= 6) {
+    diagTitle = "🏊 Balsa / Mar Espejo";
+    diagDesc = "Condiciones perfectas para nado continuo.";
+    diagBadgeClass = "bg-emerald-50 text-emerald-800 border-emerald-200";
+  }
+
+  const cx = 100, cy = 100, R = 72;
+  const rad = Math.PI / 180;
+
+  const a1 = (facing - 90) * rad;
+  const x1 = cx + R * Math.sin(a1);
+  const y1 = cy - R * Math.cos(a1);
+  const a2 = (facing + 90) * rad;
+  const x2 = cx + R * Math.sin(a2);
+  const y2 = cy - R * Math.cos(a2);
+
+  const aFacing = facing * rad;
+  const xFacing = cx + (R - 8) * Math.sin(aFacing);
+  const yFacing = cy - (R - 8) * Math.cos(aFacing);
+
+  const aWind = wDir * rad;
+  const windLen = Math.min(R - 15, 28 + (wSpd / 25) * 35);
+  const xWindStart = cx - (windLen * 0.45) * Math.sin(aWind);
+  const yWindStart = cy + (windLen * 0.45) * Math.cos(aWind);
+  const xWindEnd = cx + (windLen * 0.75) * Math.sin(aWind);
+  const yWindEnd = cy - (windLen * 0.75) * Math.cos(aWind);
+
+  const aSwell = sDir * rad;
+  const swellLen = Math.min(R - 15, 28 + Math.min(sH, 1.5) * 30);
+  const xSwellStart = cx - (swellLen * 0.45) * Math.sin(aSwell);
+  const ySwellStart = cy + (swellLen * 0.45) * Math.cos(aSwell);
+  const xSwellEnd = cx + (swellLen * 0.75) * Math.sin(aSwell);
+  const ySwellEnd = cy - (swellLen * 0.75) * Math.cos(aSwell);
+
+  return (
+    <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white p-4 rounded-2xl border border-slate-700/80 shadow-md space-y-3.5 text-left">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-indigo-500/20 border border-indigo-400/40 rounded-xl text-indigo-300 shrink-0">
+            <Compass size={18} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-black text-sm text-white tracking-wide">
+                🧭 Visor Náutico: {bObj.name.split(',')[0]}
+              </span>
+              <span className="text-[10px] font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/40 px-2 py-0.5 rounded-full">
+                Frente Marino: {facing}º
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 font-medium">
+              Eje Costa: {ejeEste}º (Este) ↔ {ejeOeste}º (Oeste)
+            </p>
+          </div>
+        </div>
+
+        <div className={`px-2.5 py-1 rounded-xl border text-xs font-bold shrink-0 ${diagBadgeClass}`}>
+          <span>{diagTitle}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+        <div className="md:col-span-5 flex justify-center">
+          <div className="relative w-44 h-44 sm:w-48 sm:h-48 bg-slate-950/90 rounded-full border border-slate-700/80 p-1 shadow-inner flex items-center justify-center">
+            <svg viewBox="0 0 200 200" className="w-full h-full">
+              <defs>
+                <marker id="arrowWindSpot" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L6,3 z" fill={windColor} />
+                </marker>
+                <marker id="arrowSwellSpot" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L6,3 z" fill="#818cf8" />
+                </marker>
+              </defs>
+
+              <circle cx={cx} cy={cy} r={R} fill="none" stroke="#334155" strokeWidth="1.5" strokeDasharray="3 3" />
+
+              <text x={cx} y={18} fontSize="9" fontWeight="bold" fill="#94a3b8" textAnchor="middle">N (0º)</text>
+              <text x={186} y={cy + 3} fontSize="9" fontWeight="bold" fill="#94a3b8" textAnchor="middle">E (90º)</text>
+              <text x={cx} y={192} fontSize="9" fontWeight="bold" fill="#94a3b8" textAnchor="middle">S (180º)</text>
+              <text x={14} y={cy + 3} fontSize="9" fontWeight="bold" fill="#94a3b8" textAnchor="middle">W (270º)</text>
+
+              {/* Línea de Costa */}
+              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />
+              
+              {/* Vector Frente Marino mirando al mar */}
+              <line x1={cx} y1={cy} x2={xFacing} y2={yFacing} stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="2 2" />
+              <circle cx={xFacing} cy={yFacing} r="2.5" fill="#f59e0b" />
+
+              {/* Flecha Viento */}
+              <line 
+                x1={xWindStart} 
+                y1={yWindStart} 
+                x2={xWindEnd} 
+                y2={yWindEnd} 
+                stroke={windColor} 
+                strokeWidth="3.5" 
+                strokeLinecap="round"
+                markerEnd="url(#arrowWindSpot)"
+                className="transition-all duration-300"
+              />
+
+              {/* Flecha Swell / Ola */}
+              <line 
+                x1={xSwellStart} 
+                y1={ySwellStart} 
+                x2={xSwellEnd} 
+                y2={ySwellEnd} 
+                stroke="#818cf8" 
+                strokeWidth="4" 
+                strokeLinecap="round"
+                strokeDasharray="6 2"
+                markerEnd="url(#arrowSwellSpot)"
+                className="transition-all duration-300"
+              />
+
+              {/* Punto central del nadador */}
+              <circle cx={cx} cy={cy} r="4" fill="#38bdf8" />
+              <circle cx={cx} cy={cy} r="8" fill="none" stroke="#38bdf8" strokeWidth="1" className="animate-ping" opacity="0.6" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="md:col-span-7 space-y-2 text-left">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-slate-800/90 p-2.5 rounded-xl border border-slate-700 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-cyan-400 flex items-center gap-1">
+                  <Wind size={12} /> Viento
+                </span>
+                <span className="text-[9px] font-bold bg-slate-700 px-1.5 py-0.2 rounded text-slate-300">
+                  {wDir}º
+                </span>
+              </div>
+              <strong className="text-lg font-black text-white block">
+                {wSpd.toFixed(1)} <span className="text-xs font-normal text-slate-300">kt</span>
+              </strong>
+              <span className="text-[9px] text-slate-400 block truncate">
+                {isOffshore ? '🏔️ Viento de Tierra (Terral)' : '🌊 Viento de Mar'}
+              </span>
+            </div>
+
+            <div className="bg-slate-800/90 p-2.5 rounded-xl border border-slate-700 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-indigo-400 flex items-center gap-1">
+                  <Waves size={12} /> Oleaje (Swell)
+                </span>
+                <span className="text-[9px] font-bold bg-slate-700 px-1.5 py-0.2 rounded text-slate-300">
+                  {sDir}º
+                </span>
+              </div>
+              <strong className="text-lg font-black text-white block">
+                {sH.toFixed(2)} <span className="text-xs font-normal text-slate-300">m</span> · {sP.toFixed(1)}<span className="text-xs font-normal text-slate-300">s</span>
+              </strong>
+              <span className="text-[9px] text-slate-400 block truncate">
+                {isLevante ? '🌊 Mar de Fondo Levante' : isPoniente ? '💨 Mar de Poniente' : '⚓ Mar Directo'}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60 text-[10px] text-slate-300 flex items-center justify-between">
+            <span className="font-semibold truncate mr-2">💡 {diagDesc}</span>
+            <span className="text-amber-400 font-bold shrink-0">Hora: {currentHour.time}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-2 border-t border-slate-800">
+        <div className="flex items-center justify-between mb-1.5 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+          <span>⏱️ Selecciona o desliza la hora del día:</span>
+          <span className="text-indigo-400 font-bold">{currentHour.time} ({hourlyData.length} horas)</span>
+        </div>
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+          {hourlyData.map((hr, idx) => {
+            const isSel = activeIdx === idx;
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => onSelectHour(idx)}
+                className={`py-1 px-2.5 rounded-lg text-[10px] font-black shrink-0 transition-all cursor-pointer ${
+                  isSel
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/40 scale-105 border border-indigo-400'
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700'
+                }`}
+              >
+                {hr.time}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function parseBoyaNum(val, min = -100, max = 500) {
   if (val === undefined || val === null || val === "") return null;
   
@@ -611,13 +852,29 @@ function swimmerScaleToMeters(v) {
 };
 
 export default function App() {
-  const [selectedBeach, setSelectedBeach] = useState('misericordia');
+  const [selectedBeach, setSelectedBeach] = useState(() => {
+    try {
+      const saved = localStorage.getItem('openwater_active_beach');
+      if (saved && BEACHES[saved]) return saved;
+    } catch(e) {}
+    return 'misericordia';
+  });
   // Por defecto seleccionamos "Hoy" (Índice 1, ya que Ayer es 0)
   const [selectedDay, setSelectedDay] = useState(1); 
   const [beachData, setBeachData] = useState(null); 
   const [rawMarineData, setRawMarineData] = useState(null);
   const [currentNowData, setCurrentNowData] = useState(null); // Datos del momento exacto actual
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedSpotHourIdx, setSelectedSpotHourIdx] = useState(null);
+
+  const handleSelectBeach = (beachKey) => {
+    setSelectedBeach(beachKey);
+    setVisibleReportsCount(3);
+    setSelectedSpotHourIdx(null);
+    try {
+      localStorage.setItem('openwater_active_beach', beachKey);
+    } catch(e) {}
+  };
   
   // Estados de calibración y administración (Fase 2)
   const [activeTab, setActiveTab] = useState('forecast'); // 'forecast' | 'comparison'
@@ -2337,10 +2594,7 @@ export default function App() {
               <MapPin className="text-slate-400 ml-1 md:ml-2 shrink-0" size={20} />
               <select 
                 value={selectedBeach} 
-                onChange={(e) => {
-                  setSelectedBeach(e.target.value);
-                  setVisibleReportsCount(3);
-                }}
+                onChange={(e) => handleSelectBeach(e.target.value)}
                 className="bg-transparent font-bold text-slate-700 py-1.5 pr-4 pl-1 md:pl-2 outline-none w-full md:min-w-[14rem] md:max-w-[22rem] cursor-pointer text-ellipsis overflow-hidden"
               >
                 <option value="misericordia">La Misericordia</option>
@@ -2859,12 +3113,14 @@ export default function App() {
               <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-fit">
                 
                 <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50/50 gap-4">
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-bold text-slate-800 text-lg">
-                      {selectedDay === 0 ? "Registro de ayer" : "Evolución del mar"}
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h3 className="font-black text-slate-800 text-base sm:text-lg flex items-center gap-1.5">
+                      <span>{selectedDay === 0 ? "Registro de ayer" : "Evolución del mar"}</span>
+                      <span className="text-indigo-600 font-extrabold">— 🏖️ {BEACHES[selectedBeach]?.name.split(',')[0]}</span>
                     </h3>
-                    <span className="hidden sm:inline-block text-[10px] text-slate-400 font-medium border border-slate-200 bg-white px-2 py-0.5 rounded-full">
-                      Predicción Matemática
+                    <span className="text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Compass size={10} className="text-indigo-500" />
+                      Facing {BEACHES[selectedBeach]?.facing}º
                     </span>
                   </div>
                   <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
@@ -2873,14 +3129,14 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setViewMode('table')}
-                        className={`px-2.5 py-1 rounded transition-all ${viewMode === 'table' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                        className={`px-2.5 py-1 rounded transition-all cursor-pointer ${viewMode === 'table' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                       >
                         Tabla 📋
                       </button>
                       <button
                         type="button"
                         onClick={() => setViewMode('chart')}
-                        className={`px-2.5 py-1 rounded transition-all ${viewMode === 'chart' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                        className={`px-2.5 py-1 rounded transition-all cursor-pointer ${viewMode === 'chart' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                       >
                         Gráfico 📈
                       </button>
@@ -2907,7 +3163,7 @@ export default function App() {
                          </div>
                           <button
                             onClick={() => setIsSwimmerModalOpen(true)}
-                            className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs w-full sm:w-auto"
+                            className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs w-full sm:w-auto cursor-pointer"
                           >
                             📝 ¿Nadaste ayer? Reportar estado
                           </button>
@@ -2915,6 +3171,18 @@ export default function App() {
                      <p className="text-[11px] font-bold text-indigo-500 mt-3 text-center sm:text-left w-full">
                        O si lo prefieres, cuéntanoslo directamente por el grupo de WhatsApp del club.
                      </p>
+                  </div>
+                )}
+
+                {/* NUEVO VISOR NÁUTICO DE ORILLA Y FLECHAS (ESTILO WINDY) */}
+                {currentDayData && currentDayData.hourly && currentDayData.hourly.length > 0 && (
+                  <div className="p-3 sm:p-4 bg-slate-900/95 border-b border-slate-800 animate-in fade-in duration-300">
+                    <NauticalSpotCompass
+                      beachKey={selectedBeach}
+                      hourlyData={currentDayData.hourly}
+                      selectedIdx={selectedSpotHourIdx}
+                      onSelectHour={(idx) => setSelectedSpotHourIdx(idx)}
+                    />
                   </div>
                 )}
                 
