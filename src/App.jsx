@@ -329,11 +329,11 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
   const ejeEste = ((facing - 90 + 360) % 360) || 25;
   const ejeOeste = (facing + 90) % 360 || 205;
 
-  const wSpd = parseFloat((currentHour.viento || currentHour.windS || 0).toString().replace(',', '.'));
-  const wDir = parseFloat((currentHour.vientoDir !== undefined ? currentHour.vientoDir : (currentHour.windD || 210)).toString().replace(',', '.'));
-  const sH = parseFloat((currentHour.olas || currentHour.swellH || 0).toString().replace(',', '.'));
-  const sP = parseFloat((currentHour.periodo || currentHour.swellP || 0).toString().replace(',', '.'));
-  const sDir = parseFloat((currentHour.olaDir !== undefined ? currentHour.olaDir : (currentHour.swellD || 115)).toString().replace(',', '.'));
+  const wSpd = parseFloat((currentHour.windS !== undefined ? currentHour.windS : (currentHour.viento || 0)).toString().replace(',', '.'));
+  const wDir = parseFloat((currentHour.windDir !== undefined ? currentHour.windDir : (currentHour.vientoDir || 210)).toString().replace(',', '.'));
+  const sH = parseFloat((currentHour.swellH !== undefined ? currentHour.swellH : (currentHour.olas || 0)).toString().replace(',', '.'));
+  const sP = parseFloat((currentHour.period !== undefined ? currentHour.period : (currentHour.periodo || 0)).toString().replace(',', '.'));
+  const sDir = parseFloat((currentHour.swellDir !== undefined ? currentHour.swellDir : (currentHour.olaDir || 115)).toString().replace(',', '.'));
 
   let windColor = '#06b6d4';
   if (wSpd >= 18) windColor = '#ef4444';
@@ -385,19 +385,23 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
   const xFacing = cx + (R - 8) * Math.sin(aFacing);
   const yFacing = cy - (R - 8) * Math.cos(aFacing);
 
-  const aWind = wDir * rad;
-  const windLen = Math.min(R - 15, 28 + (wSpd / 25) * 35);
-  const xWindStart = cx - (windLen * 0.45) * Math.sin(aWind);
-  const yWindStart = cy + (windLen * 0.45) * Math.cos(aWind);
-  const xWindEnd = cx + (windLen * 0.75) * Math.sin(aWind);
-  const yWindEnd = cy - (windLen * 0.75) * Math.cos(aWind);
+  // Vector Viento: El viento procede de wDir y viaja hacia (wDir + 180).
+  // Por ejemplo, viento de Levante (90º) viene del Este y la flecha apunta hacia el Oeste (270º/Poniente).
+  const aWindFlow = ((wDir + 180) % 360) * rad;
+  const windLen = Math.min(R - 15, 26 + (wSpd / 25) * 35);
+  const xWindStart = cx - (windLen * 0.5) * Math.sin(aWindFlow);
+  const yWindStart = cy + (windLen * 0.5) * Math.cos(aWindFlow);
+  const xWindEnd = cx + (windLen * 0.75) * Math.sin(aWindFlow);
+  const yWindEnd = cy - (windLen * 0.75) * Math.cos(aWindFlow);
 
-  const aSwell = sDir * rad;
-  const swellLen = Math.min(R - 15, 28 + Math.min(sH, 1.5) * 30);
-  const xSwellStart = cx - (swellLen * 0.45) * Math.sin(aSwell);
-  const ySwellStart = cy + (swellLen * 0.45) * Math.cos(aSwell);
-  const xSwellEnd = cx + (swellLen * 0.75) * Math.sin(aSwell);
-  const ySwellEnd = cy - (swellLen * 0.75) * Math.cos(aSwell);
+  // Vector Swell: Las olas proceden de sDir y viajan hacia la costa (sDir + 180).
+  // Por ejemplo, oleaje de Levante (115º) viene de mar adentro y la flecha apunta hacia la orilla (295º).
+  const aSwellFlow = ((sDir + 180) % 360) * rad;
+  const swellLen = Math.min(R - 15, 26 + Math.min(sH, 1.5) * 30);
+  const xSwellStart = cx - (swellLen * 0.5) * Math.sin(aSwellFlow);
+  const ySwellStart = cy + (swellLen * 0.5) * Math.cos(aSwellFlow);
+  const xSwellEnd = cx + (swellLen * 0.75) * Math.sin(aSwellFlow);
+  const ySwellEnd = cy - (swellLen * 0.75) * Math.cos(aSwellFlow);
 
   return (
     <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white p-4 rounded-2xl border border-slate-700/80 shadow-md space-y-3.5 text-left">
@@ -554,6 +558,33 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
               </button>
             );
           })}
+        </div>
+      </div>
+
+      {/* 🗺️ MAPA CALLEJERO / COSTA REAL (ESTILO GOOGLE MAPS / OSM) */}
+      <div className="pt-3 border-t border-slate-800 space-y-2">
+        <div className="flex items-center justify-between text-[11px] font-black uppercase text-slate-300 tracking-wide">
+          <span className="flex items-center gap-1.5 text-amber-400">
+            <MapPin size={14} className="text-amber-400" />
+            <span>Mapa Callejero de Costa: {bObj.name}</span>
+          </span>
+          <span className="text-[9px] font-extrabold bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded-full">
+            📍 Spot: {bObj.lat.toFixed(4)}, {bObj.lon.toFixed(4)}
+          </span>
+        </div>
+
+        <div className="relative w-full h-56 sm:h-64 rounded-xl overflow-hidden border border-slate-700 shadow-inner bg-slate-900">
+          <iframe
+            title={`Mapa callejero de ${bObj.name}`}
+            width="100%"
+            height="100%"
+            frameBorder="0"
+            scrolling="no"
+            marginHeight="0"
+            marginWidth="0"
+            src={`https://www.openstreetmap.org/export/embed.html?bbox=${(bObj.lon - 0.007).toFixed(6)}%2C${(bObj.lat - 0.004).toFixed(6)}%2C${(bObj.lon + 0.007).toFixed(6)}%2C${(bObj.lat + 0.004).toFixed(6)}&layer=mapnik&marker=${bObj.lat}%2C${bObj.lon}`}
+            className="w-full h-full filter saturate-110 contrast-105"
+          />
         </div>
       </div>
     </div>
