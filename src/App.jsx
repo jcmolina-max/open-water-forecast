@@ -335,14 +335,14 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
   const sP = parseFloat((currentHour.period !== undefined ? currentHour.period : (currentHour.periodo || 0)).toString().replace(',', '.'));
   const sDir = parseFloat((currentHour.swellDir !== undefined ? currentHour.swellDir : (currentHour.olaDir || 115)).toString().replace(',', '.'));
 
-  let windColor = '#06b6d4';
+  let windColor = '#22d3ee'; // cyan
   if (wSpd >= 18) windColor = '#ef4444';
   else if (wSpd >= 13) windColor = '#f59e0b';
   else if (wSpd >= 7) windColor = '#10b981';
 
   let diagTitle = "Condición Estable";
   let diagDesc = "Mar calmo en orilla";
-  let diagBadgeClass = "bg-blue-50 text-blue-800 border-blue-200";
+  let diagBadgeClass = "bg-blue-900/80 text-blue-200 border-blue-400/40";
 
   const isOffshore = wDir > ejeOeste || wDir < ejeEste;
   const isLevante = sDir >= ejeEste && sDir <= 170;
@@ -350,197 +350,212 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
   const isSur = wDir >= 171 && wDir <= 190;
 
   if (isOffshore && wSpd >= 8) {
-    diagTitle = "🏔️ Viento de Tierra (Terral)";
-    diagDesc = "Orilla plato / Balsa total. Precaución mar adentro.";
-    diagBadgeClass = "bg-emerald-50 text-emerald-800 border-emerald-200";
+    diagTitle = "🏔️ Terral / Viento Tierra";
+    diagDesc = "Orilla plato / Balsa total";
+    diagBadgeClass = "bg-emerald-950/80 text-emerald-300 border-emerald-500/50";
   } else if (isLevante && (sH >= 0.5 || sP >= 5.0)) {
-    diagTitle = "🌊 Mar de Fondo de Levante";
-    diagDesc = "Rompiente orillera activa. Olas con masa.";
-    diagBadgeClass = "bg-indigo-50 text-indigo-800 border-indigo-200";
+    diagTitle = "🌊 Mar de Fondo Levante";
+    diagDesc = "Rompiente orillera activa";
+    diagBadgeClass = "bg-indigo-950/80 text-indigo-300 border-indigo-500/50";
   } else if (isPoniente && wSpd >= 9) {
     diagTitle = "💨 Poniente Costero";
-    diagDesc = "Chop rápido lateral y corriente hacia Levante.";
-    diagBadgeClass = "bg-teal-50 text-teal-800 border-teal-200";
+    diagDesc = "Chop lateral y corriente a Levante";
+    diagBadgeClass = "bg-teal-950/80 text-teal-300 border-teal-500/50";
   } else if (isSur) {
     diagTitle = "⚓ Sur / Virazón Térmica";
-    diagDesc = "Mar picado e incómodo en la orilla.";
-    diagBadgeClass = "bg-purple-50 text-purple-800 border-purple-200";
+    diagDesc = "Mar picado e incómodo en la orilla";
+    diagBadgeClass = "bg-purple-950/80 text-purple-300 border-purple-500/50";
   } else if (sH <= 0.25 && wSpd <= 6) {
     diagTitle = "🏊 Balsa / Mar Espejo";
-    diagDesc = "Condiciones perfectas para nado continuo.";
-    diagBadgeClass = "bg-emerald-50 text-emerald-800 border-emerald-200";
+    diagDesc = "Condiciones perfectas para nado";
+    diagBadgeClass = "bg-emerald-950/80 text-emerald-300 border-emerald-500/50";
   }
 
-  const cx = 100, cy = 100, R = 72;
+  // Geometría SVG Overlay
+  const cx = 180, cy = 115, R = 85;
   const rad = Math.PI / 180;
 
-  const a1 = (facing - 90) * rad;
-  const x1 = cx + R * Math.sin(a1);
-  const y1 = cy - R * Math.cos(a1);
-  const a2 = (facing + 90) * rad;
-  const x2 = cx + R * Math.sin(a2);
-  const y2 = cy - R * Math.cos(a2);
+  // Línea de Costa / Ejes
+  const aCoast1 = (facing - 90) * rad;
+  const xCoast1 = cx + R * Math.sin(aCoast1);
+  const yCoast1 = cy - R * Math.cos(aCoast1);
+  const aCoast2 = (facing + 90) * rad;
+  const xCoast2 = cx + R * Math.sin(aCoast2);
+  const yCoast2 = cy - R * Math.cos(aCoast2);
 
-  const aFacing = facing * rad;
-  const xFacing = cx + (R - 8) * Math.sin(aFacing);
-  const yFacing = cy - (R - 8) * Math.cos(aFacing);
-
-  // Vector Viento: El viento procede de wDir y viaja hacia (wDir + 180).
-  // Por ejemplo, viento de Levante (90º) viene del Este y la flecha apunta hacia el Oeste (270º/Poniente).
+  // Vector Viento (Alargado y nítido)
   const aWindFlow = ((wDir + 180) % 360) * rad;
-  const windLen = Math.min(R - 15, 26 + (wSpd / 25) * 35);
-  const xWindStart = cx - (windLen * 0.5) * Math.sin(aWindFlow);
-  const yWindStart = cy + (windLen * 0.5) * Math.cos(aWindFlow);
-  const xWindEnd = cx + (windLen * 0.75) * Math.sin(aWindFlow);
-  const yWindEnd = cy - (windLen * 0.75) * Math.cos(aWindFlow);
+  const windLen = Math.min(95, 45 + (wSpd / 20) * 45);
+  const xWindStart = cx - (windLen * 0.65) * Math.sin(aWindFlow);
+  const yWindStart = cy + (windLen * 0.65) * Math.cos(aWindFlow);
+  const xWindEnd = cx + (windLen * 0.8) * Math.sin(aWindFlow);
+  const yWindEnd = cy - (windLen * 0.8) * Math.cos(aWindFlow);
 
-  // Vector Swell: Las olas proceden de sDir y viajan hacia la costa (sDir + 180).
-  // Por ejemplo, oleaje de Levante (115º) viene de mar adentro y la flecha apunta hacia la orilla (295º).
+  // Vector Swell (Alargado y nítido)
   const aSwellFlow = ((sDir + 180) % 360) * rad;
-  const swellLen = Math.min(R - 15, 26 + Math.min(sH, 1.5) * 30);
-  const xSwellStart = cx - (swellLen * 0.5) * Math.sin(aSwellFlow);
-  const ySwellStart = cy + (swellLen * 0.5) * Math.cos(aSwellFlow);
-  const xSwellEnd = cx + (swellLen * 0.75) * Math.sin(aSwellFlow);
-  const ySwellEnd = cy - (swellLen * 0.75) * Math.cos(aSwellFlow);
+  const swellLen = Math.min(95, 45 + Math.min(sH, 1.5) * 40);
+  const xSwellStart = cx - (swellLen * 0.65) * Math.sin(aSwellFlow);
+  const ySwellStart = cy + (swellLen * 0.65) * Math.cos(aSwellFlow);
+  const xSwellEnd = cx + (swellLen * 0.8) * Math.sin(aSwellFlow);
+  const ySwellEnd = cy - (swellLen * 0.8) * Math.cos(aSwellFlow);
 
   return (
-    <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white p-4 rounded-2xl border border-slate-700/80 shadow-md space-y-3.5 text-left">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-indigo-500/20 border border-indigo-400/40 rounded-xl text-indigo-300 shrink-0">
-            <Compass size={18} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-black text-sm text-white tracking-wide">
-                🧭 Visor Náutico: {bObj.name.split(',')[0]}
-              </span>
-              <span className="text-[10px] font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/40 px-2 py-0.5 rounded-full">
-                Frente Marino: {facing}º
-              </span>
+    <div className="relative w-full rounded-2xl overflow-hidden border border-slate-700/90 shadow-xl bg-slate-950 flex flex-col justify-between p-3.5 sm:p-4 text-white select-none min-h-[360px] sm:min-h-[380px]">
+      
+      {/* 🗺️ CAPA 1 (FONDO): MAPA CALLEJERO REAL (OSM / GOOGLE MAPS STYLE) */}
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        <iframe
+          title={`Mapa callejero de ${bObj.name}`}
+          width="100%"
+          height="100%"
+          frameBorder="0"
+          scrolling="no"
+          marginHeight="0"
+          marginWidth="0"
+          src={`https://www.openstreetmap.org/export/embed.html?bbox=${(bObj.lon - 0.007).toFixed(6)}%2C${(bObj.lat - 0.0042).toFixed(6)}%2C${(bObj.lon + 0.007).toFixed(6)}%2C${(bObj.lat + 0.0042).toFixed(6)}&layer=mapnik`}
+          className="w-full h-full filter saturate-125 contrast-105 pointer-events-none scale-105"
+        />
+        {/* Filtro glassmórfico de contraste para que las flechas y textos destaquen con nitidez */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/85 via-slate-900/25 to-slate-950/90 pointer-events-none" />
+      </div>
+
+      {/* 🧭 CAPA 2 (ROSA DE LOS VIENTOS SUTIL) + 💨🌊 CAPA 3 (FLECHAS ALARGADAS) */}
+      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none mt-2 sm:mt-0">
+        <svg viewBox="0 0 360 230" className="w-full h-full max-w-lg">
+          <defs>
+            <filter id="vectorDropGlow" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3.5" floodColor="#000000" floodOpacity="0.9" />
+            </filter>
+            <marker id="arrowWindBig" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M0,1 L0,7 L7,4 z" fill={windColor} stroke="#0f172a" strokeWidth="1" />
+            </marker>
+            <marker id="arrowSwellBig" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M0,1 L0,7 L7,4 z" fill="#818cf8" stroke="#0f172a" strokeWidth="1" />
+            </marker>
+          </defs>
+
+          {/* CAPA 2: ROSA DE LOS VIENTOS SUTIL AL 30% DE OPACIDAD */}
+          <g opacity="0.35">
+            {/* Círculo graduado exterior */}
+            <circle cx={cx} cy={cy} r={R} fill="none" stroke="#ffffff" strokeWidth="1.5" strokeDasharray="3 3" />
+            <circle cx={cx} cy={cy} r={R * 0.5} fill="none" stroke="#ffffff" strokeWidth="0.8" strokeDasharray="2 4" />
+            {/* Cruces N-S y E-W */}
+            <line x1={cx} y1={cy - R - 8} x2={cx} y2={cy + R + 8} stroke="#ffffff" strokeWidth="1" strokeDasharray="2 2" />
+            <line x1={cx - R - 8} y1={cy} x2={cx + R + 8} y2={cy} stroke="#ffffff" strokeWidth="1" strokeDasharray="2 2" />
+            {/* Rumbos cardinales */}
+            <text x={cx} y={cy - R + 14} fontSize="11" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">N (0º)</text>
+            <text x={cx + R - 14} y={cy + 4} fontSize="10" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">E (90º)</text>
+            <text x={cx} y={cy + R - 6} fontSize="10" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">S (180º)</text>
+            <text x={cx - R + 14} y={cy + 4} fontSize="10" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">W (270º)</text>
+            {/* Línea de orientación de Costa / Facing */}
+            <line x1={xCoast1} y1={yCoast1} x2={xCoast2} y2={yCoast2} stroke="#f59e0b" strokeWidth="2" strokeDasharray="4 2" />
+          </g>
+
+          {/* CAPA 3: VECTORES ALARGADOS DE VIENTO Y OLEAJE EN PRIMER PLANO */}
+          {/* Flecha Viento */}
+          <g filter="url(#vectorDropGlow)">
+            <line 
+              x1={xWindStart} 
+              y1={yWindStart} 
+              x2={xWindEnd} 
+              y2={yWindEnd} 
+              stroke={windColor} 
+              strokeWidth="5" 
+              strokeLinecap="round"
+              markerEnd="url(#arrowWindBig)"
+              className="transition-all duration-300"
+            />
+          </g>
+
+          {/* Flecha Swell / Ola */}
+          <g filter="url(#vectorDropGlow)">
+            <line 
+              x1={xSwellStart} 
+              y1={ySwellStart} 
+              x2={xSwellEnd} 
+              y2={ySwellEnd} 
+              stroke="#818cf8" 
+              strokeWidth="5.5" 
+              strokeLinecap="round"
+              strokeDasharray="8 3"
+              markerEnd="url(#arrowSwellBig)"
+              className="transition-all duration-300"
+            />
+          </g>
+
+          {/* Spot Náutico Central (Punto de Nado) */}
+          <circle cx={cx} cy={cy} r="6" fill="#38bdf8" stroke="#ffffff" strokeWidth="2" filter="url(#vectorDropGlow)" />
+          <circle cx={cx} cy={cy} r="14" fill="none" stroke="#38bdf8" strokeWidth="1.5" className="animate-ping" opacity="0.6" />
+        </svg>
+      </div>
+
+      {/* CONTROLES Y CABECERA FLOTANTE (Z-20) */}
+      <div className="relative z-20 space-y-2">
+        {/* Fila Superior: Título + Diagnóstico */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-indigo-500/30 backdrop-blur-md border border-indigo-400/50 rounded-xl text-indigo-300 shrink-0">
+              <Compass size={18} />
             </div>
-            <p className="text-[10px] text-slate-400 font-medium">
-              Eje Costa: {ejeEste}º (Este) ↔ {ejeOeste}º (Oeste)
-            </p>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-black text-sm text-white tracking-wide drop-shadow-md">
+                  🧭 Visor Náutico: {bObj.name.split(',')[0]}
+                </span>
+                <span className="text-[10px] font-bold bg-slate-900/80 backdrop-blur-md text-indigo-200 border border-indigo-400/40 px-2 py-0.5 rounded-full">
+                  Frente Marino: {facing}º
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-300 font-semibold drop-shadow-md">
+                Eje Costa: {ejeEste}º (Este) ↔ {ejeOeste}º (Oeste)
+              </p>
+            </div>
+          </div>
+
+          <div className={`px-2.5 py-1 rounded-xl border text-xs font-black backdrop-blur-md shrink-0 shadow-lg ${diagBadgeClass}`}>
+            <span>{diagTitle}</span>
           </div>
         </div>
 
-        <div className={`px-2.5 py-1 rounded-xl border text-xs font-bold shrink-0 ${diagBadgeClass}`}>
-          <span>{diagTitle}</span>
+        {/* Fila Intermedia: Badges de Viento y Oleaje Flotantes */}
+        <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+          {/* Badge Viento */}
+          <div className="bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-700/80 shadow-md flex items-center gap-2">
+            <Wind size={14} style={{ color: windColor }} />
+            <div className="text-left leading-tight">
+              <div className="text-[9px] font-black uppercase text-slate-400">Viento</div>
+              <div className="text-xs font-black text-white">
+                {wSpd.toFixed(1)} kt <span className="text-[10px] font-bold text-slate-300">({wDir}º)</span>
+              </div>
+            </div>
+            <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+              {isOffshore ? '🏔️ Terral' : '🌊 Mar'}
+            </span>
+          </div>
+
+          {/* Badge Oleaje */}
+          <div className="bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-700/80 shadow-md flex items-center gap-2">
+            <Waves size={14} className="text-indigo-400" />
+            <div className="text-left leading-tight">
+              <div className="text-[9px] font-black uppercase text-slate-400">Oleaje (Swell)</div>
+              <div className="text-xs font-black text-white">
+                {sH.toFixed(2)} m · {sP.toFixed(1)}s <span className="text-[10px] font-bold text-slate-300">({sDir}º)</span>
+              </div>
+            </div>
+            <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-slate-800 text-indigo-200 border border-slate-700">
+              {isLevante ? '🌊 Levante' : isPoniente ? '💨 Poniente' : '⚓ Mar'}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-        <div className="md:col-span-5 flex justify-center">
-          <div className="relative w-44 h-44 sm:w-48 sm:h-48 bg-slate-950/90 rounded-full border border-slate-700/80 p-1 shadow-inner flex items-center justify-center">
-            <svg viewBox="0 0 200 200" className="w-full h-full">
-              <defs>
-                <marker id="arrowWindSpot" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                  <path d="M0,0 L0,6 L6,3 z" fill={windColor} />
-                </marker>
-                <marker id="arrowSwellSpot" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                  <path d="M0,0 L0,6 L6,3 z" fill="#818cf8" />
-                </marker>
-              </defs>
-
-              <circle cx={cx} cy={cy} r={R} fill="none" stroke="#334155" strokeWidth="1.5" strokeDasharray="3 3" />
-
-              <text x={cx} y={18} fontSize="9" fontWeight="bold" fill="#94a3b8" textAnchor="middle">N (0º)</text>
-              <text x={186} y={cy + 3} fontSize="9" fontWeight="bold" fill="#94a3b8" textAnchor="middle">E (90º)</text>
-              <text x={cx} y={192} fontSize="9" fontWeight="bold" fill="#94a3b8" textAnchor="middle">S (180º)</text>
-              <text x={14} y={cy + 3} fontSize="9" fontWeight="bold" fill="#94a3b8" textAnchor="middle">W (270º)</text>
-
-              {/* Línea de Costa */}
-              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />
-              
-              {/* Vector Frente Marino mirando al mar */}
-              <line x1={cx} y1={cy} x2={xFacing} y2={yFacing} stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="2 2" />
-              <circle cx={xFacing} cy={yFacing} r="2.5" fill="#f59e0b" />
-
-              {/* Flecha Viento */}
-              <line 
-                x1={xWindStart} 
-                y1={yWindStart} 
-                x2={xWindEnd} 
-                y2={yWindEnd} 
-                stroke={windColor} 
-                strokeWidth="3.5" 
-                strokeLinecap="round"
-                markerEnd="url(#arrowWindSpot)"
-                className="transition-all duration-300"
-              />
-
-              {/* Flecha Swell / Ola */}
-              <line 
-                x1={xSwellStart} 
-                y1={ySwellStart} 
-                x2={xSwellEnd} 
-                y2={ySwellEnd} 
-                stroke="#818cf8" 
-                strokeWidth="4" 
-                strokeLinecap="round"
-                strokeDasharray="6 2"
-                markerEnd="url(#arrowSwellSpot)"
-                className="transition-all duration-300"
-              />
-
-              {/* Punto central del nadador */}
-              <circle cx={cx} cy={cy} r="4" fill="#38bdf8" />
-              <circle cx={cx} cy={cy} r="8" fill="none" stroke="#38bdf8" strokeWidth="1" className="animate-ping" opacity="0.6" />
-            </svg>
-          </div>
+      {/* BARRA HORARIA FLOTANTE INFERIOR (Z-20) */}
+      <div className="relative z-20 pt-2 border-t border-slate-700/80 bg-slate-950/80 backdrop-blur-md p-2 rounded-xl mt-auto">
+        <div className="flex items-center justify-between mb-1 text-[9.5px] font-black uppercase text-slate-300 tracking-wider">
+          <span>⏱️ Desliza la hora del día:</span>
+          <span className="text-indigo-300 font-bold">Activo: {currentHour.time} ({hourlyData.length}h)</span>
         </div>
-
-        <div className="md:col-span-7 space-y-2 text-left">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-slate-800/90 p-2.5 rounded-xl border border-slate-700 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase text-cyan-400 flex items-center gap-1">
-                  <Wind size={12} /> Viento
-                </span>
-                <span className="text-[9px] font-bold bg-slate-700 px-1.5 py-0.2 rounded text-slate-300">
-                  {wDir}º
-                </span>
-              </div>
-              <strong className="text-lg font-black text-white block">
-                {wSpd.toFixed(1)} <span className="text-xs font-normal text-slate-300">kt</span>
-              </strong>
-              <span className="text-[9px] text-slate-400 block truncate">
-                {isOffshore ? '🏔️ Viento de Tierra (Terral)' : '🌊 Viento de Mar'}
-              </span>
-            </div>
-
-            <div className="bg-slate-800/90 p-2.5 rounded-xl border border-slate-700 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase text-indigo-400 flex items-center gap-1">
-                  <Waves size={12} /> Oleaje (Swell)
-                </span>
-                <span className="text-[9px] font-bold bg-slate-700 px-1.5 py-0.2 rounded text-slate-300">
-                  {sDir}º
-                </span>
-              </div>
-              <strong className="text-lg font-black text-white block">
-                {sH.toFixed(2)} <span className="text-xs font-normal text-slate-300">m</span> · {sP.toFixed(1)}<span className="text-xs font-normal text-slate-300">s</span>
-              </strong>
-              <span className="text-[9px] text-slate-400 block truncate">
-                {isLevante ? '🌊 Mar de Fondo Levante' : isPoniente ? '💨 Mar de Poniente' : '⚓ Mar Directo'}
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60 text-[10px] text-slate-300 flex items-center justify-between">
-            <span className="font-semibold truncate mr-2">💡 {diagDesc}</span>
-            <span className="text-amber-400 font-bold shrink-0">Hora: {currentHour.time}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="pt-2 border-t border-slate-800">
-        <div className="flex items-center justify-between mb-1.5 text-[10px] font-black uppercase text-slate-400 tracking-wider">
-          <span>⏱️ Selecciona o desliza la hora del día:</span>
-          <span className="text-indigo-400 font-bold">{currentHour.time} ({hourlyData.length} horas)</span>
-        </div>
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-thin">
           {hourlyData.map((hr, idx) => {
             const isSel = activeIdx === idx;
             return (
@@ -550,8 +565,8 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
                 onClick={() => onSelectHour(idx)}
                 className={`py-1 px-2.5 rounded-lg text-[10px] font-black shrink-0 transition-all cursor-pointer ${
                   isSel
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/40 scale-105 border border-indigo-400'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/50 scale-105 border border-indigo-400'
+                    : 'bg-slate-900/90 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-700'
                 }`}
               >
                 {hr.time}
@@ -561,32 +576,6 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
         </div>
       </div>
 
-      {/* 🗺️ MAPA CALLEJERO / COSTA REAL (ESTILO GOOGLE MAPS / OSM) */}
-      <div className="pt-3 border-t border-slate-800 space-y-2">
-        <div className="flex items-center justify-between text-[11px] font-black uppercase text-slate-300 tracking-wide">
-          <span className="flex items-center gap-1.5 text-amber-400">
-            <MapPin size={14} className="text-amber-400" />
-            <span>Mapa Callejero de Costa: {bObj.name}</span>
-          </span>
-          <span className="text-[9px] font-extrabold bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded-full">
-            📍 Spot: {bObj.lat.toFixed(4)}, {bObj.lon.toFixed(4)}
-          </span>
-        </div>
-
-        <div className="relative w-full h-56 sm:h-64 rounded-xl overflow-hidden border border-slate-700 shadow-inner bg-slate-900">
-          <iframe
-            title={`Mapa callejero de ${bObj.name}`}
-            width="100%"
-            height="100%"
-            frameBorder="0"
-            scrolling="no"
-            marginHeight="0"
-            marginWidth="0"
-            src={`https://www.openstreetmap.org/export/embed.html?bbox=${(bObj.lon - 0.007).toFixed(6)}%2C${(bObj.lat - 0.004).toFixed(6)}%2C${(bObj.lon + 0.007).toFixed(6)}%2C${(bObj.lat + 0.004).toFixed(6)}&layer=mapnik&marker=${bObj.lat}%2C${bObj.lon}`}
-            className="w-full h-full filter saturate-110 contrast-105"
-          />
-        </div>
-      </div>
     </div>
   );
 };
