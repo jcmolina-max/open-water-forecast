@@ -599,11 +599,14 @@ function getRecordType(item) {
 function swimmerScaleToMeters(v) {
   if (v === null || v === undefined || v === "" || v === 0 || v === "0") return null;
   const val = parseFloat(v.toString().replace(",", "."));
+  if (isNaN(val)) return null;
   if (val === 1) return 0.05;
   if (val === 2) return 0.20;
   if (val === 3) return 0.45;
   if (val === 4) return 0.80;
   if (val === 5) return 1.20;
+  // Si ya viene como un valor decimal directo en metros (ej. 0.35 del admin)
+  if (val > 0 && val <= 3.5) return val;
   return null;
 };
 
@@ -4953,7 +4956,7 @@ export default function App() {
                                           <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
                                             {allSectorLogs.map((l, lIdx) => {
                                               const repId = String(l.idRegistro || l.timestamp || l.horaNado || lIdx);
-                                              const isDiscarded = discardedReportIds.includes(repId) || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("DESCARTADO") || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("PRUEBA");
+                                              const isDiscarded = discardedReportIds.includes(repId) || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("DESCARTADO");
                                               const waveVal = swimmerScaleToMeters(l.realOlas);
                                               let rawH = l.horaNado ? String(l.horaNado) : '';
                                               let cleanH = '';
@@ -4977,13 +4980,15 @@ export default function App() {
                                                 badgeStyle = 'bg-amber-50 text-amber-700 border-amber-200';
                                               }
 
+                                              const waveDisplay = (waveVal !== null && !isNaN(waveVal)) ? `${waveVal.toFixed(2)}m` : '—';
+
                                               return (
                                                 <div key={repId + lIdx} className={'flex justify-between items-center p-2 rounded-lg border text-left transition-all ' + (isDiscarded ? 'bg-rose-50/60 border-rose-200 opacity-60' : 'bg-white border-slate-200 shadow-2xs')}>
                                                   <div className="space-y-0.5 flex-1 mr-2 min-w-0">
                                                     <div className="flex items-center gap-1.5 flex-wrap">
                                                       <span className="text-[9px] font-black text-slate-800">{swimTime}</span>
                                                       <span className={'text-[7.5px] font-extrabold px-1.5 py-0.2 rounded border ' + badgeStyle}>{badgeLabel}</span>
-                                                      <span className="text-[8px] font-extrabold text-cyan-700 bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-100">Ola: {waveVal.toFixed(2)}m</span>
+                                                      <span className="text-[8px] font-extrabold text-cyan-700 bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-100">Ola: {waveDisplay}</span>
                                                     </div>
                                                     <p className="text-[9px] text-slate-600 truncate font-medium">{author}</p>
                                                   </div>
