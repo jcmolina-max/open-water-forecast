@@ -959,7 +959,7 @@ export default function App() {
         return tsB - tsA;
       });
 
-      // 1. Filtrar ESTRICTAMENTE reportes de calibración física del Admin (descartar sincronizaciones y alertas de texto)
+      // 1. Filtrar reportes de calibración física y telemetría del Admin (descartar sincronizaciones y alertas de texto)
       const adminLog = sortedNewestFirst.find(item => {
         const orig = String(item.origenDato || '').trim();
         const notas = String(item.notas || item.notasCalibracion || '');
@@ -975,7 +975,14 @@ export default function App() {
           return false;
         }
 
-        return orig.indexOf('Admin: Calibración') !== -1 || orig.indexOf('Web Admin') !== -1 || orig === 'Admin' || (orig.indexOf('Calibración') !== -1 && (item.boyaAltura || item.boyaTemp));
+        return (
+          orig.indexOf('Admin: Telemetría Boya') !== -1 ||
+          orig.indexOf('Telemetría') !== -1 ||
+          orig.indexOf('Admin: Calibración') !== -1 ||
+          orig.indexOf('Web Admin') !== -1 ||
+          orig === 'Admin' ||
+          (orig.indexOf('Calibración') !== -1 && (item.boyaAltura || item.boyaTemp))
+        );
       });
 
       if (adminLog) {
@@ -984,14 +991,21 @@ export default function App() {
         const d = parseBoyaDir(adminLog.boyaDireccion);
         const temp = parseBoyaNum(adminLog.boyaTemp, 5, 35) !== null ? parseBoyaNum(adminLog.boyaTemp, 5, 35).toFixed(1) : null;
 
-        setLatestBuoyHeight(h);
-        setLatestBuoyPeriod(t);
-        setLatestBuoyDir(d);
-        setLatestBuoyTemp(temp);
+        if (h) setLatestBuoyHeight(h);
+        if (t) setLatestBuoyPeriod(t);
+        if (d !== null) setLatestBuoyDir(d);
+        if (temp) setLatestBuoyTemp(temp);
 
-        const dObj = adminLog.timestamp ? new Date(adminLog.timestamp) : (adminLog.fechaRegistro ? new Date(adminLog.fechaRegistro) : new Date());
+        const dObj = adminLog.timestamp 
+          ? new Date(adminLog.timestamp) 
+          : (adminLog.fechaRegistro 
+              ? new Date(adminLog.fechaRegistro) 
+              : (adminLog.fechaHora 
+                  ? new Date(adminLog.fechaHora.replace(' ', 'T')) 
+                  : new Date()));
         setLatestBuoyDate(dObj);
-        setLatestBuoySource('✏️ Calibración Manual Admin');
+        const isTelemetry = (adminLog.origenDato || '').indexOf('Telemetría') !== -1;
+        setLatestBuoySource(isTelemetry ? '⚓ Telemetría Boya (Admin)' : '✏️ Calibración Manual Admin');
       }
     }, [calibrationHistory]);
 
@@ -2434,6 +2448,16 @@ export default function App() {
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(payload)
       });
+
+      // Actualización Inmediata en Pantalla (Sin esperar a Google)
+      if (!isAlertMode) {
+        if (adminBoyaAltura) setLatestBuoyHeight(parseFloat(adminBoyaAltura.replace(',', '.')).toFixed(2));
+        if (adminBoyaPeriodo) setLatestBuoyPeriod(adminBoyaPeriodo);
+        if (adminBoyaDireccion) setLatestBuoyDir(Number(adminBoyaDireccion));
+        if (adminBoyaTemp) setLatestBuoyTemp(adminBoyaTemp);
+        setLatestBuoyDate(new Date());
+        setLatestBuoySource(isBuoyOnlyMode ? '⚓ Telemetría Boya (Admin)' : '✏️ Calibración Manual Admin');
+      }
       
       const successMsg = isAlertMode 
         ? '¡Alerta oficial publicada con éxito en la web!' 
