@@ -375,6 +375,18 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, 
   const cx = 180, cy = 110, R = 80;
   const rad = Math.PI / 180;
 
+  // Slippy Map OpenStreetMap Street Tile Mosaic (HD Pastel Street View 100% continuo)
+  const zoom = 15;
+  const nTiles = Math.pow(2, zoom);
+  const exactTileX = (bObj.lon + 180.0) / 360.0 * nTiles;
+  const latRad = bObj.lat * Math.PI / 180.0;
+  const exactTileY = (1.0 - Math.log(Math.tan(latRad) + 1.0 / Math.cos(latRad)) / Math.PI) / 2.0 * nTiles;
+
+  const centerTileX = Math.floor(exactTileX);
+  const centerTileY = Math.floor(exactTileY);
+  const subPixelX = (exactTileX - centerTileX) * 256;
+  const subPixelY = (exactTileY - centerTileY) * 256;
+
   // Línea de Costa / Ejes
   const aCoast1 = (facing - 90) * rad;
   const xCoast1 = cx + R * Math.sin(aCoast1);
@@ -477,42 +489,55 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, 
         </div>
       </div>
 
-      {/* 3. VENTANA DEL MAPA + ROSA DE LOS VIENTOS + FLECHAS (PANORÁMICO 16:9 SIN CORTES) */}
+      {/* 3. VENTANA DEL MAPA + ROSA DE LOS VIENTOS + FLECHAS (MOSAICO CONTINUO SIN BORDES NEGROS) */}
       <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] min-h-[250px] sm:min-h-[280px] rounded-xl overflow-hidden border border-slate-700 shadow-inner bg-slate-950">
-        {/* CAPA 1: MAPA CALLEJERO PANORÁMICO DE FONDO (OSM / MAPNIK) */}
-        <iframe
-          title={`Mapa callejero de ${bObj.name}`}
-          width="100%"
-          height="100%"
-          frameBorder="0"
-          scrolling="no"
-          marginHeight="0"
-          marginWidth="0"
-          src={`https://www.openstreetmap.org/export/embed.html?bbox=${(bObj.lon - 0.014).toFixed(6)}%2C${(bObj.lat - 0.007).toFixed(6)}%2C${(bObj.lon + 0.014).toFixed(6)}%2C${(bObj.lat + 0.007).toFixed(6)}&layer=mapnik`}
-          className="w-full h-full filter saturate-125 contrast-105 pointer-events-none scale-105"
-        />
+        {/* CAPA 1: MOSAICO DE CALLEJERO OPENSTREETMAP 100% CONTINUO (5x3 TESELAS) */}
+        <div 
+          className="absolute pointer-events-none select-none"
+          style={{
+            width: `${5 * 256}px`,
+            height: `${3 * 256}px`,
+            left: `calc(50% - ${2 * 256 + subPixelX}px)`,
+            top: `calc(50% - ${1 * 256 + subPixelY}px)`
+          }}
+        >
+          {[-1, 0, 1].map(dy => (
+            <div key={dy} className="flex">
+              {[-2, -1, 0, 1, 2].map(dx => (
+                <img
+                  key={`${dx}-${dy}`}
+                  src={`https://tile.openstreetmap.org/${zoom}/${centerTileX + dx}/${centerTileY + dy}.png`}
+                  alt="Callejero Costa"
+                  className="w-[256px] h-[256px] block select-none"
+                  style={{ filter: 'saturate(1.2) contrast(1.05)' }}
+                  loading="eager"
+                />
+              ))}
+            </div>
+          ))}
+        </div>
         {/* Overlay sutil para que las líneas SVG resalten sobre el mapa */}
-        <div className="absolute inset-0 bg-slate-950/15 pointer-events-none" />
+        <div className="absolute inset-0 bg-slate-950/20 pointer-events-none" />
 
-        {/* CAPA 2 (ROSA DE LOS VIENTOS SUTIL) + CAPA 3 (FLECHAS AERODINÁMICAS) */}
+        {/* CAPA 2 (ROSA DE LOS VIENTOS SUTIL) + CAPA 3 (AGUJAS DE PRECISIÓN MICRO-PUNTA) */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <svg viewBox="0 0 360 220" className="w-full h-full max-w-lg">
             <defs>
               <filter id="vectorDropGlow" x="-30%" y="-30%" width="160%" height="160%">
-                <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#000000" floodOpacity="0.9" />
+                <feDropShadow dx="0" dy="1" stdDeviation="1.8" floodColor="#000000" floodOpacity="0.95" />
               </filter>
-              {/* Puntas de flecha estilizadas y proporcionadas (no cabezonas) */}
-              <marker id="arrowWindBig" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
-                <path d="M0,0.5 L0,4.5 L4.5,2.5 z" fill={windColor} stroke="#0f172a" strokeWidth="0.6" />
+              {/* Puntas de flecha micro-estilizadas (Agujas de compás náutico) */}
+              <marker id="arrowWindMicro" markerWidth="3.5" markerHeight="3.5" refX="3" refY="1.75" orient="auto">
+                <path d="M0,0.4 L0,3.1 L3.1,1.75 z" fill={windColor} stroke="#0f172a" strokeWidth="0.4" />
               </marker>
-              <marker id="arrowSwellBig" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
-                <path d="M0,0.5 L0,4.5 L4.5,2.5 z" fill="#818cf8" stroke="#0f172a" strokeWidth="0.6" />
+              <marker id="arrowSwellMicro" markerWidth="3.5" markerHeight="3.5" refX="3" refY="1.75" orient="auto">
+                <path d="M0,0.4 L0,3.1 L3.1,1.75 z" fill="#818cf8" stroke="#0f172a" strokeWidth="0.4" />
               </marker>
             </defs>
 
             {/* CAPA 2: ROSA DE LOS VIENTOS SUTIL AL 35% DE OPACIDAD */}
             <g opacity="0.35">
-              <circle cx={cx} cy={cy} r={R} fill="none" stroke="#ffffff" strokeWidth="1.5" strokeDasharray="3 3" />
+              <circle cx={cx} cy={cy} r={R} fill="none" stroke="#ffffff" strokeWidth="1.2" strokeDasharray="3 3" />
               <circle cx={cx} cy={cy} r={R * 0.5} fill="none" stroke="#ffffff" strokeWidth="0.8" strokeDasharray="2 4" />
               <line x1={cx} y1={cy - R - 6} x2={cx} y2={cy + R + 6} stroke="#ffffff" strokeWidth="1" strokeDasharray="2 2" />
               <line x1={cx - R - 6} y1={cy} x2={cx + R + 6} y2={cy} stroke="#ffffff" strokeWidth="1" strokeDasharray="2 2" />
@@ -520,10 +545,10 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, 
               <text x={cx + R - 14} y={cy + 4} fontSize="10" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">E (90º)</text>
               <text x={cx} y={cy + R - 6} fontSize="10" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">S (180º)</text>
               <text x={cx - R + 14} y={cy + 4} fontSize="10" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">W (270º)</text>
-              <line x1={xCoast1} y1={yCoast1} x2={xCoast2} y2={yCoast2} stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="4 2" />
+              <line x1={xCoast1} y1={yCoast1} x2={xCoast2} y2={yCoast2} stroke="#f59e0b" strokeWidth="2.2" strokeDasharray="4 2" />
             </g>
 
-            {/* CAPA 3: VECTORES AERODINÁMICOS DE VIENTO Y OLEAJE */}
+            {/* CAPA 3: VECTORES DE PRECISIÓN (TRAZO Y PUNTA MICRO) */}
             {/* Flecha Viento */}
             <g filter="url(#vectorDropGlow)">
               <line 
@@ -532,9 +557,9 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, 
                 x2={xWindEnd} 
                 y2={yWindEnd} 
                 stroke={windColor} 
-                strokeWidth="3.5" 
+                strokeWidth="2.6" 
                 strokeLinecap="round"
-                markerEnd="url(#arrowWindBig)"
+                markerEnd="url(#arrowWindMicro)"
                 className="transition-all duration-300"
               />
             </g>
@@ -547,16 +572,16 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, 
                 x2={xSwellEnd} 
                 y2={ySwellEnd} 
                 stroke="#818cf8" 
-                strokeWidth="4" 
+                strokeWidth="3" 
                 strokeLinecap="round"
-                strokeDasharray="6 2.5"
-                markerEnd="url(#arrowSwellBig)"
+                strokeDasharray="5 2.5"
+                markerEnd="url(#arrowSwellMicro)"
                 className="transition-all duration-300"
               />
             </g>
 
             {/* Punto Central de Nadador (Faro Fijo Sin Parpadeos) */}
-            <circle cx={cx} cy={cy} r="4.5" fill="#38bdf8" stroke="#ffffff" strokeWidth="2" filter="url(#vectorDropGlow)" />
+            <circle cx={cx} cy={cy} r="4" fill="#38bdf8" stroke="#ffffff" strokeWidth="1.8" filter="url(#vectorDropGlow)" />
           </svg>
         </div>
       </div>
