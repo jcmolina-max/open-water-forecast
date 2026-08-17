@@ -319,13 +319,13 @@ function HourlySvgChart({ hourlyData }) {
   );
 };
 
-function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }) {
+function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, customFacing, customSectors }) {
   if (!hourlyData || hourlyData.length === 0) return null;
 
   const activeIdx = (selectedIdx !== null && selectedIdx >= 0 && selectedIdx < hourlyData.length) ? selectedIdx : 0;
   const currentHour = hourlyData[activeIdx] || hourlyData[0];
   const bObj = BEACHES[beachKey] || BEACHES.misericordia;
-  const facing = bObj?.facing || 115;
+  const facing = (customFacing !== undefined && !isNaN(customFacing)) ? customFacing : (bObj?.facing || 115);
   const ejeEste = ((facing - 90 + 360) % 360) || 25;
   const ejeOeste = (facing + 90) % 360 || 205;
 
@@ -371,8 +371,8 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
     diagBadgeClass = "bg-emerald-950/80 text-emerald-300 border-emerald-500/50";
   }
 
-  // Geometría SVG Overlay
-  const cx = 180, cy = 110, R = 85;
+  // Geometría SVG Overlay (Proporción áurea y límites anti-corte)
+  const cx = 180, cy = 110, R = 80;
   const rad = Math.PI / 180;
 
   // Línea de Costa / Ejes
@@ -383,24 +383,24 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
   const xCoast2 = cx + R * Math.sin(aCoast2);
   const yCoast2 = cy - R * Math.cos(aCoast2);
 
-  // Vector Viento (Alargado y nítido)
+  // Vector Viento (Alargado, aerodinámico y con límite anti-corte)
   const aWindFlow = ((wDir + 180) % 360) * rad;
-  const windLen = Math.min(95, 45 + (wSpd / 20) * 45);
-  const xWindStart = cx - (windLen * 0.65) * Math.sin(aWindFlow);
-  const yWindStart = cy + (windLen * 0.65) * Math.cos(aWindFlow);
-  const xWindEnd = cx + (windLen * 0.8) * Math.sin(aWindFlow);
-  const yWindEnd = cy - (windLen * 0.8) * Math.cos(aWindFlow);
+  const windLen = Math.min(R - 10, 38 + (wSpd / 20) * 32);
+  const xWindStart = cx - (windLen * 0.6) * Math.sin(aWindFlow);
+  const yWindStart = cy + (windLen * 0.6) * Math.cos(aWindFlow);
+  const xWindEnd = cx + (windLen * 0.75) * Math.sin(aWindFlow);
+  const yWindEnd = cy - (windLen * 0.75) * Math.cos(aWindFlow);
 
-  // Vector Swell (Alargado y nítido)
+  // Vector Swell (Alargado, aerodinámico y con límite anti-corte)
   const aSwellFlow = ((sDir + 180) % 360) * rad;
-  const swellLen = Math.min(95, 45 + Math.min(sH, 1.5) * 40);
-  const xSwellStart = cx - (swellLen * 0.65) * Math.sin(aSwellFlow);
-  const ySwellStart = cy + (swellLen * 0.65) * Math.cos(aSwellFlow);
-  const xSwellEnd = cx + (swellLen * 0.8) * Math.sin(aSwellFlow);
-  const ySwellEnd = cy - (swellLen * 0.8) * Math.cos(aSwellFlow);
+  const swellLen = Math.min(R - 10, 38 + Math.min(sH, 1.5) * 30);
+  const xSwellStart = cx - (swellLen * 0.6) * Math.sin(aSwellFlow);
+  const ySwellStart = cy + (swellLen * 0.6) * Math.cos(aSwellFlow);
+  const xSwellEnd = cx + (swellLen * 0.75) * Math.sin(aSwellFlow);
+  const ySwellEnd = cy - (swellLen * 0.75) * Math.cos(aSwellFlow);
 
   return (
-    <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white p-3.5 sm:p-4 rounded-2xl border border-slate-700/80 shadow-md space-y-3 text-left">
+    <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white p-3.5 sm:p-4 rounded-2xl border border-slate-700/80 shadow-md space-y-3 text-left max-w-3xl mx-auto">
       
       {/* 1. CABECERA: TÍTULO + DIAGNÓSTICO */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
@@ -477,9 +477,9 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
         </div>
       </div>
 
-      {/* 3. VENTANA DEL MAPA + ROSA DE LOS VIENTOS + FLECHAS (100% DESPEJADO Y SIN OBSTÁCULOS) */}
-      <div className="relative w-full h-60 sm:h-72 rounded-xl overflow-hidden border border-slate-700 shadow-inner bg-slate-950">
-        {/* CAPA 1: MAPA CALLEJERO REAL DE FONDO */}
+      {/* 3. VENTANA DEL MAPA + ROSA DE LOS VIENTOS + FLECHAS (PANORÁMICO 16:9 SIN CORTES) */}
+      <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] min-h-[250px] sm:min-h-[280px] rounded-xl overflow-hidden border border-slate-700 shadow-inner bg-slate-950">
+        {/* CAPA 1: MAPA CALLEJERO PANORÁMICO DE FONDO (OSM / MAPNIK) */}
         <iframe
           title={`Mapa callejero de ${bObj.name}`}
           width="100%"
@@ -488,24 +488,25 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
           scrolling="no"
           marginHeight="0"
           marginWidth="0"
-          src={`https://www.openstreetmap.org/export/embed.html?bbox=${(bObj.lon - 0.007).toFixed(6)}%2C${(bObj.lat - 0.0042).toFixed(6)}%2C${(bObj.lon + 0.007).toFixed(6)}%2C${(bObj.lat + 0.0042).toFixed(6)}&layer=mapnik`}
+          src={`https://www.openstreetmap.org/export/embed.html?bbox=${(bObj.lon - 0.014).toFixed(6)}%2C${(bObj.lat - 0.007).toFixed(6)}%2C${(bObj.lon + 0.014).toFixed(6)}%2C${(bObj.lat + 0.007).toFixed(6)}&layer=mapnik`}
           className="w-full h-full filter saturate-125 contrast-105 pointer-events-none scale-105"
         />
         {/* Overlay sutil para que las líneas SVG resalten sobre el mapa */}
         <div className="absolute inset-0 bg-slate-950/15 pointer-events-none" />
 
-        {/* CAPA 2 (ROSA DE LOS VIENTOS SUTIL) + CAPA 3 (FLECHAS ALARGADAS) */}
+        {/* CAPA 2 (ROSA DE LOS VIENTOS SUTIL) + CAPA 3 (FLECHAS AERODINÁMICAS) */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <svg viewBox="0 0 360 220" className="w-full h-full max-w-lg">
             <defs>
               <filter id="vectorDropGlow" x="-30%" y="-30%" width="160%" height="160%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3.5" floodColor="#000000" floodOpacity="0.9" />
+                <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#000000" floodOpacity="0.9" />
               </filter>
-              <marker id="arrowWindBig" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-                <path d="M0,1 L0,7 L7,4 z" fill={windColor} stroke="#0f172a" strokeWidth="1" />
+              {/* Puntas de flecha estilizadas y proporcionadas (no cabezonas) */}
+              <marker id="arrowWindBig" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+                <path d="M0,0.5 L0,4.5 L4.5,2.5 z" fill={windColor} stroke="#0f172a" strokeWidth="0.6" />
               </marker>
-              <marker id="arrowSwellBig" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-                <path d="M0,1 L0,7 L7,4 z" fill="#818cf8" stroke="#0f172a" strokeWidth="1" />
+              <marker id="arrowSwellBig" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+                <path d="M0,0.5 L0,4.5 L4.5,2.5 z" fill="#818cf8" stroke="#0f172a" strokeWidth="0.6" />
               </marker>
             </defs>
 
@@ -522,7 +523,8 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
               <line x1={xCoast1} y1={yCoast1} x2={xCoast2} y2={yCoast2} stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="4 2" />
             </g>
 
-            {/* CAPA 3: VECTORES ALARGADOS DE VIENTO Y OLEAJE */}
+            {/* CAPA 3: VECTORES AERODINÁMICOS DE VIENTO Y OLEAJE */}
+            {/* Flecha Viento */}
             <g filter="url(#vectorDropGlow)">
               <line 
                 x1={xWindStart} 
@@ -530,13 +532,14 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
                 x2={xWindEnd} 
                 y2={yWindEnd} 
                 stroke={windColor} 
-                strokeWidth="5" 
+                strokeWidth="3.5" 
                 strokeLinecap="round"
                 markerEnd="url(#arrowWindBig)"
                 className="transition-all duration-300"
               />
             </g>
 
+            {/* Flecha Swell / Ola */}
             <g filter="url(#vectorDropGlow)">
               <line 
                 x1={xSwellStart} 
@@ -544,17 +547,16 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour }
                 x2={xSwellEnd} 
                 y2={ySwellEnd} 
                 stroke="#818cf8" 
-                strokeWidth="5.5" 
+                strokeWidth="4" 
                 strokeLinecap="round"
-                strokeDasharray="8 3"
+                strokeDasharray="6 2.5"
                 markerEnd="url(#arrowSwellBig)"
                 className="transition-all duration-300"
               />
             </g>
 
-            {/* Punto Central de Nadador (Spot de Playa) */}
-            <circle cx={cx} cy={cy} r="6" fill="#38bdf8" stroke="#ffffff" strokeWidth="2" filter="url(#vectorDropGlow)" />
-            <circle cx={cx} cy={cy} r="14" fill="none" stroke="#38bdf8" strokeWidth="1.5" className="animate-ping" opacity="0.6" />
+            {/* Punto Central de Nadador (Faro Fijo Sin Parpadeos) */}
+            <circle cx={cx} cy={cy} r="4.5" fill="#38bdf8" stroke="#ffffff" strokeWidth="2" filter="url(#vectorDropGlow)" />
           </svg>
         </div>
       </div>
@@ -3212,6 +3214,8 @@ export default function App() {
                       hourlyData={currentDayData.hourly}
                       selectedIdx={selectedSpotHourIdx}
                       onSelectHour={(idx) => setSelectedSpotHourIdx(idx)}
+                      customFacing={compassCustomFacing ? compassCustomFacing[selectedBeach] : undefined}
+                      customSectors={compassCustomSectors ? compassCustomSectors[selectedBeach] : undefined}
                     />
                   </div>
                 )}
@@ -6239,13 +6243,13 @@ export default function App() {
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
                               {/* COLUMNA MAPA SATÉLITE CON SVG */}
                               <div className="lg:col-span-7 flex flex-col items-center">
-                                <div className="w-full max-w-[420px] aspect-square rounded-3xl overflow-hidden relative shadow-2xl border-4 border-slate-800 bg-slate-950">
-                                  {/* Mosaico Satelital 3x3 en Alta Definición Nativa (Sin pixelado) */}
+                                <div className="w-full max-w-[400px] aspect-square rounded-3xl overflow-hidden relative shadow-2xl border-4 border-slate-800 bg-slate-950">
+                                  {/* Mosaico Satelital 3x3 en Alta Definición Nativa (Anclaje Invariante a Zoom) */}
                                   <div 
                                     className="absolute w-[768px] h-[768px] pointer-events-none transition-all duration-300"
                                     style={{
-                                      left: `${cx - 256 - subPixelX}px`,
-                                      top: `${cy - 256 - subPixelY}px`
+                                      left: `calc(50% - ${256 + subPixelX}px)`,
+                                      top: `calc(50% - ${256 + subPixelY}px)`
                                     }}
                                   >
                                     {[-1, 0, 1].map(dy => (
@@ -6412,9 +6416,8 @@ export default function App() {
                                       🌊 Ola {currentWaveH}m ({currentWaveDir}º)
                                     </text>
 
-                                    {/* Centro: Pinpoint en la Arena */}
-                                    <circle cx={cx} cy={cy} r="6" fill="#ef4444" stroke="#ffffff" strokeWidth="2" />
-                                    <circle cx={cx} cy={cy} r="10" fill="none" stroke="#ef4444" strokeWidth="1.5" className="animate-ping" style={{ transformOrigin: `${cx}px ${cy}px` }} />
+                                    {/* Centro: Pinpoint en la Arena Fijo (Sin Parpadeos) */}
+                                    <circle cx={cx} cy={cy} r="5" fill="#ef4444" stroke="#ffffff" strokeWidth="2" />
                                   </svg>
 
                                   {/* Badge de Referencia Inferior */}
