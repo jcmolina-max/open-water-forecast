@@ -33,7 +33,8 @@ import {
   ChevronDown,
   ChevronUp,
   Users,
-  Database
+  Database,
+  Video
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
@@ -2721,6 +2722,159 @@ export default function App() {
 
   const currentDayData = beachData?.[selectedDay] ?? null;
 
+  // Renderizador de Widgets de Utilidad (Estado Real, Webcams en Directo y Socorrista Virtual)
+  const renderUtilityCards = () => (
+    <>
+      {/* Tarjeta: Estado Real (Lectura Física) */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+            <Anchor size={16} className="text-blue-500"/> Estado Real
+          </h3>
+          <span className="text-[10px] text-slate-400 font-medium">Lectura Física</span>
+        </div>
+        
+        <div className="space-y-3">
+          <a 
+            href="https://portus.puertos.es/#/" 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              </span>
+              <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Boya de Málaga</span>
+            </div>
+            <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
+          </a>
+
+          <a 
+            href="https://tablademareas.com/es/malaga/malaga" 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Droplets size={16} className="text-blue-400" />
+              <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Tabla de Mareas</span>
+            </div>
+            <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
+          </a>
+        </div>
+      </div>
+
+      {/* Tarjeta: Webcams en Directo */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+        <div className="flex justify-between items-center mb-3.5">
+          <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+            <Video size={16} className="text-rose-500"/> Webcams en Directo
+          </h3>
+          <span className="text-[10px] text-rose-600 font-bold flex items-center gap-1.5 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-100 animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> EN VIVO
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-2.5">
+          <a 
+            href="https://meteo365.es/livecams/malaga-misericordia.php" 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-rose-200 hover:bg-rose-50/40 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">📹</span>
+              <div>
+                <span className="font-bold text-slate-700 text-xs block group-hover:text-rose-700">La Misericordia</span>
+                <span className="text-[9px] text-slate-400 block">Málaga • Paseo Antonio Banderas</span>
+              </div>
+            </div>
+            <ArrowUpRight size={15} className="text-slate-400 group-hover:text-rose-500 shrink-0" />
+          </a>
+
+          <a 
+            href="https://meteo365.es/livecams/malaga.php" 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-rose-200 hover:bg-rose-50/40 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">📹</span>
+              <div>
+                <span className="font-bold text-slate-700 text-xs block group-hover:text-rose-700">La Malagueta</span>
+                <span className="text-[9px] text-slate-400 block">Málaga • Bahía de Málaga</span>
+              </div>
+            </div>
+            <ArrowUpRight size={15} className="text-slate-400 group-hover:text-rose-500 shrink-0" />
+          </a>
+
+          <a 
+            href="https://meteo365.es/livecams/torremolinos-bajondillo.php" 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-rose-200 hover:bg-rose-50/40 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">📹</span>
+              <div>
+                <span className="font-bold text-slate-700 text-xs block group-hover:text-rose-700">El Bajondillo</span>
+                <span className="text-[9px] text-slate-400 block">Torremolinos • Costa del Sol</span>
+              </div>
+            </div>
+            <ArrowUpRight size={15} className="text-slate-400 group-hover:text-rose-500 shrink-0" />
+          </a>
+        </div>
+      </div>
+
+      {/* Tarjeta: Socorrista Virtual */}
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-5">
+          <Bot size={80} />
+        </div>
+        <div className="flex justify-between items-center mb-4 relative z-10">
+          <h3 className="font-bold text-blue-900 flex items-center gap-2">
+            <Bot className="text-blue-600" size={20} />
+            Socorrista Virtual
+          </h3>
+          <span className="text-[10px] text-blue-400/80 font-medium bg-blue-100/50 px-2 py-1 rounded-md">IA Generativa</span>
+        </div>
+        
+        <div className="relative z-10">
+          {!hasRequestedAi ? (
+            <button 
+              onClick={handleAskExpert}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Bot size={18} /> Consultar previsión 
+            </button>
+          ) : isAiLoading ? (
+            <div className="flex items-center gap-2 text-blue-600/70 p-2">
+              <Loader2 size={18} className="animate-spin" />
+              <span className="text-sm font-bold">El experto está evaluando la playa...</span>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-blue-900 text-sm leading-relaxed font-medium bg-white/60 p-4 rounded-xl border border-blue-100/50 shadow-sm">
+                "{expertAdvice}"
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (expertAdvice) navigator.clipboard?.writeText(expertAdvice).catch(() => {});
+                }}
+                className="w-full sm:w-auto text-xs font-bold text-blue-700 bg-white/80 hover:bg-white border border-blue-200 rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <Copy size={14} /> Copiar consejo
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-slate-100 font-sans flex flex-col">
       
@@ -3104,48 +3258,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 4: Enlaces Oficiales (Boya y Mareas) */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
-                      <Anchor size={16} className="text-blue-500"/> Estado Real
-                    </h3>
-                    <span className="text-[10px] text-slate-400 font-medium">Lectura Física</span>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <a 
-                      href="https://portus.puertos.es/#/" 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="relative flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                        </span>
-                        <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Boya de Málaga</span>
-                      </div>
-                      <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
-                    </a>
-
-                    <a 
-                      href="https://tablademareas.com/es/malaga/malaga" 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Droplets size={16} className="text-blue-400" />
-                        <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Tabla de Mareas</span>
-                      </div>
-                      <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
-                    </a>
-                  </div>
-                </div>
-
-                {/* Tarjeta 5: Calidad del Agua, Medusas y Mareas (Grid triple en Tablet, vertical en PC/Móvil) */}
+                {/* Tarjeta 4: Calidad del Agua, Medusas y Mareas (Grid triple en Tablet, vertical en PC/Móvil) */}
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-1 gap-4">
                   {/* Calidad del Agua */}
                   <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
@@ -3234,49 +3347,9 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 6: Socorrista Virtual */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-4 opacity-5">
-                    <Bot size={80} />
-                  </div>
-                  <div className="flex justify-between items-center mb-4 relative z-10">
-                    <h3 className="font-bold text-blue-900 flex items-center gap-2">
-                      <Bot className="text-blue-600" size={20} />
-                      Socorrista Virtual
-                    </h3>
-                    <span className="text-[10px] text-blue-400/80 font-medium bg-blue-100/50 px-2 py-1 rounded-md">IA Generativa</span>
-                  </div>
-                  
-                  <div className="relative z-10">
-                    {!hasRequestedAi ? (
-                      <button 
-                        onClick={handleAskExpert}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
-                      >
-                        <Bot size={18} /> Consultar previsión 
-                      </button>
-                    ) : isAiLoading ? (
-                      <div className="flex items-center gap-2 text-blue-600/70 p-2">
-                        <Loader2 size={18} className="animate-spin" />
-                        <span className="text-sm font-bold">El experto está evaluando la playa...</span>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <p className="text-blue-900 text-sm leading-relaxed font-medium bg-white/60 p-4 rounded-xl border border-blue-100/50 shadow-sm">
-                          "{expertAdvice}"
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (expertAdvice) navigator.clipboard?.writeText(expertAdvice).catch(() => {});
-                          }}
-                          className="w-full sm:w-auto text-xs font-bold text-blue-700 bg-white/80 hover:bg-white border border-blue-200 rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors"
-                        >
-                          <Copy size={14} /> Copiar consejo
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                {/* Widgets de Utilidad (Visible solo en Desktop en columna lateral izquierda) */}
+                <div className="hidden lg:flex flex-col gap-6">
+                  {renderUtilityCards()}
                 </div>
 
               </div>
@@ -3537,8 +3610,13 @@ export default function App() {
               )}
             </div>
 
-              </div>
-            ) : (
+            {/* Widgets de Utilidad (Visible solo en Móvil/Tablet debajo de la tabla y encima de la Comunidad) */}
+            <div className="block lg:hidden space-y-6 mt-6">
+              {renderUtilityCards()}
+            </div>
+
+          </div>
+        ) : (
               <div className="space-y-6 text-left w-full">
                 
                 {/* Selector de Nado Histórico y Ficha de Análisis */}
