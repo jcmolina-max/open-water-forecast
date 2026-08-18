@@ -1829,7 +1829,10 @@ export default function App() {
             const isLevanteMar = waveDir !== undefined && waveDir !== null && waveDir >= 60 && waveDir <= 120;
             const isPedregalejo = selectedBeach === 'pedregalejo';
 
-            if (isPedregalejo && isLevanteMar) {
+            const dynEmbudoMinHs = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['embudo_min_hs'] || cloudConfigAlertas['EMBUDO_MIN_HS'])))
+              ? Number(cloudConfigAlertas['embudo_min_hs'] || cloudConfigAlertas['EMBUDO_MIN_HS']) : 0.30;
+
+            if (isPedregalejo && isLevanteMar && effectiveWaveHeight >= dynEmbudoMinHs) {
                 driftInfo = { icon: "➡️", color: "text-red-600 font-bold bg-red-50 border-red-200", short: "Embudo: Fuengirola" };
                 localRule = "Efecto Embudo: Alta resistencia";
                 ruleColor = "text-red-700 font-bold bg-red-100 border border-red-300 shadow-sm";
