@@ -2048,10 +2048,11 @@ export default function App() {
                 }
             }
 
-            // DETECCION DE INESTABILIDAD CONVECTIVA ESTIVAL (Índice CAPE)
+            // DETECCION DE INESTABILIDAD CONVECTIVA ESTIVAL (Índice CAPE + Disparador de Nubes/Rachas)
             const hourCape = localClimateDown ? 0 : (weatherJson?.hourly?.cape?.[i] || 0);
             const isSummerSeason = (new Date().getMonth() >= 5 && new Date().getMonth() <= 9); // Junio - Octubre
-            const hasHighCapeRisk = isSummerSeason && hourCape >= 800;
+            const hasConvectiveTrigger = (!localClimateDown && (cloudCover >= 40 || rainProb >= 20 || gustKnots >= 15));
+            const hasHighCapeRisk = isSummerSeason && hourCape >= 1200 && hasConvectiveTrigger;
 
             // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos, Niebla y CAPE Convectivo)
             if (isThunderstorm) {
