@@ -1883,11 +1883,25 @@ export default function App() {
             if (period < 4.5 && effectiveWaveHeight > 0.5) hourScore -= 15;
             if (period < 3.5 && effectiveWaveHeight > 0.6) hourScore -= 25;
 
-            // Regla: La Trampa del Levante (v10.x - Calibrada en Hito 19)
-            // Excluir olas < 0.20m (baño plácido real); exigir Tp > 4.0s y viento suave < 8kt de Levante
+            // Umbrales dinámicos de alerta (desde CONFIG_ALERTAS_REGLAS con fallback seguro)
+            const dynFalsaCalmaMinHs = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['falsa_calma_hs_min'] || cloudConfigAlertas['FALSA_CALMA_MIN_HS'])))
+              ? Number(cloudConfigAlertas['falsa_calma_hs_min'] || cloudConfigAlertas['FALSA_CALMA_MIN_HS']) : 0.20;
+            const dynTaroDeltaT = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['taro_delta_t'] || cloudConfigAlertas['TARO_DELTAT'])))
+              ? Number(cloudConfigAlertas['taro_delta_t'] || cloudConfigAlertas['TARO_DELTAT']) : 2.5;
+            const dynTaroHum = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['taro_humidity_min'] || cloudConfigAlertas['TARO_HUMIDITY'])))
+              ? Number(cloudConfigAlertas['taro_humidity_min'] || cloudConfigAlertas['TARO_HUMIDITY']) : 75;
+            const dynCapeMin = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['cape_min'] || cloudConfigAlertas['CAPE_MIN'])))
+              ? Number(cloudConfigAlertas['cape_min'] || cloudConfigAlertas['CAPE_MIN']) : 1200;
+            const dynWindTerral = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['wind_terral_min'] || cloudConfigAlertas['WIND_TERRAL_MIN'])))
+              ? Number(cloudConfigAlertas['wind_terral_min'] || cloudConfigAlertas['WIND_TERRAL_MIN']) : 15;
+            const dynWindLavadora = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['wind_lavadora_min'] || cloudConfigAlertas['WIND_LAVADORA_MIN'])))
+              ? Number(cloudConfigAlertas['wind_lavadora_min'] || cloudConfigAlertas['WIND_LAVADORA_MIN']) : 12;
+
+            // Regla: La Trampa del Levante (v10.x - Calibrada en Hito 19 / Dinámica en Hito 21)
+            // Excluir olas < dynFalsaCalmaMinHs (baño plácido real); exigir Tp > 4.0s y viento suave < 8kt de Levante
             const isLevanteComponent = (waveDir >= 60 && waveDir <= 120) || (!localClimateDown && windDir >= 60 && windDir <= 120);
             const isCalmSurface = localClimateDown ? true : windKnots < 8;
-            const hasUnderlyingSwell = period > 4.0 && effectiveWaveHeight >= 0.20 && effectiveWaveHeight < 0.50;
+            const hasUnderlyingSwell = period > 4.0 && effectiveWaveHeight >= dynFalsaCalmaMinHs && effectiveWaveHeight < 0.50;
 
             if (isLevanteComponent && isCalmSurface && hasUnderlyingSwell) {
                 hourScore = Math.max(0, hourScore - 10);
@@ -1915,7 +1929,7 @@ export default function App() {
 
                 // Lavadora
                 const isPoniente = windDir > 202.5 && windDir <= 292.5;
-                if (isPoniente && displayHour >= 12 && displayHour <= 18 && windKnots > 12) {
+                if (isPoniente && displayHour >= 12 && displayHour <= 18 && windKnots > dynWindLavadora) {
                     hourScore -= 25;
                     localRule = "Lavadora";
                     ruleColor = "text-amber-600";
@@ -1923,7 +1937,7 @@ export default function App() {
 
                 // Riesgo Deriva Terral
                 const isNorte = windDir > 315 || windDir <= 45;
-                if (isNorte && windKnots > 15) {
+                if (isNorte && windKnots > dynWindTerral) {
                     hourScore -= 25;
                     localRule = "Riesgo Deriva";
                     ruleColor = "text-red-600";
@@ -2010,14 +2024,14 @@ export default function App() {
               const humidity = weatherJson?.hourly?.relative_humidity_2m?.[i];
               const vis = visibility !== undefined ? visibility : 10000;
 
-              // Criterios Calibrados Hito 19: Humedad >= 75%, DeltaT >= 2.5°C y confirmación de visibilidad de satélite
-              if (deltaT >= 2.5 && isSeaBreezeWind && isGentleWind && (humidity >= 75 || vis < 2500)) {
+              // Criterios Calibrados: Humedad >= dynTaroHum, DeltaT >= dynTaroDeltaT y confirmación de visibilidad de satélite
+              if (deltaT >= dynTaroDeltaT && isSeaBreezeWind && isGentleWind && (humidity >= dynTaroHum || vis < 2500)) {
                 if (vis < 1000) {
                   taroRisk = "Alto";
                 } else {
                   taroRisk = "Moderado";
                 }
-              } else if (deltaT >= 1.5 && isSeaBreezeWind && isGentleWind && humidity >= 75 && vis < 4000) {
+              } else if (deltaT >= (dynTaroDeltaT - 1.0) && isSeaBreezeWind && isGentleWind && humidity >= dynTaroHum && vis < 4000) {
                 taroRisk = "Bruma";
               }
             }
@@ -2053,7 +2067,7 @@ export default function App() {
             const hourCape = localClimateDown ? 0 : (weatherJson?.hourly?.cape?.[i] || 0);
             const isSummerSeason = (new Date().getMonth() >= 5 && new Date().getMonth() <= 9); // Junio - Octubre
             const hasCloudOrRainTrigger = (!localClimateDown && (cloudCover >= 40 || rainProb >= 20));
-            const hasHighCapeRisk = isSummerSeason && hourCape >= 1200 && hasCloudOrRainTrigger;
+            const hasHighCapeRisk = isSummerSeason && hourCape >= dynCapeMin && hasCloudOrRainTrigger;
 
             // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos, Niebla y CAPE Convectivo)
             if (isThunderstorm) {
@@ -2285,20 +2299,53 @@ export default function App() {
           }
         }
 
-        // Cargar Configuración Dinámica de Google Sheets (Data-Driven)
-        if (json && json.config) {
-          if (json.config.playas && Object.keys(json.config.playas).length > 0) {
-            setCloudConfigPlayas(json.config.playas);
-            try { localStorage.setItem('openwater_config_playas', JSON.stringify(json.config.playas)); } catch(e) {}
+        // Cargar Configuración Dinámica de Google Sheets (Data-Driven con Tolerancia 100% a Fallos)
+        const incomingPlayas = (json && json.config && json.config.playas) || null;
+        if (incomingPlayas && Object.keys(incomingPlayas).length > 0) {
+          setCloudConfigPlayas(incomingPlayas);
+          try { localStorage.setItem('openwater_config_playas', JSON.stringify(incomingPlayas)); } catch(e) {}
+        }
+
+        const incomingSectores = (json && (json.config_sectores || json.configSectores)) || (json && json.config && json.config.sectores) || null;
+        if (incomingSectores && Object.keys(incomingSectores).length > 0) {
+          setCloudConfigSectores(incomingSectores);
+          try { localStorage.setItem('openwater_config_sectores', JSON.stringify(incomingSectores)); } catch(e) {}
+
+          // Sincronizar rumbos de costa (facing) y sectores personalizados si vienen desde Sheets
+          const newFacing = {};
+          const newSectors = {};
+          Object.keys(incomingSectores).forEach(bKey => {
+            const bConf = incomingSectores[bKey];
+            if (bConf && bConf.facing !== null && bConf.facing !== undefined && !isNaN(Number(bConf.facing))) {
+              newFacing[bKey] = Number(bConf.facing);
+            }
+            if (bConf && Array.isArray(bConf.sectors) && bConf.sectors.length > 0) {
+              const secObj = {};
+              bConf.sectors.forEach(s => {
+                const sName = String(s.name || '').toLowerCase();
+                if (sName.includes('anortado') && s.max !== null && s.max !== undefined) secObj.lev_anortado = Number(s.max);
+                else if (sName.includes('levante') && s.max !== null && s.max !== undefined) secObj.levante = Number(s.max);
+                else if (sName.includes('sur') && s.max !== null && s.max !== undefined) secObj.sur = Number(s.max);
+                else if (sName.includes('poniente') && s.max !== null && s.max !== undefined) secObj.poniente = Number(s.max);
+              });
+              if (Object.keys(secObj).length > 0) {
+                newSectors[bKey] = secObj;
+              }
+            }
+          });
+
+          if (Object.keys(newFacing).length > 0) {
+            setCompassCustomFacing(prev => ({ ...newFacing, ...prev }));
           }
-          if (json.config.sectores && Object.keys(json.config.sectores).length > 0) {
-            setCloudConfigSectores(json.config.sectores);
-            try { localStorage.setItem('openwater_config_sectores', JSON.stringify(json.config.sectores)); } catch(e) {}
+          if (Object.keys(newSectors).length > 0) {
+            setCompassCustomSectors(prev => ({ ...newSectors, ...prev }));
           }
-          if (json.config.alertas && Array.isArray(json.config.alertas) && json.config.alertas.length > 0) {
-            setCloudConfigAlertas(json.config.alertas);
-            try { localStorage.setItem('openwater_config_alertas', JSON.stringify(json.config.alertas)); } catch(e) {}
-          }
+        }
+
+        const incomingAlertas = (json && (json.config_alertas || json.configAlertas)) || (json && json.config && json.config.alertas) || null;
+        if (incomingAlertas && (typeof incomingAlertas === 'object') && Object.keys(incomingAlertas).length > 0) {
+          setCloudConfigAlertas(incomingAlertas);
+          try { localStorage.setItem('openwater_config_alertas', JSON.stringify(incomingAlertas)); } catch(e) {}
         }
 
         // 1. Cargar factores y marcas de tiempo locales guardadas en localStorage
