@@ -39,14 +39,14 @@ import { Analytics } from '@vercel/analytics/react';
 
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
 const BEACHES = {
-  misericordia: { name: "La Misericordia, Málaga", lat: 36.6918, lon: -4.4385, facing: 115 },
-  malagueta: { name: "La Malagueta, Málaga", lat: 36.7180, lon: -4.4070, facing: 140 },
-  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.7215, lon: -4.3850, facing: 180 },
+  misericordia: { name: "La Misericordia, Málaga", lat: 36.688139, lon: -4.441750, facing: 115 },
+  malagueta: { name: "La Malagueta, Málaga", lat: 36.718556, lon: -4.407750, facing: 140 },
+  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.720444, lon: -4.374278, facing: 180 },
   // v9.4+ — expansión costera (Open-Meteo: mismos endpoints, lat/lon por playa)
-  los_alamos: { name: "Los Álamos, Torremolinos", lat: 36.6375, lon: -4.4840, facing: 120 },
-  bajondillo: { name: "El Bajondillo, Torremolinos", lat: 36.6235, lon: -4.4960, facing: 120 },
-  rincon_victoria: { name: "Rincón de la Victoria, Málaga", lat: 36.7150, lon: -4.2780, facing: 190 },
-  cala_del_moral: { name: "La Cala del Moral, Rincón de la Victoria", lat: 36.7135, lon: -4.3115, facing: 180 }
+  los_alamos: { name: "Los Álamos, Torremolinos", lat: 36.635500, lon: -4.484639, facing: 120 },
+  bajondillo: { name: "El Bajondillo, Torremolinos", lat: 36.626250, lon: -4.491472, facing: 120 },
+  cala_del_moral: { name: "La Cala del Moral, Rincón de la Victoria", lat: 36.714194, lon: -4.305167, facing: 180 },
+  rincon_victoria: { name: "Rincón de la Victoria, Málaga", lat: 36.714417, lon: -4.287972, facing: 190 }
 };
 
 // Generador de etiquetas de fecha
@@ -948,66 +948,67 @@ export default function App() {
   const [latestBuoyPeriod, setLatestBuoyPeriod] = useState(null);
   const [latestBuoyDir, setLatestBuoyDir] = useState(null);
   const [latestBuoyTemp, setLatestBuoyTemp] = useState(null);
+  const [latestBuoyWindSpeed, setLatestBuoyWindSpeed] = useState(null);
+  const [latestBuoyWindDir, setLatestBuoyWindDir] = useState(null);
   const [latestBuoyDate, setLatestBuoyDate] = useState(null);
   const [latestBuoySource, setLatestBuoySource] = useState(null);
   const [showPuertosIframe, setShowPuertosIframe] = useState(false);
 
-          useEffect(() => {
-      const sortedNewestFirst = [...calibrationHistory].sort((a, b) => {
-        const tsA = parseLogTimestamp(a);
-        const tsB = parseLogTimestamp(b);
-        return tsB - tsA;
-      });
+  useEffect(() => {
+    const sortedNewestFirst = [...calibrationHistory].sort((a, b) => {
+      const tsA = parseLogTimestamp(a);
+      const tsB = parseLogTimestamp(b);
+      return tsB - tsA;
+    });
 
-      // 1. Filtrar reportes de calibración física y telemetría del Admin (descartar sincronizaciones y alertas de texto)
-      const adminLog = sortedNewestFirst.find(item => {
-        const orig = String(item.origenDato || '').trim();
-        const notas = String(item.notas || item.notasCalibracion || '');
-        const sens = String(item.sensaciones || '');
+    // 1. Filtrar reportes de calibración física y telemetría del Admin (descartar sincronizaciones y alertas de texto)
+    const adminLog = sortedNewestFirst.find(item => {
+      const orig = String(item.origenDato || '').trim();
+      const notas = String(item.notas || item.notasCalibracion || '');
+      const sens = String(item.sensaciones || '');
 
-        // Excluir sincronizaciones automáticas
-        if (orig.indexOf('Sincronizaci') !== -1 || notas.indexOf('Sincronizaci') !== -1 || sens.indexOf('Sincronizaci') !== -1) {
-          return false;
-        }
-
-        // Excluir estrictamente Alertas informativas de texto, Copérnico residual y avisos oficiales
-        if (orig.indexOf('Alerta') !== -1 || orig.indexOf('Copernicus') !== -1 || notas.indexOf('[ALERTA_OFICIAL]') !== -1) {
-          return false;
-        }
-
-        return (
-          orig.indexOf('Admin: Telemetría Boya') !== -1 ||
-          orig.indexOf('Telemetría') !== -1 ||
-          orig.indexOf('Admin: Calibración') !== -1 ||
-          orig.indexOf('Web Admin') !== -1 ||
-          orig === 'Admin' ||
-          (orig.indexOf('Calibración') !== -1 && (item.boyaAltura || item.boyaTemp))
-        );
-      });
-
-      if (adminLog) {
-        const h = parseBoyaNum(adminLog.boyaAltura, 0.01, 15) !== null ? parseBoyaNum(adminLog.boyaAltura, 0.01, 15).toFixed(2) : (adminLog.realOlas ? Number(String(adminLog.realOlas).replace(',', '.')).toFixed(2) : null);
-        const t = parseBoyaNum(adminLog.boyaPeriodo, 1, 30) !== null ? parseBoyaNum(adminLog.boyaPeriodo, 1, 30).toFixed(1) : null;
-        const d = parseBoyaDir(adminLog.boyaDireccion);
-        const temp = parseBoyaNum(adminLog.boyaTemp, 5, 35) !== null ? parseBoyaNum(adminLog.boyaTemp, 5, 35).toFixed(1) : null;
-
-        if (h) setLatestBuoyHeight(h);
-        if (t) setLatestBuoyPeriod(t);
-        if (d !== null) setLatestBuoyDir(d);
-        if (temp) setLatestBuoyTemp(temp);
-
-        const dObj = adminLog.timestamp 
-          ? new Date(adminLog.timestamp) 
-          : (adminLog.fechaRegistro 
-              ? new Date(adminLog.fechaRegistro) 
-              : (adminLog.fechaHora 
-                  ? new Date(adminLog.fechaHora.replace(' ', 'T')) 
-                  : new Date()));
-        setLatestBuoyDate(dObj);
-        const isTelemetry = (adminLog.origenDato || '').indexOf('Telemetría') !== -1;
-        setLatestBuoySource(isTelemetry ? '⚓ Telemetría Boya (Admin)' : '✏️ Calibración Manual Admin');
+      // Excluir sincronizaciones automáticas
+      if (orig.indexOf('Sincronizaci') !== -1 || notas.indexOf('Sincronizaci') !== -1 || sens.indexOf('Sincronizaci') !== -1) {
+        return false;
       }
-    }, [calibrationHistory]);
+
+      // Excluir estrictamente Alertas informativas de texto, Copérnico residual y avisos oficiales
+      if (orig.indexOf('Alerta') !== -1 || orig.indexOf('Copernicus') !== -1 || notas.indexOf('[ALERTA_OFICIAL]') !== -1) {
+        return false;
+      }
+
+      return (
+        orig.indexOf('Admin: Telemetría Boya') !== -1 ||
+        orig.indexOf('Telemetría') !== -1 ||
+        orig.indexOf('Admin: Calibración') !== -1 ||
+        orig.indexOf('Web Admin') !== -1 ||
+        orig === 'Admin' ||
+        (orig.indexOf('Calibración') !== -1 && (item.boyaAltura || item.boyaTemp))
+      );
+    });
+
+    if (adminLog) {
+      const h = parseBoyaNum(adminLog.boyaAltura, 0.01, 15) !== null ? parseBoyaNum(adminLog.boyaAltura, 0.01, 15).toFixed(2) : (adminLog.realOlas ? Number(String(adminLog.realOlas).replace(',', '.')).toFixed(2) : null);
+      const t = parseBoyaNum(adminLog.boyaPeriodo, 1, 30) !== null ? parseBoyaNum(adminLog.boyaPeriodo, 1, 30).toFixed(1) : null;
+      const d = parseBoyaDir(adminLog.boyaDireccion);
+      const temp = parseBoyaNum(adminLog.boyaTemp, 5, 35) !== null ? parseBoyaNum(adminLog.boyaTemp, 5, 35).toFixed(1) : null;
+      const windSpd = adminLog.realVientoFza || (adminLog.boyaVientoKnots ? `${adminLog.boyaVientoKnots} kt` : (adminLog.appVientoNudos ? `${adminLog.appVientoNudos} kt` : null));
+      const windDirection = adminLog.realVientoDir || (adminLog.boyaVientoDir ? `${adminLog.boyaVientoDir}º` : (adminLog.appVientoDir ? `${adminLog.appVientoDir}º` : null));
+
+      if (h) setLatestBuoyHeight(h);
+      if (t) setLatestBuoyPeriod(t);
+      if (d !== null) setLatestBuoyDir(d);
+      if (temp) setLatestBuoyTemp(temp);
+      if (windSpd) setLatestBuoyWindSpeed(windSpd);
+      if (windDirection) setLatestBuoyWindDir(windDirection);
+
+      const logTs = parseLogTimestamp(adminLog);
+      const dObj = logTs > 0 ? new Date(logTs) : new Date();
+      setLatestBuoyDate(dObj);
+      const isTelemetry = (adminLog.origenDato || '').indexOf('Telemetría') !== -1;
+      setLatestBuoySource(isTelemetry ? '⚓ Telemetría Boya (Admin)' : '✏️ Calibración Manual Admin');
+    }
+  }, [calibrationHistory]);
 
   // Sincronización Inteligente de Boya Real al abrir la App (Smart Throttle 15 min)
   useEffect(() => {
@@ -1208,10 +1209,43 @@ export default function App() {
   const [hoveredChartIndex, setHoveredChartIndex] = useState(null);
 
 
-  // Helper para interpretar marcas de tiempo de logs en diversos formatos (ISO, DD/MM/YYYY, etc.)
+  // Helper para interpretar marcas de tiempo de logs en diversos formatos, priorizando la fecha y hora REAL de la sesión
   function parseLogTimestamp(log) {
     if (!log) return 0;
-    const raw = log.fechaRegistro || log.fecha || log.timestamp || "";
+    
+    // 1. Prioridad Absoluta: Fecha y Hora del Nado/Sesión física
+    const sessionDate = log.fechaNado || log.fecha;
+    const sessionHour = log.horaNado || log.hora;
+    if (sessionDate) {
+      const dateStr = String(sessionDate).trim();
+      const timeStr = String(sessionHour || '12:00').trim();
+      const combined = `${dateStr} ${timeStr}`;
+      const parsedCombined = Date.parse(combined);
+      if (!isNaN(parsedCombined)) return parsedCombined;
+
+      const p = dateStr.split(/[-/]/);
+      if (p.length === 3) {
+        let year, month, day;
+        if (p[0].length === 4) { // YYYY-MM-DD
+          year = parseInt(p[0], 10);
+          month = parseInt(p[1], 10) - 1;
+          day = parseInt(p[2], 10);
+        } else { // DD/MM/YYYY
+          day = parseInt(p[0], 10);
+          month = parseInt(p[1], 10) - 1;
+          year = parseInt(p[2], 10);
+        }
+        const timeParts = timeStr.split(':');
+        const hour = timeParts[0] ? parseInt(timeParts[0], 10) : 12;
+        const min = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
+        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+          return new Date(year, month, day, hour, min).getTime();
+        }
+      }
+    }
+
+    // 2. Fallback a fechaHora, timestamp o fechaRegistro
+    const raw = log.fechaHora || log.timestamp || log.fechaRegistro || "";
     if (!raw) return 0;
     if (!isNaN(Number(raw)) && Number(raw) > 1000000000) return Number(raw);
 
@@ -2455,7 +2489,11 @@ export default function App() {
         if (adminBoyaPeriodo) setLatestBuoyPeriod(adminBoyaPeriodo);
         if (adminBoyaDireccion) setLatestBuoyDir(Number(adminBoyaDireccion));
         if (adminBoyaTemp) setLatestBuoyTemp(adminBoyaTemp);
-        setLatestBuoyDate(new Date());
+        if (adminRealVientoFza) setLatestBuoyWindSpeed(adminRealVientoFza);
+        if (adminRealVientoDir) setLatestBuoyWindDir(adminRealVientoDir);
+        
+        const eventTs = parseLogTimestamp({ fechaNado: adminFechaNado, horaNado: adminHoraNado });
+        setLatestBuoyDate(eventTs > 0 ? new Date(eventTs) : new Date());
         setLatestBuoySource(isBuoyOnlyMode ? '⚓ Telemetría Boya (Admin)' : '✏️ Calibración Manual Admin');
       }
       
@@ -2918,83 +2956,74 @@ export default function App() {
                           {latestBuoyTemp ? `${latestBuoyTemp}°C` : '—'}
                         </strong>
                       </div>
+
+                      {/* 💨 Casilla de Viento en Boya (Fuerza + Dirección) */}
+                      <div className="col-span-2 bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60 flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 shrink-0">
+                            <Wind size={14} className="text-cyan-400" />
+                          </div>
+                          <div className="truncate">
+                            <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Viento en Boya</span>
+                            <strong className="text-xs font-black text-cyan-300 block truncate">
+                              {latestBuoyWindSpeed ? `${latestBuoyWindSpeed}` : '—'} {latestBuoyWindDir ? `· ${latestBuoyWindDir}` : ''}
+                            </strong>
+                          </div>
+                        </div>
+                        <span className="text-[8.5px] font-bold text-cyan-200 bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-800/60 shrink-0">
+                          💨 {latestBuoyWindDir || 'Telemetría'}
+                        </span>
+                      </div>
                     </div>
                   )}
 
                   <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
-                                          <span>
-                        Origen: {showPuertosIframe 
-                          ? '📡 Puertos del Estado (Estación 2056 - Málaga)' 
-                          : (latestBuoySource || '✏️ Calibración Manual Admin')}
-                      </span>
-                      <span>Última lectura: {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'Sin reporte hoy'}</span>
+                    <span>
+                      Origen: {showPuertosIframe 
+                        ? '📡 Puertos del Estado (Estación 2056 - Málaga)' 
+                        : (latestBuoySource || '✏️ Calibración Manual Admin')}
+                    </span>
+                    <span>Última lectura: {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'Sin reporte hoy'}</span>
                   </div>
                 </div>
 
-                {/* Tarjeta 2: Temperaturas */}
-                <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4 ${isClimateDown ? 'opacity-70' : ''}`}>
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
+                {/* Tarjeta 2: Temperaturas (1 Sola Fila Compacta) */}
+                <div className={`bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-2.5 ${isClimateDown ? 'opacity-70' : ''}`}>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
                     <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
-                      <Thermometer size={16} className="text-blue-500"/> Temperaturas
+                      <Thermometer size={15} className="text-blue-500"/> Temperaturas
                     </h3>
                     <span className="text-[10px] text-indigo-500 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100/50">
                       Previsión vs Real
                     </span>
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Agua / Mar */}
-                    <div className="space-y-2 text-left">
-                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Temperatura del Agua</span>
-                      <div className="grid grid-cols-2 gap-2">
-                        {/* Prevista */}
-                        <div className="bg-blue-50/40 border border-blue-100/50 rounded-xl p-2.5 text-left">
-                          <span className="block text-[8px] font-bold text-blue-500 uppercase tracking-wider">Satélite</span>
-                          <span className="text-base font-black text-blue-700">{currentDayData.temps.water}ºC</span>
-                          <span className="block text-[8px] text-blue-400 font-semibold mt-0.5">Modelo previsto</span>
-                        </div>
-                        
-                        {/* Real (Boya) */}
-                        <div className="bg-indigo-50/40 border border-indigo-100/50 rounded-xl p-2.5 text-left relative overflow-hidden">
-                          <div className="flex justify-between items-center">
-                            <span className="block text-[8px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
-                              ⚓ Boya Real
-                            </span>
-                            <button
-                              type="button"
-                              onClick={handleSyncBuoy}
-                              disabled={isSyncingBuoy}
-                              title="Sincronizar boya en tiempo real"
-                              className="text-indigo-500 hover:text-indigo-700 transition-colors disabled:opacity-50 p-0.5"
-                            >
-                              <RefreshCw size={10} className={isSyncingBuoy ? "animate-spin" : ""} />
-                            </button>
-                          </div>
-                          <span className="text-base font-black text-indigo-800 block mt-0.5">
-                            {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '— ºC'}
-                          </span>
-                          <span className="block text-[8px] text-indigo-500/70 font-semibold mt-0.5">
-                            {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate).split(',')[0]}` : 'Sin datos'}
-                          </span>
-                        </div>
-                      </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* Agua Satélite */}
+                    <div className="bg-blue-50/50 border border-blue-100/70 rounded-xl p-2 text-left">
+                      <span className="block text-[8px] font-bold text-blue-500 uppercase tracking-wider truncate">🛰️ Agua (Satélite)</span>
+                      <span className="text-sm sm:text-base font-black text-blue-700 block mt-0.5">{currentDayData.temps.water}ºC</span>
+                      <span className="block text-[7.5px] text-blue-400 font-semibold truncate mt-0.5">Modelo previsto</span>
                     </div>
                     
-                    {/* Aire */}
-                    <div className="space-y-2 text-left flex flex-col justify-between">
-                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Temperatura del Aire</span>
-                      <div className="bg-orange-50/40 border border-orange-100/50 rounded-xl p-2.5 flex items-center justify-between h-full">
-                        <div>
-                          <span className="block text-[8px] font-bold text-orange-500 uppercase tracking-wider">Ambiente ({currentDayData.dayLabel.split(' ')[0]})</span>
-                          <span className={`text-base font-black ${isClimateDown ? 'text-slate-400' : 'text-orange-700'}`}>
-                            {currentDayData.temps.air === "-" ? "- ºC" : `${currentDayData.temps.air}ºC`}
-                          </span>
-                          <span className="block text-[8px] text-orange-400 font-semibold mt-0.5">Predicción Modelo</span>
-                        </div>
-                        <div className={isClimateDown ? "text-slate-400" : "text-orange-500"}>
-                          <Sun size={24}/>
-                        </div>
-                      </div>
+                    {/* Agua Boya Real (Sin icono de refresco falso) */}
+                    <div className="bg-indigo-50/50 border border-indigo-100/70 rounded-xl p-2 text-left">
+                      <span className="block text-[8px] font-bold text-indigo-600 uppercase tracking-wider truncate">⚓ Agua (Boya Real)</span>
+                      <span className="text-sm sm:text-base font-black text-indigo-800 block mt-0.5">
+                        {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '— ºC'}
+                      </span>
+                      <span className="block text-[7.5px] text-indigo-500/80 font-semibold truncate mt-0.5">
+                        {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate).split(',')[0]}` : 'Sin datos'}
+                      </span>
+                    </div>
+
+                    {/* Aire Ambiente */}
+                    <div className="bg-orange-50/50 border border-orange-100/70 rounded-xl p-2 text-left">
+                      <span className="block text-[8px] font-bold text-orange-500 uppercase tracking-wider truncate">☀️ Aire ({currentDayData.dayLabel.split(' ')[0]})</span>
+                      <span className={`text-sm sm:text-base font-black block mt-0.5 ${isClimateDown ? 'text-slate-400' : 'text-orange-700'}`}>
+                        {currentDayData.temps.air === "-" ? "- ºC" : `${currentDayData.temps.air}ºC`}
+                      </span>
+                      <span className="block text-[7.5px] text-orange-400 font-semibold truncate mt-0.5">Predicción</span>
                     </div>
                   </div>
                 </div>
