@@ -1540,9 +1540,9 @@ export default function App() {
         }
       };
 
-      // 1. SATÉLITE CLIMA (Añadimos visibility y dew_point_2m)
+      // 1. SATÉLITE CLIMA (Añadimos visibility, dew_point_2m y cape para tormentas convectivas)
       try {
-        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,dew_point_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,precipitation,weather_code,uv_index,cloud_cover,visibility&timezone=Europe%2FMadrid&past_days=2`);
+        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,dew_point_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,precipitation,weather_code,uv_index,cloud_cover,visibility,cape&timezone=Europe%2FMadrid&past_days=2`);
       } catch (e) {
         console.warn("Satélite de clima caído. Activando auto-rescate.", e);
         localClimateDown = true;
@@ -1609,10 +1609,11 @@ export default function App() {
 
           let waterTemp = predictedWaterTemp;
 
-          // ----- CÁLCULO DE CALIDAD DEL AGUA (Aguas Sucias) -----
+          // ----- CÁLCULO DE CALIDAD DEL AGUA (Memoria de 48h de Depuración + Textos Prudentes) -----
           let rainSum = 0;
           if (!localClimateDown && weatherJson?.hourly?.precipitation) {
-              for (let k = weatherBaseIndex - 24; k <= weatherBaseIndex + 21; k++) {
+              // Ventana de 48 horas hacia atrás desde este día para memoria de depuración marina
+              for (let k = Math.max(0, weatherBaseIndex - 48); k <= weatherBaseIndex + 21; k++) {
                   if (k >= 0 && k < weatherJson.hourly.precipitation.length) {
                       rainSum += weatherJson.hourly.precipitation[k] || 0;
                   }
@@ -1630,15 +1631,15 @@ export default function App() {
               wqBg = "bg-slate-100 border-slate-200";
               wqDesc = "Satélite desconectado.";
           } else if (rainSum >= 2.0) {
-              wqStatus = "Riesgo Alto";
-              wqColor = "text-red-600";
+              wqStatus = "Riesgo Alto / Posibilidad Aliviaderos";
+              wqColor = "text-red-600 font-bold";
               wqBg = "bg-red-50 border-red-200";
-              wqDesc = `Aliviaderos activos. Lluvia acum: ${rainSum.toFixed(1)}mm.`;
+              wqDesc = `Arrastre fluvial activo, posibilidad de aliviaderos abiertos y de contaminación de aguas en Misericordia (Lluvia 48h: ${rainSum.toFixed(1)}mm).`;
           } else if (rainSum >= 0.5) {
-              wqStatus = "Precaución";
-              wqColor = "text-amber-600";
+              wqStatus = "Precaución / Posible Arrastre";
+              wqColor = "text-amber-600 font-bold";
               wqBg = "bg-amber-50 border-amber-200";
-              wqDesc = `Posible arrastre. Lluvia acum: ${rainSum.toFixed(1)}mm.`;
+              wqDesc = `Posibilidad de turbidez por arrastre fluvial ligero (${rainSum.toFixed(1)}mm en 48h).`;
           }
 
           // ----- DETECCION DE MAREAS DEL DIA (24 HORAS DE ESTE OFFSET) -----
@@ -1881,9 +1882,13 @@ export default function App() {
             if (period < 4.5 && effectiveWaveHeight > 0.5) hourScore -= 15;
             if (period < 3.5 && effectiveWaveHeight > 0.6) hourScore -= 25;
 
-            // Regla: La Trampa del Levante (v10.x)
+            // Regla: La Trampa del Levante (v10.x - Calibrada en Hito 19)
+            // Excluir olas < 0.20m (baño plácido real); exigir Tp > 4.0s y viento suave < 8kt de Levante
             const isLevanteComponent = (waveDir >= 60 && waveDir <= 120) || (!localClimateDown && windDir >= 60 && windDir <= 120);
-            if (isLevanteComponent && effectiveWaveHeight < 0.4) {
+            const isCalmSurface = localClimateDown ? true : windKnots < 8;
+            const hasUnderlyingSwell = period > 4.0 && effectiveWaveHeight >= 0.20 && effectiveWaveHeight < 0.50;
+
+            if (isLevanteComponent && isCalmSurface && hasUnderlyingSwell) {
                 hourScore = Math.max(0, hourScore - 10);
                 if (!localRule || localRule === "Escudo Activo" || localRule === "Magón") {
                     localRule = "Falsa Calma: Corriente de Fondo";
@@ -2002,12 +2007,16 @@ export default function App() {
               const isSeaBreezeWind = windDir >= 80 && windDir <= 220; // Vientos de componente marítima (Levante, Sur, Sudeste)
               const isGentleWind = windKnots >= 3 && windKnots <= 12; // Viento suave que empuja pero no dispersa la niebla
               const humidity = weatherJson?.hourly?.relative_humidity_2m?.[i];
-              
-              if (deltaT >= 2.0 && isSeaBreezeWind && isGentleWind) {
-                taroRisk = "Alto";
-              } else if (deltaT >= 0.0 && isSeaBreezeWind && isGentleWind) {
-                taroRisk = "Moderado";
-              } else if ((deltaT >= -1.0 || (humidity !== undefined && humidity >= 80)) && isSeaBreezeWind && isGentleWind) {
+              const vis = visibility !== undefined ? visibility : 10000;
+
+              // Criterios Calibrados Hito 19: Humedad >= 75%, DeltaT >= 2.5°C y confirmación de visibilidad de satélite
+              if (deltaT >= 2.5 && isSeaBreezeWind && isGentleWind && (humidity >= 75 || vis < 2500)) {
+                if (vis < 1000) {
+                  taroRisk = "Alto";
+                } else {
+                  taroRisk = "Moderado";
+                }
+              } else if (deltaT >= 1.5 && isSeaBreezeWind && isGentleWind && humidity >= 75 && vis < 4000) {
                 taroRisk = "Bruma";
               }
             }
@@ -2039,7 +2048,12 @@ export default function App() {
                 }
             }
 
-            // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos y Niebla)
+            // DETECCION DE INESTABILIDAD CONVECTIVA ESTIVAL (Índice CAPE)
+            const hourCape = localClimateDown ? 0 : (weatherJson?.hourly?.cape?.[i] || 0);
+            const isSummerSeason = (new Date().getMonth() >= 5 && new Date().getMonth() <= 9); // Junio - Octubre
+            const hasHighCapeRisk = isSummerSeason && hourCape >= 800;
+
+            // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos, Niebla y CAPE Convectivo)
             if (isThunderstorm) {
                 hourScore = 0;
                 localRule = "Tormenta ⚡";
@@ -2048,6 +2062,9 @@ export default function App() {
                 hourScore = Math.max(0, hourScore - 40); // Castigo severo por pérdida de visibilidad
                 localRule = "Niebla 🌫️";
                 ruleColor = "text-slate-600 bg-slate-200 border-slate-300 shadow-sm";
+            } else if (hasHighCapeRisk && (!localRule || localRule === "Escudo Activo" || localRule === "Magón")) {
+                localRule = "Riesgo Tormenta Convectiva ⚡";
+                ruleColor = "text-amber-900 bg-amber-100 border border-amber-300 shadow-sm";
             }
 
             hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
@@ -2117,7 +2134,8 @@ export default function App() {
               dewPoint: dewPoint,
               taroRisk: taroRisk,
               visText: visText,
-              visColor: visColor
+              visColor: visColor,
+              cape: hourCape
             });
           }
 
