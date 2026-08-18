@@ -863,16 +863,16 @@ function formatBoyaPeriod(raw) {
 }
 
 function getRecordType(item) {
-  const orig = String(item.origenDato || "");
-  const notes = String(item.notasCalibracion || "");
-  const sens = String(item.sensaciones || "");
+  const orig = String(item.origenDato || "").trim();
+  const notes = String(item.notas || item.notasCalibracion || "").trim();
+  const sens = String(item.sensaciones || "").trim();
   const hasOlas = item.realOlas !== undefined && item.realOlas !== null && item.realOlas !== "";
   
   if (orig === 'Admin: Factor' || sens.includes('[FactorConfig:')) {
     return 'system_factor';
   }
 
-  if (notes.includes('[ALERTA_OFICIAL]') || orig === 'Admin: Alerta') {
+  if (notes.includes('[ALERTA_OFICIAL]') || orig === 'Admin: Alerta' || orig.toLowerCase().includes('alerta')) {
     return 'admin_alert';
   }
   
@@ -1829,7 +1829,10 @@ export default function App() {
             const isLevanteMar = waveDir !== undefined && waveDir !== null && waveDir >= 60 && waveDir <= 120;
             const isPedregalejo = selectedBeach === 'pedregalejo';
 
-            if (isPedregalejo && isLevanteMar) {
+            const dynEmbudoMinHs = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['embudo_min_hs'] || cloudConfigAlertas['EMBUDO_MIN_HS'])))
+              ? Number(cloudConfigAlertas['embudo_min_hs'] || cloudConfigAlertas['EMBUDO_MIN_HS']) : 0.30;
+
+            if (isPedregalejo && isLevanteMar && effectiveWaveHeight >= dynEmbudoMinHs) {
                 driftInfo = { icon: "➡️", color: "text-red-600 font-bold bg-red-50 border-red-200", short: "Embudo: Fuengirola" };
                 localRule = "Efecto Embudo: Alta resistencia";
                 ruleColor = "text-red-700 font-bold bg-red-100 border border-red-300 shadow-sm";
@@ -4046,7 +4049,11 @@ export default function App() {
 
                               {(() => {
                                 const isSwimmerType = recType === 'swimmer_report' || recType === 'swimmer_msg';
-                                const displayComment = isSwimmerType ? parsed.comentario : (recType === 'admin_alert' ? String(item.notasCalibracion || '').replace('[ALERTA_OFICIAL]', '').trim() : String(item.sensaciones !== null && item.sensaciones !== undefined ? item.sensaciones : ''));
+                                const displayComment = isSwimmerType 
+                                  ? parsed.comentario 
+                                  : (recType === 'admin_alert' 
+                                      ? String(item.notas || item.notasCalibracion || item.sensaciones || '').replace('[ALERTA_OFICIAL]', '').replace(/\[(INFO|WARNING|DANGER|CRITICAL)\]/gi, '').trim() 
+                                      : String(item.sensaciones !== null && item.sensaciones !== undefined ? item.sensaciones : ''));
                                 
                                 if (displayComment && recType !== 'buoy_sync') {
                                   return (
@@ -4197,32 +4204,64 @@ export default function App() {
 
           {/* Feed de reportes */}
           {(() => {
-            const latestAlert = calibrationHistory.find(item => 
-              item.playa === selectedBeach && 
-              getRecordType(item) === 'admin_alert'
-            );
+            const latestAlert = calibrationHistory.find(item => {
+              const p = String(item.playa || '').toLowerCase().trim();
+              const isMatch = !p || p === 'todas' || p === selectedBeach.toLowerCase() || p.includes(selectedBeach.toLowerCase()) || selectedBeach.toLowerCase().includes(p);
+              return isMatch && getRecordType(item) === 'admin_alert';
+            });
             
             const filteredReports = calibrationHistory.filter(item => {
-              const itemPlaya = (item.playa || '').toString().toLowerCase();
+              const itemPlaya = (item.playa || '').toString().toLowerCase().trim();
               const targetPlaya = selectedBeach.toLowerCase();
-              const isBeachMatch = !item.playa || itemPlaya.includes(targetPlaya) || targetPlaya.includes(itemPlaya);
+              const isBeachMatch = !item.playa || itemPlaya === 'todas' || itemPlaya.includes(targetPlaya) || targetPlaya.includes(itemPlaya);
               const type = getRecordType(item);
               return isBeachMatch && (type === 'swimmer_report' || type === 'swimmer_msg' || type === 'admin_report');
             });
 
+            let alertSeverityBadge = "bg-rose-100 text-rose-700 border-rose-200";
+            let alertContainerClass = "bg-rose-50 border-rose-200 border-l-4 border-l-rose-500";
+            let alertIcon = "⚠️";
+            let alertText = "";
+
+            if (latestAlert) {
+              const rawNotes = String(latestAlert.notas || latestAlert.notasCalibracion || latestAlert.sensaciones || "").trim();
+              alertText = rawNotes.replace('[ALERTA_OFICIAL]', '').replace(/\[(INFO|WARNING|DANGER|CRITICAL)\]/gi, '').trim() || 'Aviso oficial de seguridad';
+              
+              if (rawNotes.includes('[DANGER]') || rawNotes.includes('[CRITICAL]')) {
+                alertSeverityBadge = "bg-red-100 text-red-700 border border-red-300";
+                alertContainerClass = "bg-red-50 border-red-200 border-l-4 border-l-red-600";
+                alertIcon = "🚨";
+              } else if (rawNotes.includes('[INFO]')) {
+                alertSeverityBadge = "bg-blue-100 text-blue-700 border border-blue-300";
+                alertContainerClass = "bg-blue-50 border-blue-200 border-l-4 border-l-blue-500";
+                alertIcon = "ℹ️";
+              } else {
+                alertSeverityBadge = "bg-amber-100 text-amber-800 border border-amber-300";
+                alertContainerClass = "bg-amber-50 border-amber-200 border-l-4 border-l-amber-500";
+                alertIcon = "⚠️";
+              }
+            }
+
             return (
               <>
                 {latestAlert && (
-                  <div className="mb-5 bg-rose-50 border border-rose-200/60 rounded-2xl p-4 shadow-sm text-left flex items-start gap-3 w-full border-l-4 border-l-rose-500">
-                    <span className="text-xl shrink-0">⚠️</span>
+                  <div className={`mb-5 rounded-2xl p-4 shadow-sm text-left flex items-start gap-3 w-full border ${alertContainerClass}`}>
+                    <span className="text-xl shrink-0">{alertIcon}</span>
                     <div className="flex-grow">
-                      <span className="inline-block text-[8px] font-black text-rose-600 bg-rose-100/60 px-2 py-0.5 rounded-full uppercase tracking-wider mb-1">
-                        Alerta Oficial del Administrador
-                      </span>
-                      <p className="text-xs font-bold text-rose-800 leading-tight">
-                        {(latestAlert.notasCalibracion || '').replace('[ALERTA_OFICIAL]', '').trim() || (latestAlert.sensaciones || 'Aviso de seguridad')}
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className={`inline-block text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${alertSeverityBadge}`}>
+                          Alerta Oficial del Administrador
+                        </span>
+                        {String(latestAlert.playa || '').toLowerCase() === 'todas' && (
+                          <span className="text-[8px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md">
+                            🌎 Toda la costa
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-bold text-slate-800 leading-tight">
+                        {alertText}
                       </p>
-                      <span className="block text-[8px] text-rose-500/70 font-semibold mt-1">
+                      <span className="block text-[8px] text-slate-400 font-semibold mt-1">
                         Registrado: {formatFriendlyDate(latestAlert.timestamp || latestAlert.fechaRegistro || latestAlert.fecha)}
                       </span>
                     </div>
