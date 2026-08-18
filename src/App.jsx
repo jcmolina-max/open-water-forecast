@@ -1213,16 +1213,30 @@ export default function App() {
   function parseLogTimestamp(log) {
     if (!log) return 0;
     
-    // 1. Prioridad Absoluta: Fecha y Hora del Nado/Sesión física
+    // 1. Prioridad: ¿Viene la fecha completa en horaNado o fechaHora? (Formato habitual en Google Sheets: "YYYY-MM-DD HH:mm")
+    const rawHora = String(log.horaNado || log.hora || log.fechaHora || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(rawHora)) {
+      const parts = rawHora.split(/[ T]/);
+      const datePart = parts[0];
+      const timePart = parts[1] || '12:00';
+      const dp = datePart.split('-');
+      const tp = timePart.split(':');
+      const y = parseInt(dp[0], 10);
+      const m = parseInt(dp[1], 10) - 1;
+      const d = parseInt(dp[2], 10);
+      const h = parseInt(tp[0] || '12', 10);
+      const min = parseInt(tp[1] || '0', 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m, d, h, min).getTime();
+      }
+    }
+
+    // 2. Prioridad: fechaNado o fecha explícita combinada con horaNado
     const sessionDate = log.fechaNado || log.fecha;
     const sessionHour = log.horaNado || log.hora;
     if (sessionDate) {
       const dateStr = String(sessionDate).trim();
       const timeStr = String(sessionHour || '12:00').trim();
-      const combined = `${dateStr} ${timeStr}`;
-      const parsedCombined = Date.parse(combined);
-      if (!isNaN(parsedCombined)) return parsedCombined;
-
       const p = dateStr.split(/[-/]/);
       if (p.length === 3) {
         let year, month, day;
@@ -1235,7 +1249,7 @@ export default function App() {
           month = parseInt(p[1], 10) - 1;
           year = parseInt(p[2], 10);
         }
-        const timeParts = timeStr.split(':');
+        const timeParts = timeStr.replace(/.*[ T]/, '').split(':');
         const hour = timeParts[0] ? parseInt(timeParts[0], 10) : 12;
         const min = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
         if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
@@ -1244,19 +1258,26 @@ export default function App() {
       }
     }
 
-    // 2. Fallback a fechaHora, timestamp o fechaRegistro
-    const raw = log.fechaHora || log.timestamp || log.fechaRegistro || "";
+    // 3. Fallback a timestamp, fechaRegistro o fechaHora
+    const raw = log.timestamp || log.fechaRegistro || log.fechaHora || "";
     if (!raw) return 0;
     if (!isNaN(Number(raw)) && Number(raw) > 1000000000) return Number(raw);
 
     const direct = Date.parse(raw);
     if (!isNaN(direct)) return direct;
 
-    const p = String(raw).split(/[/, :]+/);
+    const p = String(raw).split(/[/, :\-T]+/);
     if (p.length >= 3) {
-      const day = parseInt(p[0], 10);
-      const month = parseInt(p[1], 10) - 1;
-      const year = parseInt(p[2], 10);
+      let year, month, day;
+      if (p[0].length === 4) { // YYYY-MM-DD
+        year = parseInt(p[0], 10);
+        month = parseInt(p[1], 10) - 1;
+        day = parseInt(p[2], 10);
+      } else {
+        day = parseInt(p[0], 10);
+        month = parseInt(p[1], 10) - 1;
+        year = parseInt(p[2], 10);
+      }
       const hour = p[3] ? parseInt(p[3], 10) : 0;
       const min = p[4] ? parseInt(p[4], 10) : 0;
       const sec = p[5] ? parseInt(p[5], 10) : 0;
@@ -2483,18 +2504,22 @@ export default function App() {
         body: JSON.stringify(payload)
       });
 
-      // Actualización Inmediata en Pantalla (Sin esperar a Google)
+      // Actualización Inmediata en Pantalla (Solo si la sesión es de hoy o más reciente que la lectura actual)
       if (!isAlertMode) {
-        if (adminBoyaAltura) setLatestBuoyHeight(parseFloat(adminBoyaAltura.replace(',', '.')).toFixed(2));
-        if (adminBoyaPeriodo) setLatestBuoyPeriod(adminBoyaPeriodo);
-        if (adminBoyaDireccion) setLatestBuoyDir(Number(adminBoyaDireccion));
-        if (adminBoyaTemp) setLatestBuoyTemp(adminBoyaTemp);
-        if (adminRealVientoFza) setLatestBuoyWindSpeed(adminRealVientoFza);
-        if (adminRealVientoDir) setLatestBuoyWindDir(adminRealVientoDir);
-        
         const eventTs = parseLogTimestamp({ fechaNado: adminFechaNado, horaNado: adminHoraNado });
-        setLatestBuoyDate(eventTs > 0 ? new Date(eventTs) : new Date());
-        setLatestBuoySource(isBuoyOnlyMode ? '⚓ Telemetría Boya (Admin)' : '✏️ Calibración Manual Admin');
+        const currentTs = latestBuoyDate ? new Date(latestBuoyDate).getTime() : 0;
+
+        // Solo sobreescribir la tarjeta viva si el evento enviado es de hoy o más reciente que la lectura visible
+        if (eventTs >= currentTs || !currentTs) {
+          if (adminBoyaAltura) setLatestBuoyHeight(parseFloat(adminBoyaAltura.replace(',', '.')).toFixed(2));
+          if (adminBoyaPeriodo) setLatestBuoyPeriod(adminBoyaPeriodo);
+          if (adminBoyaDireccion) setLatestBuoyDir(Number(adminBoyaDireccion));
+          if (adminBoyaTemp) setLatestBuoyTemp(adminBoyaTemp);
+          if (adminRealVientoFza) setLatestBuoyWindSpeed(adminRealVientoFza);
+          if (adminRealVientoDir) setLatestBuoyWindDir(adminRealVientoDir);
+          setLatestBuoyDate(eventTs > 0 ? new Date(eventTs) : new Date());
+          setLatestBuoySource(isBuoyOnlyMode ? '⚓ Telemetría Boya (Admin)' : '✏️ Calibración Manual Admin');
+        }
       }
       
       const successMsg = isAlertMode 
