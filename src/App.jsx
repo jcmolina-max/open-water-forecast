@@ -32,20 +32,22 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
-  Users
+  Users,
+  Database,
+  Video
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
 const BEACHES = {
-  misericordia: { name: "La Misericordia, Málaga", lat: 36.696, lon: -4.444, facing: 135 },
-  malagueta: { name: "La Malagueta, Málaga", lat: 36.718, lon: -4.407, facing: 180 },
-  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.721, lon: -4.386, facing: 180 },
+  misericordia: { name: "La Misericordia, Málaga", lat: 36.688139, lon: -4.441750, facing: 115 },
+  malagueta: { name: "La Malagueta, Málaga", lat: 36.718556, lon: -4.407750, facing: 140 },
+  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.720444, lon: -4.374278, facing: 180 },
   // v9.4+ — expansión costera (Open-Meteo: mismos endpoints, lat/lon por playa)
-  los_alamos: { name: "Los Álamos, Torremolinos", lat: 36.6398, lon: -4.4815, facing: 188 },
-  bajondillo: { name: "El Bajondillo, Torremolinos", lat: 36.6271, lon: -4.4916, facing: 182 },
-  rincon_victoria: { name: "Rincón de la Victoria, Málaga", lat: 36.7131, lon: -4.2743, facing: 162 },
-  cala_del_moral: { name: "La Cala del Moral, Rincón de la Victoria", lat: 36.7148, lon: -4.31, facing: 148 }
+  los_alamos: { name: "Los Álamos, Torremolinos", lat: 36.635500, lon: -4.484639, facing: 120 },
+  bajondillo: { name: "El Bajondillo, Torremolinos", lat: 36.626250, lon: -4.491472, facing: 120 },
+  cala_del_moral: { name: "La Cala del Moral, Rincón de la Victoria", lat: 36.714194, lon: -4.305167, facing: 180 },
+  rincon_victoria: { name: "Rincón de la Victoria, Málaga", lat: 36.714417, lon: -4.287972, facing: 190 }
 };
 
 // Generador de etiquetas de fecha
@@ -314,6 +316,304 @@ function HourlySvgChart({ hourlyData }) {
           )}
         </div>
       )}
+    </div>
+  );
+};
+
+function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, customFacing, customSectors }) {
+  if (!hourlyData || hourlyData.length === 0) return null;
+
+  const activeIdx = (selectedIdx !== null && selectedIdx >= 0 && selectedIdx < hourlyData.length) ? selectedIdx : 0;
+  const currentHour = hourlyData[activeIdx] || hourlyData[0];
+  const bObj = BEACHES[beachKey] || BEACHES.misericordia;
+  const facing = (customFacing !== undefined && !isNaN(customFacing)) ? customFacing : (bObj?.facing || 115);
+  const ejeEste = ((facing - 90 + 360) % 360) || 25;
+  const ejeOeste = (facing + 90) % 360 || 205;
+
+  const wSpd = parseFloat((currentHour.windS !== undefined ? currentHour.windS : (currentHour.viento || 0)).toString().replace(',', '.'));
+  const wDir = parseFloat((currentHour.windDir !== undefined ? currentHour.windDir : (currentHour.vientoDir || 210)).toString().replace(',', '.'));
+  const sH = parseFloat((currentHour.swellH !== undefined ? currentHour.swellH : (currentHour.olas || 0)).toString().replace(',', '.'));
+  const sP = parseFloat((currentHour.period !== undefined ? currentHour.period : (currentHour.periodo || 0)).toString().replace(',', '.'));
+  const sDir = parseFloat((currentHour.swellDir !== undefined ? currentHour.swellDir : (currentHour.olaDir || 115)).toString().replace(',', '.'));
+
+  let windColor = '#22d3ee'; // cyan
+  if (wSpd >= 18) windColor = '#ef4444';
+  else if (wSpd >= 13) windColor = '#f59e0b';
+  else if (wSpd >= 7) windColor = '#10b981';
+
+  let diagTitle = "Condición Estable";
+  let diagDesc = "Mar calmo en orilla";
+  let diagBadgeClass = "bg-blue-900/80 text-blue-200 border-blue-400/40";
+
+  const isOffshore = wDir > ejeOeste || wDir < ejeEste;
+  const isLevante = sDir >= ejeEste && sDir <= 170;
+  const isPoniente = wDir >= 191 && wDir <= ejeOeste;
+  const isSur = wDir >= 171 && wDir <= 190;
+
+  if (isOffshore && wSpd >= 8) {
+    diagTitle = "🏔️ Terral / Viento Tierra";
+    diagDesc = "Orilla plato / Balsa total";
+    diagBadgeClass = "bg-emerald-950/80 text-emerald-300 border-emerald-500/50";
+  } else if (isLevante && (sH >= 0.5 || sP >= 5.0)) {
+    diagTitle = "🌊 Mar de Fondo Levante";
+    diagDesc = "Rompiente orillera activa";
+    diagBadgeClass = "bg-indigo-950/80 text-indigo-300 border-indigo-500/50";
+  } else if (isPoniente && wSpd >= 9) {
+    diagTitle = "💨 Poniente Costero";
+    diagDesc = "Chop lateral y corriente a Levante";
+    diagBadgeClass = "bg-teal-950/80 text-teal-300 border-teal-500/50";
+  } else if (isSur) {
+    diagTitle = "⚓ Sur / Virazón Térmica";
+    diagDesc = "Mar picado e incómodo en la orilla";
+    diagBadgeClass = "bg-purple-950/80 text-purple-300 border-purple-500/50";
+  } else if (sH <= 0.25 && wSpd <= 6) {
+    diagTitle = "🏊 Balsa / Mar Espejo";
+    diagDesc = "Condiciones perfectas para nado";
+    diagBadgeClass = "bg-emerald-950/80 text-emerald-300 border-emerald-500/50";
+  }
+
+  // Geometría SVG Overlay (Proporción áurea y límites anti-corte)
+  const cx = 180, cy = 110, R = 80;
+  const rad = Math.PI / 180;
+
+  // Slippy Map OpenStreetMap Street Tile Mosaic (HD Pastel Street View 100% continuo)
+  const zoom = 15;
+  const nTiles = Math.pow(2, zoom);
+  const exactTileX = (bObj.lon + 180.0) / 360.0 * nTiles;
+  const latRad = bObj.lat * Math.PI / 180.0;
+  const exactTileY = (1.0 - Math.log(Math.tan(latRad) + 1.0 / Math.cos(latRad)) / Math.PI) / 2.0 * nTiles;
+
+  const centerTileX = Math.floor(exactTileX);
+  const centerTileY = Math.floor(exactTileY);
+  const subPixelX = (exactTileX - centerTileX) * 256;
+  const subPixelY = (exactTileY - centerTileY) * 256;
+
+  // Línea de Costa / Ejes
+  const aCoast1 = (facing - 90) * rad;
+  const xCoast1 = cx + R * Math.sin(aCoast1);
+  const yCoast1 = cy - R * Math.cos(aCoast1);
+  const aCoast2 = (facing + 90) * rad;
+  const xCoast2 = cx + R * Math.sin(aCoast2);
+  const yCoast2 = cy - R * Math.cos(aCoast2);
+
+  // Vector Viento (Alargado, aerodinámico y con límite anti-corte)
+  const aWindFlow = ((wDir + 180) % 360) * rad;
+  const windLen = Math.min(R - 10, 38 + (wSpd / 20) * 32);
+  const xWindStart = cx - (windLen * 0.6) * Math.sin(aWindFlow);
+  const yWindStart = cy + (windLen * 0.6) * Math.cos(aWindFlow);
+  const xWindEnd = cx + (windLen * 0.75) * Math.sin(aWindFlow);
+  const yWindEnd = cy - (windLen * 0.75) * Math.cos(aWindFlow);
+
+  // Vector Swell (Alargado, aerodinámico y con límite anti-corte)
+  const aSwellFlow = ((sDir + 180) % 360) * rad;
+  const swellLen = Math.min(R - 10, 38 + Math.min(sH, 1.5) * 30);
+  const xSwellStart = cx - (swellLen * 0.6) * Math.sin(aSwellFlow);
+  const ySwellStart = cy + (swellLen * 0.6) * Math.cos(aSwellFlow);
+  const xSwellEnd = cx + (swellLen * 0.75) * Math.sin(aSwellFlow);
+  const ySwellEnd = cy - (swellLen * 0.75) * Math.cos(aSwellFlow);
+
+  return (
+    <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white p-3.5 sm:p-4 rounded-2xl border border-slate-700/80 shadow-md space-y-3 text-left max-w-3xl mx-auto">
+      
+      {/* 1. CABECERA: TÍTULO + DIAGNÓSTICO */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-indigo-500/20 border border-indigo-400/40 rounded-xl text-indigo-300 shrink-0">
+            <Compass size={18} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-black text-sm text-white tracking-wide">
+                🧭 Visor Náutico: {bObj.name.split(',')[0]}
+              </span>
+              <span className="text-[10px] font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/40 px-2 py-0.5 rounded-full">
+                Frente Marino: {facing}º
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 font-medium">
+              Eje Costa: {ejeEste}º (Este) ↔ {ejeOeste}º (Oeste)
+            </p>
+          </div>
+        </div>
+
+        <div className={`px-2.5 py-1 rounded-xl border text-xs font-bold shrink-0 ${diagBadgeClass}`}>
+          <span>{diagTitle}</span>
+        </div>
+      </div>
+
+      {/* 2. BARRA HUD LIMPIA (DATOS EN HORIZONTAL JUSTO ENCIMA DEL MAPA) */}
+      <div className="grid grid-cols-2 gap-2 text-left">
+        {/* Chip Viento */}
+        <div className="bg-slate-800/90 p-2 sm:p-2.5 rounded-xl border border-slate-700 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-700">
+              <Wind size={15} style={{ color: windColor }} />
+            </div>
+            <div className="truncate">
+              <span className="block text-[8.5px] font-black uppercase text-slate-400">Viento</span>
+              <span className="text-xs sm:text-sm font-black text-white">
+                {wSpd.toFixed(1)} <span className="text-[10px] font-normal text-slate-300">kt</span>
+              </span>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-[9px] font-bold bg-slate-700 px-1.5 py-0.5 rounded text-slate-200 block">
+              {wDir}º
+            </span>
+            <span className="text-[8px] font-extrabold text-cyan-300 block mt-0.5">
+              {isOffshore ? '🏔️ Terral' : '🌊 Mar'}
+            </span>
+          </div>
+        </div>
+
+        {/* Chip Swell */}
+        <div className="bg-slate-800/90 p-2 sm:p-2.5 rounded-xl border border-slate-700 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-700">
+              <Waves size={15} className="text-indigo-400" />
+            </div>
+            <div className="truncate">
+              <span className="block text-[8.5px] font-black uppercase text-slate-400">Oleaje (Swell)</span>
+              <span className="text-xs sm:text-sm font-black text-white">
+                {sH.toFixed(2)} <span className="text-[10px] font-normal text-slate-300">m</span> · {sP.toFixed(1)}<span className="text-[10px] font-normal text-slate-300">s</span>
+              </span>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-[9px] font-bold bg-slate-700 px-1.5 py-0.5 rounded text-slate-200 block">
+              {sDir}º
+            </span>
+            <span className="text-[8px] font-extrabold text-indigo-300 block mt-0.5">
+              {isLevante ? '🌊 Levante' : isPoniente ? '💨 Poniente' : '⚓ Mar'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. VENTANA DEL MAPA + ROSA DE LOS VIENTOS + FLECHAS (MOSAICO CONTINUO SIN BORDES NEGROS) */}
+      <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] min-h-[250px] sm:min-h-[280px] rounded-xl overflow-hidden border border-slate-700 shadow-inner bg-slate-950">
+        {/* CAPA 1: MOSAICO DE CALLEJERO OPENSTREETMAP 100% CONTINUO (5x3 TESELAS) */}
+        <div 
+          className="absolute pointer-events-none select-none"
+          style={{
+            width: `${5 * 256}px`,
+            height: `${3 * 256}px`,
+            left: `calc(50% - ${2 * 256 + subPixelX}px)`,
+            top: `calc(50% - ${1 * 256 + subPixelY}px)`
+          }}
+        >
+          {[-1, 0, 1].map(dy => (
+            <div key={dy} className="flex">
+              {[-2, -1, 0, 1, 2].map(dx => (
+                <img
+                  key={`${dx}-${dy}`}
+                  src={`https://tile.openstreetmap.org/${zoom}/${centerTileX + dx}/${centerTileY + dy}.png`}
+                  alt="Callejero Costa"
+                  className="w-[256px] h-[256px] block select-none"
+                  style={{ filter: 'saturate(1.2) contrast(1.05)' }}
+                  loading="eager"
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+        {/* Overlay sutil para que las líneas SVG resalten sobre el mapa */}
+        <div className="absolute inset-0 bg-slate-950/20 pointer-events-none" />
+
+        {/* CAPA 2 (ROSA DE LOS VIENTOS SUTIL) + CAPA 3 (AGUJAS DE PRECISIÓN MICRO-PUNTA) */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <svg viewBox="0 0 360 220" className="w-full h-full max-w-lg">
+            <defs>
+              <filter id="vectorDropGlow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="1" stdDeviation="1.8" floodColor="#000000" floodOpacity="0.95" />
+              </filter>
+              {/* Puntas de flecha micro-estilizadas (Agujas de compás náutico) */}
+              <marker id="arrowWindMicro" markerWidth="3.5" markerHeight="3.5" refX="3" refY="1.75" orient="auto">
+                <path d="M0,0.4 L0,3.1 L3.1,1.75 z" fill={windColor} stroke="#0f172a" strokeWidth="0.4" />
+              </marker>
+              <marker id="arrowSwellMicro" markerWidth="3.5" markerHeight="3.5" refX="3" refY="1.75" orient="auto">
+                <path d="M0,0.4 L0,3.1 L3.1,1.75 z" fill="#818cf8" stroke="#0f172a" strokeWidth="0.4" />
+              </marker>
+            </defs>
+
+            {/* CAPA 2: ROSA DE LOS VIENTOS SUTIL AL 35% DE OPACIDAD */}
+            <g opacity="0.35">
+              <circle cx={cx} cy={cy} r={R} fill="none" stroke="#ffffff" strokeWidth="1.2" strokeDasharray="3 3" />
+              <circle cx={cx} cy={cy} r={R * 0.5} fill="none" stroke="#ffffff" strokeWidth="0.8" strokeDasharray="2 4" />
+              <line x1={cx} y1={cy - R - 6} x2={cx} y2={cy + R + 6} stroke="#ffffff" strokeWidth="1" strokeDasharray="2 2" />
+              <line x1={cx - R - 6} y1={cy} x2={cx + R + 6} y2={cy} stroke="#ffffff" strokeWidth="1" strokeDasharray="2 2" />
+              <text x={cx} y={cy - R + 14} fontSize="11" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">N (0º)</text>
+              <text x={cx + R - 14} y={cy + 4} fontSize="10" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">E (90º)</text>
+              <text x={cx} y={cy + R - 6} fontSize="10" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">S (180º)</text>
+              <text x={cx - R + 14} y={cy + 4} fontSize="10" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">W (270º)</text>
+              <line x1={xCoast1} y1={yCoast1} x2={xCoast2} y2={yCoast2} stroke="#f59e0b" strokeWidth="2.2" strokeDasharray="4 2" />
+            </g>
+
+            {/* CAPA 3: VECTORES DE PRECISIÓN (TRAZO Y PUNTA MICRO) */}
+            {/* Flecha Viento */}
+            <g filter="url(#vectorDropGlow)">
+              <line 
+                x1={xWindStart} 
+                y1={yWindStart} 
+                x2={xWindEnd} 
+                y2={yWindEnd} 
+                stroke={windColor} 
+                strokeWidth="2.6" 
+                strokeLinecap="round"
+                markerEnd="url(#arrowWindMicro)"
+                className="transition-all duration-300"
+              />
+            </g>
+
+            {/* Flecha Swell / Ola */}
+            <g filter="url(#vectorDropGlow)">
+              <line 
+                x1={xSwellStart} 
+                y1={ySwellStart} 
+                x2={xSwellEnd} 
+                y2={ySwellEnd} 
+                stroke="#818cf8" 
+                strokeWidth="3" 
+                strokeLinecap="round"
+                strokeDasharray="5 2.5"
+                markerEnd="url(#arrowSwellMicro)"
+                className="transition-all duration-300"
+              />
+            </g>
+
+            {/* Punto Central de Nadador (Faro Fijo Sin Parpadeos) */}
+            <circle cx={cx} cy={cy} r="4" fill="#38bdf8" stroke="#ffffff" strokeWidth="1.8" filter="url(#vectorDropGlow)" />
+          </svg>
+        </div>
+      </div>
+
+      {/* 4. BARRA HORARIA FLOTANTE INFERIOR */}
+      <div className="pt-2 border-t border-slate-800">
+        <div className="flex items-center justify-between mb-1.5 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+          <span>⏱️ Selecciona o desliza la hora del día:</span>
+          <span className="text-indigo-400 font-bold">{currentHour.time} ({hourlyData.length} horas)</span>
+        </div>
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+          {hourlyData.map((hr, idx) => {
+            const isSel = activeIdx === idx;
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => onSelectHour(idx)}
+                className={`py-1 px-2.5 rounded-lg text-[10px] font-black shrink-0 transition-all cursor-pointer ${
+                  isSel
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/40 scale-105 border border-indigo-400'
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700'
+                }`}
+              >
+                {hr.time}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
     </div>
   );
 };
@@ -598,22 +898,41 @@ function getRecordType(item) {
 function swimmerScaleToMeters(v) {
   if (v === null || v === undefined || v === "" || v === 0 || v === "0") return null;
   const val = parseFloat(v.toString().replace(",", "."));
+  if (isNaN(val)) return null;
   if (val === 1) return 0.05;
   if (val === 2) return 0.20;
   if (val === 3) return 0.45;
   if (val === 4) return 0.80;
   if (val === 5) return 1.20;
+  // Si ya viene como un valor decimal directo en metros (ej. 0.35 del admin)
+  if (val > 0 && val <= 3.5) return val;
   return null;
 };
 
 export default function App() {
-  const [selectedBeach, setSelectedBeach] = useState('misericordia');
+  const [selectedBeach, setSelectedBeach] = useState(() => {
+    try {
+      const saved = localStorage.getItem('openwater_active_beach');
+      if (saved && BEACHES[saved]) return saved;
+    } catch(e) {}
+    return 'misericordia';
+  });
   // Por defecto seleccionamos "Hoy" (Índice 1, ya que Ayer es 0)
   const [selectedDay, setSelectedDay] = useState(1); 
   const [beachData, setBeachData] = useState(null); 
   const [rawMarineData, setRawMarineData] = useState(null);
   const [currentNowData, setCurrentNowData] = useState(null); // Datos del momento exacto actual
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedSpotHourIdx, setSelectedSpotHourIdx] = useState(null);
+
+  const handleSelectBeach = (beachKey) => {
+    setSelectedBeach(beachKey);
+    setVisibleReportsCount(3);
+    setSelectedSpotHourIdx(null);
+    try {
+      localStorage.setItem('openwater_active_beach', beachKey);
+    } catch(e) {}
+  };
   
   // Estados de calibración y administración (Fase 2)
   const [activeTab, setActiveTab] = useState('forecast'); // 'forecast' | 'comparison'
@@ -630,52 +949,67 @@ export default function App() {
   const [latestBuoyPeriod, setLatestBuoyPeriod] = useState(null);
   const [latestBuoyDir, setLatestBuoyDir] = useState(null);
   const [latestBuoyTemp, setLatestBuoyTemp] = useState(null);
+  const [latestBuoyWindSpeed, setLatestBuoyWindSpeed] = useState(null);
+  const [latestBuoyWindDir, setLatestBuoyWindDir] = useState(null);
   const [latestBuoyDate, setLatestBuoyDate] = useState(null);
   const [latestBuoySource, setLatestBuoySource] = useState(null);
   const [showPuertosIframe, setShowPuertosIframe] = useState(false);
 
-          useEffect(() => {
-      const sortedNewestFirst = [...calibrationHistory].sort((a, b) => {
-        const tsA = parseLogTimestamp(a);
-        const tsB = parseLogTimestamp(b);
-        return tsB - tsA;
-      });
+  useEffect(() => {
+    const sortedNewestFirst = [...calibrationHistory].sort((a, b) => {
+      const tsA = parseLogTimestamp(a);
+      const tsB = parseLogTimestamp(b);
+      return tsB - tsA;
+    });
 
-      // 1. Filtrar ESTRICTAMENTE reportes de calibración física del Admin (descartar sincronizaciones y alertas de texto)
-      const adminLog = sortedNewestFirst.find(item => {
-        const orig = String(item.origenDato || '').trim();
-        const notas = String(item.notas || item.notasCalibracion || '');
-        const sens = String(item.sensaciones || '');
+    // 1. Filtrar reportes de calibración física y telemetría del Admin (descartar sincronizaciones y alertas de texto)
+    const adminLog = sortedNewestFirst.find(item => {
+      const orig = String(item.origenDato || '').trim();
+      const notas = String(item.notas || item.notasCalibracion || '');
+      const sens = String(item.sensaciones || '');
 
-        // Excluir sincronizaciones automáticas
-        if (orig.indexOf('Sincronizaci') !== -1 || notas.indexOf('Sincronizaci') !== -1 || sens.indexOf('Sincronizaci') !== -1) {
-          return false;
-        }
-
-        // Excluir estrictamente Alertas informativas de texto, Copérnico residual y avisos oficiales
-        if (orig.indexOf('Alerta') !== -1 || orig.indexOf('Copernicus') !== -1 || notas.indexOf('[ALERTA_OFICIAL]') !== -1) {
-          return false;
-        }
-
-        return orig.indexOf('Admin: Calibración') !== -1 || orig.indexOf('Web Admin') !== -1 || orig === 'Admin' || (orig.indexOf('Calibración') !== -1 && (item.boyaAltura || item.boyaTemp));
-      });
-
-      if (adminLog) {
-        const h = parseBoyaNum(adminLog.boyaAltura, 0.01, 15) !== null ? parseBoyaNum(adminLog.boyaAltura, 0.01, 15).toFixed(2) : (adminLog.realOlas ? Number(String(adminLog.realOlas).replace(',', '.')).toFixed(2) : null);
-        const t = parseBoyaNum(adminLog.boyaPeriodo, 1, 30) !== null ? parseBoyaNum(adminLog.boyaPeriodo, 1, 30).toFixed(1) : null;
-        const d = parseBoyaDir(adminLog.boyaDireccion);
-        const temp = parseBoyaNum(adminLog.boyaTemp, 5, 35) !== null ? parseBoyaNum(adminLog.boyaTemp, 5, 35).toFixed(1) : null;
-
-        setLatestBuoyHeight(h);
-        setLatestBuoyPeriod(t);
-        setLatestBuoyDir(d);
-        setLatestBuoyTemp(temp);
-
-        const dObj = adminLog.timestamp ? new Date(adminLog.timestamp) : (adminLog.fechaRegistro ? new Date(adminLog.fechaRegistro) : new Date());
-        setLatestBuoyDate(dObj);
-        setLatestBuoySource('✏️ Calibración Manual Admin');
+      // Excluir sincronizaciones automáticas
+      if (orig.indexOf('Sincronizaci') !== -1 || notas.indexOf('Sincronizaci') !== -1 || sens.indexOf('Sincronizaci') !== -1) {
+        return false;
       }
-    }, [calibrationHistory]);
+
+      // Excluir estrictamente Alertas informativas de texto, Copérnico residual y avisos oficiales
+      if (orig.indexOf('Alerta') !== -1 || orig.indexOf('Copernicus') !== -1 || notas.indexOf('[ALERTA_OFICIAL]') !== -1) {
+        return false;
+      }
+
+      return (
+        orig.indexOf('Admin: Telemetría Boya') !== -1 ||
+        orig.indexOf('Telemetría') !== -1 ||
+        orig.indexOf('Admin: Calibración') !== -1 ||
+        orig.indexOf('Web Admin') !== -1 ||
+        orig === 'Admin' ||
+        (orig.indexOf('Calibración') !== -1 && (item.boyaAltura || item.boyaTemp))
+      );
+    });
+
+    if (adminLog) {
+      const h = parseBoyaNum(adminLog.boyaAltura, 0.01, 15) !== null ? parseBoyaNum(adminLog.boyaAltura, 0.01, 15).toFixed(2) : (adminLog.realOlas ? Number(String(adminLog.realOlas).replace(',', '.')).toFixed(2) : null);
+      const t = parseBoyaNum(adminLog.boyaPeriodo, 1, 30) !== null ? parseBoyaNum(adminLog.boyaPeriodo, 1, 30).toFixed(1) : null;
+      const d = parseBoyaDir(adminLog.boyaDireccion);
+      const temp = parseBoyaNum(adminLog.boyaTemp, 5, 35) !== null ? parseBoyaNum(adminLog.boyaTemp, 5, 35).toFixed(1) : null;
+      const windSpd = adminLog.realVientoFza || (adminLog.boyaVientoKnots ? `${adminLog.boyaVientoKnots} kt` : (adminLog.appVientoNudos ? `${adminLog.appVientoNudos} kt` : null));
+      const windDirection = adminLog.realVientoDir || (adminLog.boyaVientoDir ? `${adminLog.boyaVientoDir}º` : (adminLog.appVientoDir ? `${adminLog.appVientoDir}º` : null));
+
+      if (h) setLatestBuoyHeight(h);
+      if (t) setLatestBuoyPeriod(t);
+      if (d !== null) setLatestBuoyDir(d);
+      if (temp) setLatestBuoyTemp(temp);
+      if (windSpd) setLatestBuoyWindSpeed(windSpd);
+      if (windDirection) setLatestBuoyWindDir(windDirection);
+
+      const logTs = parseLogTimestamp(adminLog);
+      const dObj = logTs > 0 ? new Date(logTs) : new Date();
+      setLatestBuoyDate(dObj);
+      const isTelemetry = (adminLog.origenDato || '').indexOf('Telemetría') !== -1;
+      setLatestBuoySource(isTelemetry ? '⚓ Telemetría Boya (Admin)' : '✏️ Calibración Manual Admin');
+    }
+  }, [calibrationHistory]);
 
   // Sincronización Inteligente de Boya Real al abrir la App (Smart Throttle 15 min)
   useEffect(() => {
@@ -757,6 +1091,9 @@ export default function App() {
   const [isSyncingBuoy, setIsSyncingBuoy] = useState(false);
   const [swimmerIsOnlyMessage, setSwimmerIsOnlyMessage] = useState(false);
   const [adminIsAlert, setAdminIsAlert] = useState(false);
+  const [adminReportMode, setAdminReportMode] = useState('full'); // 'full' | 'buoy_only' | 'alert'
+  const [adminWavePropDir, setAdminWavePropDir] = useState('');
+  const [adminAlertSeverity, setAdminAlertSeverity] = useState('warning'); // 'warning' | 'danger' | 'info'
   const [visibleReportsCount, setVisibleReportsCount] = useState(3);
 
   // Previsiones detalladas (comparador)
@@ -774,8 +1111,45 @@ export default function App() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
-  // Estado para las pestañas del Modal Admin ('factors' o 'report')
+  // Estado para las pestañas del Modal Admin ('factors', 'chart', 'compass', 'telemetry' o 'report')
   const [adminTab, setAdminTab] = useState('factors');
+  const [compassBeachKey, setCompassBeachKey] = useState('misericordia');
+  const [compassCustomFacing, setCompassCustomFacing] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_compass_facing') || '{}');
+    } catch(e) { return {}; }
+  });
+  const [compassCustomSectors, setCompassCustomSectors] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_compass_sectors') || '{}');
+    } catch(e) { return {}; }
+  });
+  const [compassZoom, setCompassZoom] = useState(16);
+  const [compassOffsets, setCompassOffsets] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_compass_offsets') || '{}');
+    } catch(e) { return {}; }
+  });
+  const [compassCopiedToast, setCompassCopiedToast] = useState(false);
+  const [compassSavedToast, setCompassSavedToast] = useState(false);
+  const [isSavingToSheets, setIsSavingToSheets] = useState(false);
+  const [cloudConfigPlayas, setCloudConfigPlayas] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_config_playas') || '{}');
+    } catch(e) { return {}; }
+  });
+  const [cloudConfigSectores, setCloudConfigSectores] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_config_sectores') || '{}');
+    } catch(e) { return {}; }
+  });
+  const [cloudConfigAlertas, setCloudConfigAlertas] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('openwater_config_alertas') || '[]');
+    } catch(e) { return []; }
+  });
+  const [telemetryEngineMode, setTelemetryEngineMode] = useState('v2');
+  const [telemetryBeachFilter, setTelemetryBeachFilter] = useState('misericordia');
   const [expandedSectorAudit, setExpandedSectorAudit] = useState({});
   const [discardedReportIds, setDiscardedReportIds] = useState(() => {
     try {
@@ -836,21 +1210,75 @@ export default function App() {
   const [hoveredChartIndex, setHoveredChartIndex] = useState(null);
 
 
-  // Helper para interpretar marcas de tiempo de logs en diversos formatos (ISO, DD/MM/YYYY, etc.)
+  // Helper para interpretar marcas de tiempo de logs en diversos formatos, priorizando la fecha y hora REAL de la sesión
   function parseLogTimestamp(log) {
     if (!log) return 0;
-    const raw = log.fechaRegistro || log.fecha || log.timestamp || "";
+    
+    // 1. Prioridad: ¿Viene la fecha completa en horaNado o fechaHora? (Formato habitual en Google Sheets: "YYYY-MM-DD HH:mm")
+    const rawHora = String(log.horaNado || log.hora || log.fechaHora || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(rawHora)) {
+      const parts = rawHora.split(/[ T]/);
+      const datePart = parts[0];
+      const timePart = parts[1] || '12:00';
+      const dp = datePart.split('-');
+      const tp = timePart.split(':');
+      const y = parseInt(dp[0], 10);
+      const m = parseInt(dp[1], 10) - 1;
+      const d = parseInt(dp[2], 10);
+      const h = parseInt(tp[0] || '12', 10);
+      const min = parseInt(tp[1] || '0', 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m, d, h, min).getTime();
+      }
+    }
+
+    // 2. Prioridad: fechaNado o fecha explícita combinada con horaNado
+    const sessionDate = log.fechaNado || log.fecha;
+    const sessionHour = log.horaNado || log.hora;
+    if (sessionDate) {
+      const dateStr = String(sessionDate).trim();
+      const timeStr = String(sessionHour || '12:00').trim();
+      const p = dateStr.split(/[-/]/);
+      if (p.length === 3) {
+        let year, month, day;
+        if (p[0].length === 4) { // YYYY-MM-DD
+          year = parseInt(p[0], 10);
+          month = parseInt(p[1], 10) - 1;
+          day = parseInt(p[2], 10);
+        } else { // DD/MM/YYYY
+          day = parseInt(p[0], 10);
+          month = parseInt(p[1], 10) - 1;
+          year = parseInt(p[2], 10);
+        }
+        const timeParts = timeStr.replace(/.*[ T]/, '').split(':');
+        const hour = timeParts[0] ? parseInt(timeParts[0], 10) : 12;
+        const min = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
+        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+          return new Date(year, month, day, hour, min).getTime();
+        }
+      }
+    }
+
+    // 3. Fallback a timestamp, fechaRegistro o fechaHora
+    const raw = log.timestamp || log.fechaRegistro || log.fechaHora || "";
     if (!raw) return 0;
     if (!isNaN(Number(raw)) && Number(raw) > 1000000000) return Number(raw);
 
     const direct = Date.parse(raw);
     if (!isNaN(direct)) return direct;
 
-    const p = String(raw).split(/[/, :]+/);
+    const p = String(raw).split(/[/, :\-T]+/);
     if (p.length >= 3) {
-      const day = parseInt(p[0], 10);
-      const month = parseInt(p[1], 10) - 1;
-      const year = parseInt(p[2], 10);
+      let year, month, day;
+      if (p[0].length === 4) { // YYYY-MM-DD
+        year = parseInt(p[0], 10);
+        month = parseInt(p[1], 10) - 1;
+        day = parseInt(p[2], 10);
+      } else {
+        day = parseInt(p[0], 10);
+        month = parseInt(p[1], 10) - 1;
+        year = parseInt(p[2], 10);
+      }
       const hour = p[3] ? parseInt(p[3], 10) : 0;
       const min = p[4] ? parseInt(p[4], 10) : 0;
       const sec = p[5] ? parseInt(p[5], 10) : 0;
@@ -1113,9 +1541,9 @@ export default function App() {
         }
       };
 
-      // 1. SATÉLITE CLIMA (Añadimos visibility y dew_point_2m)
+      // 1. SATÉLITE CLIMA (Añadimos visibility, dew_point_2m y cape para tormentas convectivas)
       try {
-        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,dew_point_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,precipitation,weather_code,uv_index,cloud_cover,visibility&timezone=Europe%2FMadrid&past_days=2`);
+        weatherJson = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${beach.lat}&longitude=${beach.lon}&hourly=temperature_2m,dew_point_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,precipitation,weather_code,uv_index,cloud_cover,visibility,cape&timezone=Europe%2FMadrid&past_days=2`);
       } catch (e) {
         console.warn("Satélite de clima caído. Activando auto-rescate.", e);
         localClimateDown = true;
@@ -1182,10 +1610,11 @@ export default function App() {
 
           let waterTemp = predictedWaterTemp;
 
-          // ----- CÁLCULO DE CALIDAD DEL AGUA (Aguas Sucias) -----
+          // ----- CÁLCULO DE CALIDAD DEL AGUA (Memoria de 48h de Depuración + Textos Prudentes) -----
           let rainSum = 0;
           if (!localClimateDown && weatherJson?.hourly?.precipitation) {
-              for (let k = weatherBaseIndex - 24; k <= weatherBaseIndex + 21; k++) {
+              // Ventana de 48 horas hacia atrás desde este día para memoria de depuración marina
+              for (let k = Math.max(0, weatherBaseIndex - 48); k <= weatherBaseIndex + 21; k++) {
                   if (k >= 0 && k < weatherJson.hourly.precipitation.length) {
                       rainSum += weatherJson.hourly.precipitation[k] || 0;
                   }
@@ -1203,15 +1632,15 @@ export default function App() {
               wqBg = "bg-slate-100 border-slate-200";
               wqDesc = "Satélite desconectado.";
           } else if (rainSum >= 2.0) {
-              wqStatus = "Riesgo Alto";
-              wqColor = "text-red-600";
+              wqStatus = "Riesgo Alto / Posibilidad Aliviaderos";
+              wqColor = "text-red-600 font-bold";
               wqBg = "bg-red-50 border-red-200";
-              wqDesc = `Aliviaderos activos. Lluvia acum: ${rainSum.toFixed(1)}mm.`;
+              wqDesc = `Arrastre fluvial activo, posibilidad de aliviaderos abiertos y de contaminación de aguas en Misericordia (Lluvia 48h: ${rainSum.toFixed(1)}mm).`;
           } else if (rainSum >= 0.5) {
-              wqStatus = "Precaución";
-              wqColor = "text-amber-600";
+              wqStatus = "Precaución / Posible Arrastre";
+              wqColor = "text-amber-600 font-bold";
               wqBg = "bg-amber-50 border-amber-200";
-              wqDesc = `Posible arrastre. Lluvia acum: ${rainSum.toFixed(1)}mm.`;
+              wqDesc = `Posibilidad de turbidez por arrastre fluvial ligero (${rainSum.toFixed(1)}mm en 48h).`;
           }
 
           // ----- DETECCION DE MAREAS DEL DIA (24 HORAS DE ESTE OFFSET) -----
@@ -1454,9 +1883,27 @@ export default function App() {
             if (period < 4.5 && effectiveWaveHeight > 0.5) hourScore -= 15;
             if (period < 3.5 && effectiveWaveHeight > 0.6) hourScore -= 25;
 
-            // Regla: La Trampa del Levante (v10.x)
+            // Umbrales dinámicos de alerta (desde CONFIG_ALERTAS_REGLAS con fallback seguro)
+            const dynFalsaCalmaMinHs = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['falsa_calma_hs_min'] || cloudConfigAlertas['FALSA_CALMA_MIN_HS'])))
+              ? Number(cloudConfigAlertas['falsa_calma_hs_min'] || cloudConfigAlertas['FALSA_CALMA_MIN_HS']) : 0.20;
+            const dynTaroDeltaT = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['taro_delta_t'] || cloudConfigAlertas['TARO_DELTAT'])))
+              ? Number(cloudConfigAlertas['taro_delta_t'] || cloudConfigAlertas['TARO_DELTAT']) : 2.5;
+            const dynTaroHum = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['taro_humidity_min'] || cloudConfigAlertas['TARO_HUMIDITY'])))
+              ? Number(cloudConfigAlertas['taro_humidity_min'] || cloudConfigAlertas['TARO_HUMIDITY']) : 75;
+            const dynCapeMin = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['cape_min'] || cloudConfigAlertas['CAPE_MIN'])))
+              ? Number(cloudConfigAlertas['cape_min'] || cloudConfigAlertas['CAPE_MIN']) : 1200;
+            const dynWindTerral = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['wind_terral_min'] || cloudConfigAlertas['WIND_TERRAL_MIN'])))
+              ? Number(cloudConfigAlertas['wind_terral_min'] || cloudConfigAlertas['WIND_TERRAL_MIN']) : 15;
+            const dynWindLavadora = (cloudConfigAlertas && !isNaN(Number(cloudConfigAlertas['wind_lavadora_min'] || cloudConfigAlertas['WIND_LAVADORA_MIN'])))
+              ? Number(cloudConfigAlertas['wind_lavadora_min'] || cloudConfigAlertas['WIND_LAVADORA_MIN']) : 12;
+
+            // Regla: La Trampa del Levante (v10.x - Calibrada en Hito 19 / Dinámica en Hito 21)
+            // Excluir olas < dynFalsaCalmaMinHs (baño plácido real); exigir Tp > 4.0s y viento suave < 8kt de Levante
             const isLevanteComponent = (waveDir >= 60 && waveDir <= 120) || (!localClimateDown && windDir >= 60 && windDir <= 120);
-            if (isLevanteComponent && effectiveWaveHeight < 0.4) {
+            const isCalmSurface = localClimateDown ? true : windKnots < 8;
+            const hasUnderlyingSwell = period > 4.0 && effectiveWaveHeight >= dynFalsaCalmaMinHs && effectiveWaveHeight < 0.50;
+
+            if (isLevanteComponent && isCalmSurface && hasUnderlyingSwell) {
                 hourScore = Math.max(0, hourScore - 10);
                 if (!localRule || localRule === "Escudo Activo" || localRule === "Magón") {
                     localRule = "Falsa Calma: Corriente de Fondo";
@@ -1482,7 +1929,7 @@ export default function App() {
 
                 // Lavadora
                 const isPoniente = windDir > 202.5 && windDir <= 292.5;
-                if (isPoniente && displayHour >= 12 && displayHour <= 18 && windKnots > 12) {
+                if (isPoniente && displayHour >= 12 && displayHour <= 18 && windKnots > dynWindLavadora) {
                     hourScore -= 25;
                     localRule = "Lavadora";
                     ruleColor = "text-amber-600";
@@ -1490,7 +1937,7 @@ export default function App() {
 
                 // Riesgo Deriva Terral
                 const isNorte = windDir > 315 || windDir <= 45;
-                if (isNorte && windKnots > 15) {
+                if (isNorte && windKnots > dynWindTerral) {
                     hourScore -= 25;
                     localRule = "Riesgo Deriva";
                     ruleColor = "text-red-600";
@@ -1575,12 +2022,16 @@ export default function App() {
               const isSeaBreezeWind = windDir >= 80 && windDir <= 220; // Vientos de componente marítima (Levante, Sur, Sudeste)
               const isGentleWind = windKnots >= 3 && windKnots <= 12; // Viento suave que empuja pero no dispersa la niebla
               const humidity = weatherJson?.hourly?.relative_humidity_2m?.[i];
-              
-              if (deltaT >= 2.0 && isSeaBreezeWind && isGentleWind) {
-                taroRisk = "Alto";
-              } else if (deltaT >= 0.0 && isSeaBreezeWind && isGentleWind) {
-                taroRisk = "Moderado";
-              } else if ((deltaT >= -1.0 || (humidity !== undefined && humidity >= 80)) && isSeaBreezeWind && isGentleWind) {
+              const vis = visibility !== undefined ? visibility : 10000;
+
+              // Criterios Calibrados: Humedad >= dynTaroHum, DeltaT >= dynTaroDeltaT y confirmación de visibilidad de satélite
+              if (deltaT >= dynTaroDeltaT && isSeaBreezeWind && isGentleWind && (humidity >= dynTaroHum || vis < 2500)) {
+                if (vis < 1000) {
+                  taroRisk = "Alto";
+                } else {
+                  taroRisk = "Moderado";
+                }
+              } else if (deltaT >= (dynTaroDeltaT - 1.0) && isSeaBreezeWind && isGentleWind && humidity >= dynTaroHum && vis < 4000) {
                 taroRisk = "Bruma";
               }
             }
@@ -1612,7 +2063,13 @@ export default function App() {
                 }
             }
 
-            // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos y Niebla)
+            // DETECCION DE INESTABILIDAD CONVECTIVA ESTIVAL (Índice CAPE + Disparador Obligatorio de Nubes/Lluvia)
+            const hourCape = localClimateDown ? 0 : (weatherJson?.hourly?.cape?.[i] || 0);
+            const isSummerSeason = (new Date().getMonth() >= 5 && new Date().getMonth() <= 9); // Junio - Octubre
+            const hasCloudOrRainTrigger = (!localClimateDown && (cloudCover >= 40 || rainProb >= 20));
+            const hasHighCapeRisk = isSummerSeason && hourCape >= dynCapeMin && hasCloudOrRainTrigger;
+
+            // SOBRESCRITURAS POR PELIGRO MÁXIMO (Rayos, Niebla y CAPE Convectivo)
             if (isThunderstorm) {
                 hourScore = 0;
                 localRule = "Tormenta ⚡";
@@ -1621,6 +2078,9 @@ export default function App() {
                 hourScore = Math.max(0, hourScore - 40); // Castigo severo por pérdida de visibilidad
                 localRule = "Niebla 🌫️";
                 ruleColor = "text-slate-600 bg-slate-200 border-slate-300 shadow-sm";
+            } else if (hasHighCapeRisk && (!localRule || localRule === "Escudo Activo" || localRule === "Magón")) {
+                localRule = "Riesgo Tormenta Convectiva ⚡";
+                ruleColor = "text-amber-900 bg-amber-100 border border-amber-300 shadow-sm";
             }
 
             hourScore = Math.max(0, Math.min(100, Math.round(hourScore)));
@@ -1690,7 +2150,8 @@ export default function App() {
               dewPoint: dewPoint,
               taroRisk: taroRisk,
               visText: visText,
-              visColor: visColor
+              visColor: visColor,
+              cape: hourCape
             });
           }
 
@@ -1836,6 +2297,55 @@ export default function App() {
           if (vCount !== undefined && vCount !== null) {
             setTotalVisits(Number(vCount));
           }
+        }
+
+        // Cargar Configuración Dinámica de Google Sheets (Data-Driven con Tolerancia 100% a Fallos)
+        const incomingPlayas = (json && json.config && json.config.playas) || null;
+        if (incomingPlayas && Object.keys(incomingPlayas).length > 0) {
+          setCloudConfigPlayas(incomingPlayas);
+          try { localStorage.setItem('openwater_config_playas', JSON.stringify(incomingPlayas)); } catch(e) {}
+        }
+
+        const incomingSectores = (json && (json.config_sectores || json.configSectores)) || (json && json.config && json.config.sectores) || null;
+        if (incomingSectores && Object.keys(incomingSectores).length > 0) {
+          setCloudConfigSectores(incomingSectores);
+          try { localStorage.setItem('openwater_config_sectores', JSON.stringify(incomingSectores)); } catch(e) {}
+
+          // Sincronizar rumbos de costa (facing) y sectores personalizados si vienen desde Sheets
+          const newFacing = {};
+          const newSectors = {};
+          Object.keys(incomingSectores).forEach(bKey => {
+            const bConf = incomingSectores[bKey];
+            if (bConf && bConf.facing !== null && bConf.facing !== undefined && !isNaN(Number(bConf.facing))) {
+              newFacing[bKey] = Number(bConf.facing);
+            }
+            if (bConf && Array.isArray(bConf.sectors) && bConf.sectors.length > 0) {
+              const secObj = {};
+              bConf.sectors.forEach(s => {
+                const sName = String(s.name || '').toLowerCase();
+                if (sName.includes('anortado') && s.max !== null && s.max !== undefined) secObj.lev_anortado = Number(s.max);
+                else if (sName.includes('levante') && s.max !== null && s.max !== undefined) secObj.levante = Number(s.max);
+                else if (sName.includes('sur') && s.max !== null && s.max !== undefined) secObj.sur = Number(s.max);
+                else if (sName.includes('poniente') && s.max !== null && s.max !== undefined) secObj.poniente = Number(s.max);
+              });
+              if (Object.keys(secObj).length > 0) {
+                newSectors[bKey] = secObj;
+              }
+            }
+          });
+
+          if (Object.keys(newFacing).length > 0) {
+            setCompassCustomFacing(prev => ({ ...newFacing, ...prev }));
+          }
+          if (Object.keys(newSectors).length > 0) {
+            setCompassCustomSectors(prev => ({ ...newSectors, ...prev }));
+          }
+        }
+
+        const incomingAlertas = (json && (json.config_alertas || json.configAlertas)) || (json && json.config && json.config.alertas) || null;
+        if (incomingAlertas && (typeof incomingAlertas === 'object') && Object.keys(incomingAlertas).length > 0) {
+          setCloudConfigAlertas(incomingAlertas);
+          try { localStorage.setItem('openwater_config_alertas', JSON.stringify(incomingAlertas)); } catch(e) {}
         }
 
         // 1. Cargar factores y marcas de tiempo locales guardadas en localStorage
@@ -2013,6 +2523,15 @@ export default function App() {
       }
     }
 
+    const isAlertMode = adminReportMode === 'alert' || adminIsAlert;
+    const isBuoyOnlyMode = adminReportMode === 'buoy_only';
+
+    const originLabel = isAlertMode 
+      ? "Admin: Alerta" 
+      : isBuoyOnlyMode 
+        ? "Admin: Telemetría Boya" 
+        : "Admin: Calibración";
+
     const slotId = generateCanonicalSlotId(adminPlaya, adminFechaNado, adminHoraNado);
     const payload = {
       idRegistro: slotId,
@@ -2021,19 +2540,19 @@ export default function App() {
       fechaNado: adminFechaNado,
       horaNado: adminHoraNado,
       playa: adminPlaya,
-      realOlas: adminIsAlert ? "" : adminRealOlas,
-      realResaca: adminIsAlert ? "" : adminRealResaca,
-      realCorriente: adminIsAlert ? "" : adminRealCorriente,
+      realOlas: (isAlertMode || isBuoyOnlyMode) ? "" : adminRealOlas,
+      realResaca: (isAlertMode || isBuoyOnlyMode) ? "" : adminRealResaca,
+      realCorriente: (isAlertMode || isBuoyOnlyMode) ? "" : adminRealCorriente,
       realVientoFza: adminRealVientoFza,
       realVientoDir: adminRealVientoDir,
       sensaciones: adminSensaciones,
-      origenDato: adminIsAlert ? "Admin: Alerta" : "Admin: Calibración",
+      origenDato: originLabel,
       appScore: hourForecast ? hourForecast.hourScore : "",
       appOlas: hourForecast ? hourForecast.swellH : "",
       appEnergia: hourForecast ? hourForecast.waveEnergy : "",
       appVientoNudos: hourForecast ? hourForecast.windS : "",
       appVientoDir: hourForecast ? hourForecast.windDir : "",
-      notasCalibracion: adminIsAlert ? `[ALERTA_OFICIAL] ${adminNotas}` : adminNotas,
+      notasCalibracion: isAlertMode ? `[ALERTA_OFICIAL] [${(adminAlertSeverity || 'warning').toUpperCase()}] ${adminNotas}` : adminNotas,
       boyaAltura: adminBoyaAltura || (latestBuoyHeight ? latestBuoyHeight : (ecmwfVal || "")), 
       boyaPeriodo: adminBoyaPeriodo || (latestBuoyPeriod || ""),
       boyaDireccion: adminBoyaDireccion || ((latestBuoyDir && Number(latestBuoyDir) !== 110) ? latestBuoyDir : (hourForecast && hourForecast.swellDir ? hourForecast.swellDir : "")),
@@ -2051,8 +2570,31 @@ export default function App() {
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(payload)
       });
+
+      // Actualización Inmediata en Pantalla (Solo si la sesión es de hoy o más reciente que la lectura actual)
+      if (!isAlertMode) {
+        const eventTs = parseLogTimestamp({ fechaNado: adminFechaNado, horaNado: adminHoraNado });
+        const currentTs = latestBuoyDate ? new Date(latestBuoyDate).getTime() : 0;
+
+        // Solo sobreescribir la tarjeta viva si el evento enviado es de hoy o más reciente que la lectura visible
+        if (eventTs >= currentTs || !currentTs) {
+          if (adminBoyaAltura) setLatestBuoyHeight(parseFloat(adminBoyaAltura.replace(',', '.')).toFixed(2));
+          if (adminBoyaPeriodo) setLatestBuoyPeriod(adminBoyaPeriodo);
+          if (adminBoyaDireccion) setLatestBuoyDir(Number(adminBoyaDireccion));
+          if (adminBoyaTemp) setLatestBuoyTemp(adminBoyaTemp);
+          if (adminRealVientoFza) setLatestBuoyWindSpeed(adminRealVientoFza);
+          if (adminRealVientoDir) setLatestBuoyWindDir(adminRealVientoDir);
+          setLatestBuoyDate(eventTs > 0 ? new Date(eventTs) : new Date());
+          setLatestBuoySource(isBuoyOnlyMode ? '⚓ Telemetría Boya (Admin)' : '✏️ Calibración Manual Admin');
+        }
+      }
       
-      setReportStatus({ type: 'success', text: '¡Calibración enviada con éxito a Google Sheets!' });
+      const successMsg = isAlertMode 
+        ? '¡Alerta oficial publicada con éxito en la web!' 
+        : isBuoyOnlyMode 
+          ? '¡Telemetría de boya actualizada en vivo con éxito!' 
+          : '¡Calibración de nado + boya enviada con éxito a Google Sheets!';
+      setReportStatus({ type: 'success', text: successMsg });
       setAdminSensaciones('');
       setAdminNotas('');
       setAdminIsAlert(false);
@@ -2061,6 +2603,7 @@ export default function App() {
       setAdminBoyaDireccion('');
       setAdminBoyaTemp('');
       setAdminVientoMs('');
+      setAdminWavePropDir('');
       
       // Esperar 2.5 segundos para dar tiempo a que Google Sheets inserte la fila antes de refrescar el historial
       setTimeout(() => {
@@ -2226,6 +2769,159 @@ export default function App() {
 
   const currentDayData = beachData?.[selectedDay] ?? null;
 
+  // Renderizador de Widgets de Utilidad (Estado Real, Webcams en Directo y Socorrista Virtual)
+  const renderUtilityCards = () => (
+    <>
+      {/* Tarjeta: Estado Real (Lectura Física) */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+            <Anchor size={16} className="text-blue-500"/> Estado Real
+          </h3>
+          <span className="text-[10px] text-slate-400 font-medium">Lectura Física</span>
+        </div>
+        
+        <div className="space-y-3">
+          <a 
+            href="https://portus.puertos.es/#/" 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              </span>
+              <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Boya de Málaga</span>
+            </div>
+            <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
+          </a>
+
+          <a 
+            href="https://tablademareas.com/es/malaga/malaga" 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Droplets size={16} className="text-blue-400" />
+              <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Tabla de Mareas</span>
+            </div>
+            <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
+          </a>
+        </div>
+      </div>
+
+      {/* Tarjeta: Webcams en Directo */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+        <div className="flex justify-between items-center mb-3.5">
+          <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
+            <Video size={16} className="text-rose-500"/> Webcams en Directo
+          </h3>
+          <span className="text-[10px] text-rose-600 font-bold flex items-center gap-1.5 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-100 animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> EN VIVO
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-2.5">
+          <a 
+            href="https://meteo365.es/livecams/malaga-misericordia.php" 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-rose-200 hover:bg-rose-50/40 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">📹</span>
+              <div>
+                <span className="font-bold text-slate-700 text-xs block group-hover:text-rose-700">La Misericordia</span>
+                <span className="text-[9px] text-slate-400 block">Málaga • Paseo Antonio Banderas</span>
+              </div>
+            </div>
+            <ArrowUpRight size={15} className="text-slate-400 group-hover:text-rose-500 shrink-0" />
+          </a>
+
+          <a 
+            href="https://meteo365.es/livecams/malaga.php" 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-rose-200 hover:bg-rose-50/40 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">📹</span>
+              <div>
+                <span className="font-bold text-slate-700 text-xs block group-hover:text-rose-700">La Malagueta</span>
+                <span className="text-[9px] text-slate-400 block">Málaga • Bahía de Málaga</span>
+              </div>
+            </div>
+            <ArrowUpRight size={15} className="text-slate-400 group-hover:text-rose-500 shrink-0" />
+          </a>
+
+          <a 
+            href="https://meteo365.es/livecams/torremolinos-bajondillo.php" 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-rose-200 hover:bg-rose-50/40 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">📹</span>
+              <div>
+                <span className="font-bold text-slate-700 text-xs block group-hover:text-rose-700">El Bajondillo</span>
+                <span className="text-[9px] text-slate-400 block">Torremolinos • Costa del Sol</span>
+              </div>
+            </div>
+            <ArrowUpRight size={15} className="text-slate-400 group-hover:text-rose-500 shrink-0" />
+          </a>
+        </div>
+      </div>
+
+      {/* Tarjeta: Socorrista Virtual */}
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-5">
+          <Bot size={80} />
+        </div>
+        <div className="flex justify-between items-center mb-4 relative z-10">
+          <h3 className="font-bold text-blue-900 flex items-center gap-2">
+            <Bot className="text-blue-600" size={20} />
+            Socorrista Virtual
+          </h3>
+          <span className="text-[10px] text-blue-400/80 font-medium bg-blue-100/50 px-2 py-1 rounded-md">IA Generativa</span>
+        </div>
+        
+        <div className="relative z-10">
+          {!hasRequestedAi ? (
+            <button 
+              onClick={handleAskExpert}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Bot size={18} /> Consultar previsión 
+            </button>
+          ) : isAiLoading ? (
+            <div className="flex items-center gap-2 text-blue-600/70 p-2">
+              <Loader2 size={18} className="animate-spin" />
+              <span className="text-sm font-bold">El experto está evaluando la playa...</span>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-blue-900 text-sm leading-relaxed font-medium bg-white/60 p-4 rounded-xl border border-blue-100/50 shadow-sm">
+                "{expertAdvice}"
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (expertAdvice) navigator.clipboard?.writeText(expertAdvice).catch(() => {});
+                }}
+                className="w-full sm:w-auto text-xs font-bold text-blue-700 bg-white/80 hover:bg-white border border-blue-200 rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <Copy size={14} /> Copiar consejo
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-slate-100 font-sans flex flex-col">
       
@@ -2280,10 +2976,7 @@ export default function App() {
               <MapPin className="text-slate-400 ml-1 md:ml-2 shrink-0" size={20} />
               <select 
                 value={selectedBeach} 
-                onChange={(e) => {
-                  setSelectedBeach(e.target.value);
-                  setVisibleReportsCount(3);
-                }}
+                onChange={(e) => handleSelectBeach(e.target.value)}
                 className="bg-transparent font-bold text-slate-700 py-1.5 pr-4 pl-1 md:pl-2 outline-none w-full md:min-w-[14rem] md:max-w-[22rem] cursor-pointer text-ellipsis overflow-hidden"
               >
                 <option value="misericordia">La Misericordia</option>
@@ -2508,83 +3201,74 @@ export default function App() {
                           {latestBuoyTemp ? `${latestBuoyTemp}°C` : '—'}
                         </strong>
                       </div>
+
+                      {/* 💨 Casilla de Viento en Boya (Fuerza + Dirección) */}
+                      <div className="col-span-2 bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60 flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 shrink-0">
+                            <Wind size={14} className="text-cyan-400" />
+                          </div>
+                          <div className="truncate">
+                            <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Viento en Boya</span>
+                            <strong className="text-xs font-black text-cyan-300 block truncate">
+                              {latestBuoyWindSpeed ? `${latestBuoyWindSpeed}` : '—'} {latestBuoyWindDir ? `· ${latestBuoyWindDir}` : ''}
+                            </strong>
+                          </div>
+                        </div>
+                        <span className="text-[8.5px] font-bold text-cyan-200 bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-800/60 shrink-0">
+                          💨 {latestBuoyWindDir || 'Telemetría'}
+                        </span>
+                      </div>
                     </div>
                   )}
 
                   <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
-                                          <span>
-                        Origen: {showPuertosIframe 
-                          ? '📡 Puertos del Estado (Estación 2056 - Málaga)' 
-                          : (latestBuoySource || '✏️ Calibración Manual Admin')}
-                      </span>
-                      <span>Última lectura: {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'Sin reporte hoy'}</span>
+                    <span>
+                      Origen: {showPuertosIframe 
+                        ? '📡 Puertos del Estado (Estación 2056 - Málaga)' 
+                        : (latestBuoySource || '✏️ Calibración Manual Admin')}
+                    </span>
+                    <span>Última lectura: {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'Sin reporte hoy'}</span>
                   </div>
                 </div>
 
-                {/* Tarjeta 2: Temperaturas */}
-                <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4 ${isClimateDown ? 'opacity-70' : ''}`}>
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
+                {/* Tarjeta 2: Temperaturas (1 Sola Fila Compacta) */}
+                <div className={`bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-2.5 ${isClimateDown ? 'opacity-70' : ''}`}>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
                     <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
-                      <Thermometer size={16} className="text-blue-500"/> Temperaturas
+                      <Thermometer size={15} className="text-blue-500"/> Temperaturas
                     </h3>
                     <span className="text-[10px] text-indigo-500 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100/50">
                       Previsión vs Real
                     </span>
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Agua / Mar */}
-                    <div className="space-y-2 text-left">
-                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Temperatura del Agua</span>
-                      <div className="grid grid-cols-2 gap-2">
-                        {/* Prevista */}
-                        <div className="bg-blue-50/40 border border-blue-100/50 rounded-xl p-2.5 text-left">
-                          <span className="block text-[8px] font-bold text-blue-500 uppercase tracking-wider">Satélite</span>
-                          <span className="text-base font-black text-blue-700">{currentDayData.temps.water}ºC</span>
-                          <span className="block text-[8px] text-blue-400 font-semibold mt-0.5">Modelo previsto</span>
-                        </div>
-                        
-                        {/* Real (Boya) */}
-                        <div className="bg-indigo-50/40 border border-indigo-100/50 rounded-xl p-2.5 text-left relative overflow-hidden">
-                          <div className="flex justify-between items-center">
-                            <span className="block text-[8px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
-                              ⚓ Boya Real
-                            </span>
-                            <button
-                              type="button"
-                              onClick={handleSyncBuoy}
-                              disabled={isSyncingBuoy}
-                              title="Sincronizar boya en tiempo real"
-                              className="text-indigo-500 hover:text-indigo-700 transition-colors disabled:opacity-50 p-0.5"
-                            >
-                              <RefreshCw size={10} className={isSyncingBuoy ? "animate-spin" : ""} />
-                            </button>
-                          </div>
-                          <span className="text-base font-black text-indigo-800 block mt-0.5">
-                            {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '— ºC'}
-                          </span>
-                          <span className="block text-[8px] text-indigo-500/70 font-semibold mt-0.5">
-                            {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate).split(',')[0]}` : 'Sin datos'}
-                          </span>
-                        </div>
-                      </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* Agua Satélite */}
+                    <div className="bg-blue-50/50 border border-blue-100/70 rounded-xl p-2 text-left">
+                      <span className="block text-[8px] font-bold text-blue-500 uppercase tracking-wider truncate">🛰️ Agua (Satélite)</span>
+                      <span className="text-sm sm:text-base font-black text-blue-700 block mt-0.5">{currentDayData.temps.water}ºC</span>
+                      <span className="block text-[7.5px] text-blue-400 font-semibold truncate mt-0.5">Modelo previsto</span>
                     </div>
                     
-                    {/* Aire */}
-                    <div className="space-y-2 text-left flex flex-col justify-between">
-                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Temperatura del Aire</span>
-                      <div className="bg-orange-50/40 border border-orange-100/50 rounded-xl p-2.5 flex items-center justify-between h-full">
-                        <div>
-                          <span className="block text-[8px] font-bold text-orange-500 uppercase tracking-wider">Ambiente ({currentDayData.dayLabel.split(' ')[0]})</span>
-                          <span className={`text-base font-black ${isClimateDown ? 'text-slate-400' : 'text-orange-700'}`}>
-                            {currentDayData.temps.air === "-" ? "- ºC" : `${currentDayData.temps.air}ºC`}
-                          </span>
-                          <span className="block text-[8px] text-orange-400 font-semibold mt-0.5">Predicción Modelo</span>
-                        </div>
-                        <div className={isClimateDown ? "text-slate-400" : "text-orange-500"}>
-                          <Sun size={24}/>
-                        </div>
-                      </div>
+                    {/* Agua Boya Real (Sin icono de refresco falso) */}
+                    <div className="bg-indigo-50/50 border border-indigo-100/70 rounded-xl p-2 text-left">
+                      <span className="block text-[8px] font-bold text-indigo-600 uppercase tracking-wider truncate">⚓ Agua (Boya Real)</span>
+                      <span className="text-sm sm:text-base font-black text-indigo-800 block mt-0.5">
+                        {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '— ºC'}
+                      </span>
+                      <span className="block text-[7.5px] text-indigo-500/80 font-semibold truncate mt-0.5">
+                        {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate).split(',')[0]}` : 'Sin datos'}
+                      </span>
+                    </div>
+
+                    {/* Aire Ambiente */}
+                    <div className="bg-orange-50/50 border border-orange-100/70 rounded-xl p-2 text-left">
+                      <span className="block text-[8px] font-bold text-orange-500 uppercase tracking-wider truncate">☀️ Aire ({currentDayData.dayLabel.split(' ')[0]})</span>
+                      <span className={`text-sm sm:text-base font-black block mt-0.5 ${isClimateDown ? 'text-slate-400' : 'text-orange-700'}`}>
+                        {currentDayData.temps.air === "-" ? "- ºC" : `${currentDayData.temps.air}ºC`}
+                      </span>
+                      <span className="block text-[7.5px] text-orange-400 font-semibold truncate mt-0.5">Predicción</span>
                     </div>
                   </div>
                 </div>
@@ -2621,48 +3305,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 4: Enlaces Oficiales (Boya y Mareas) */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
-                      <Anchor size={16} className="text-blue-500"/> Estado Real
-                    </h3>
-                    <span className="text-[10px] text-slate-400 font-medium">Lectura Física</span>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <a 
-                      href="https://portus.puertos.es/#/" 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="relative flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                        </span>
-                        <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Boya de Málaga</span>
-                      </div>
-                      <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
-                    </a>
-
-                    <a 
-                      href="https://tablademareas.com/es/malaga/malaga" 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Droplets size={16} className="text-blue-400" />
-                        <span className="font-bold text-slate-700 text-sm group-hover:text-blue-700">Tabla de Mareas</span>
-                      </div>
-                      <ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-500" />
-                    </a>
-                  </div>
-                </div>
-
-                {/* Tarjeta 5: Calidad del Agua, Medusas y Mareas (Grid triple en Tablet, vertical en PC/Móvil) */}
+                {/* Tarjeta 4: Calidad del Agua, Medusas y Mareas (Grid triple en Tablet, vertical en PC/Móvil) */}
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-1 gap-4">
                   {/* Calidad del Agua */}
                   <div className={`bg-white p-5 rounded-2xl shadow-sm border border-slate-200 ${isClimateDown ? 'opacity-70' : ''}`}>
@@ -2751,49 +3394,9 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 6: Socorrista Virtual */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-4 opacity-5">
-                    <Bot size={80} />
-                  </div>
-                  <div className="flex justify-between items-center mb-4 relative z-10">
-                    <h3 className="font-bold text-blue-900 flex items-center gap-2">
-                      <Bot className="text-blue-600" size={20} />
-                      Socorrista Virtual
-                    </h3>
-                    <span className="text-[10px] text-blue-400/80 font-medium bg-blue-100/50 px-2 py-1 rounded-md">IA Generativa</span>
-                  </div>
-                  
-                  <div className="relative z-10">
-                    {!hasRequestedAi ? (
-                      <button 
-                        onClick={handleAskExpert}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
-                      >
-                        <Bot size={18} /> Consultar previsión 
-                      </button>
-                    ) : isAiLoading ? (
-                      <div className="flex items-center gap-2 text-blue-600/70 p-2">
-                        <Loader2 size={18} className="animate-spin" />
-                        <span className="text-sm font-bold">El experto está evaluando la playa...</span>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <p className="text-blue-900 text-sm leading-relaxed font-medium bg-white/60 p-4 rounded-xl border border-blue-100/50 shadow-sm">
-                          "{expertAdvice}"
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (expertAdvice) navigator.clipboard?.writeText(expertAdvice).catch(() => {});
-                          }}
-                          className="w-full sm:w-auto text-xs font-bold text-blue-700 bg-white/80 hover:bg-white border border-blue-200 rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors"
-                        >
-                          <Copy size={14} /> Copiar consejo
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                {/* Widgets de Utilidad (Visible solo en Desktop en columna lateral izquierda) */}
+                <div className="hidden lg:flex flex-col gap-6">
+                  {renderUtilityCards()}
                 </div>
 
               </div>
@@ -2802,12 +3405,14 @@ export default function App() {
               <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-fit">
                 
                 <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50/50 gap-4">
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-bold text-slate-800 text-lg">
-                      {selectedDay === 0 ? "Registro de ayer" : "Evolución del mar"}
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h3 className="font-black text-slate-800 text-base sm:text-lg flex items-center gap-1.5">
+                      <span>{selectedDay === 0 ? "Registro de ayer" : "Evolución del mar"}</span>
+                      <span className="text-indigo-600 font-extrabold">— 🏖️ {BEACHES[selectedBeach]?.name.split(',')[0]}</span>
                     </h3>
-                    <span className="hidden sm:inline-block text-[10px] text-slate-400 font-medium border border-slate-200 bg-white px-2 py-0.5 rounded-full">
-                      Predicción Matemática
+                    <span className="text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Compass size={10} className="text-indigo-500" />
+                      Facing {BEACHES[selectedBeach]?.facing}º
                     </span>
                   </div>
                   <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
@@ -2816,14 +3421,14 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setViewMode('table')}
-                        className={`px-2.5 py-1 rounded transition-all ${viewMode === 'table' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                        className={`px-2.5 py-1 rounded transition-all cursor-pointer ${viewMode === 'table' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                       >
                         Tabla 📋
                       </button>
                       <button
                         type="button"
                         onClick={() => setViewMode('chart')}
-                        className={`px-2.5 py-1 rounded transition-all ${viewMode === 'chart' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                        className={`px-2.5 py-1 rounded transition-all cursor-pointer ${viewMode === 'chart' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                       >
                         Gráfico 📈
                       </button>
@@ -2850,7 +3455,7 @@ export default function App() {
                          </div>
                           <button
                             onClick={() => setIsSwimmerModalOpen(true)}
-                            className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs w-full sm:w-auto"
+                            className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs w-full sm:w-auto cursor-pointer"
                           >
                             📝 ¿Nadaste ayer? Reportar estado
                           </button>
@@ -2858,6 +3463,20 @@ export default function App() {
                      <p className="text-[11px] font-bold text-indigo-500 mt-3 text-center sm:text-left w-full">
                        O si lo prefieres, cuéntanoslo directamente por el grupo de WhatsApp del club.
                      </p>
+                  </div>
+                )}
+
+                {/* NUEVO VISOR NÁUTICO DE ORILLA Y FLECHAS (ESTILO WINDY) */}
+                {currentDayData && currentDayData.hourly && currentDayData.hourly.length > 0 && (
+                  <div className="p-3 sm:p-4 bg-slate-900/95 border-b border-slate-800 animate-in fade-in duration-300">
+                    <NauticalSpotCompass
+                      beachKey={selectedBeach}
+                      hourlyData={currentDayData.hourly}
+                      selectedIdx={selectedSpotHourIdx}
+                      onSelectHour={(idx) => setSelectedSpotHourIdx(idx)}
+                      customFacing={compassCustomFacing ? compassCustomFacing[selectedBeach] : undefined}
+                      customSectors={compassCustomSectors ? compassCustomSectors[selectedBeach] : undefined}
+                    />
                   </div>
                 )}
                 
@@ -3038,8 +3657,13 @@ export default function App() {
               )}
             </div>
 
-              </div>
-            ) : (
+            {/* Widgets de Utilidad (Visible solo en Móvil/Tablet debajo de la tabla y encima de la Comunidad) */}
+            <div className="block lg:hidden space-y-6 mt-6">
+              {renderUtilityCards()}
+            </div>
+
+          </div>
+        ) : (
               <div className="space-y-6 text-left w-full">
                 
                 {/* Selector de Nado Histórico y Ficha de Análisis */}
@@ -4122,6 +4746,13 @@ export default function App() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => setAdminTab('compass')}
+                      className={`flex-1 py-2 px-2 rounded-xl font-extrabold text-[11px] transition-all flex items-center justify-center gap-1 shrink-0 cursor-pointer ${adminTab === 'compass' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      🧭 Brújula Costera
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setAdminTab('telemetry')}
                       className={`flex-1 py-2 px-2 rounded-xl font-extrabold text-[11px] transition-all flex items-center justify-center gap-1 shrink-0 cursor-pointer ${adminTab === 'telemetry' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
                     >
@@ -4136,13 +4767,51 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* PESTAÑA 1: REGISTRAR NADO O ALERTA OFICIAL */}
+                  {/* PESTAÑA 1: REGISTRAR NADO, TELEMETRÍA BOYA O ALERTA OFICIAL */}
                   {adminTab === 'report' && (
-                    <form onSubmit={handleSendReport} className="space-y-4 text-left">
-                      {/* SELECTOR TÁCTIL DE FECHA DEL NADO / CALIBRACIÓN (ADMIN) */}
-                      <div className="space-y-1.5 mb-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
+                    <form onSubmit={handleSendReport} className="space-y-3.5 text-left">
+                      
+                      {/* SELECTOR SUPERIOR DE LOS 3 MODOS */}
+                      <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200/90 shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={() => { setAdminReportMode('full'); setAdminIsAlert(false); }}
+                          className={`py-2 px-1.5 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 cursor-pointer text-center ${
+                            adminReportMode === 'full' 
+                              ? 'bg-indigo-600 text-white shadow-sm border border-indigo-700' 
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          🏊 Nado + Boya
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setAdminReportMode('buoy_only'); setAdminIsAlert(false); }}
+                          className={`py-2 px-1.5 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 cursor-pointer text-center ${
+                            adminReportMode === 'buoy_only' 
+                              ? 'bg-blue-600 text-white shadow-sm border border-blue-700' 
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          ⚓ Solo Boya (En Vivo)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setAdminReportMode('alert'); setAdminIsAlert(true); }}
+                          className={`py-2 px-1.5 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 cursor-pointer text-center ${
+                            adminReportMode === 'alert' 
+                              ? 'bg-rose-600 text-white shadow-sm border border-rose-700' 
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          📢 Publicar Alerta
+                        </button>
+                      </div>
+
+                      {/* SELECTOR TÁCTIL DE FECHA (ADMIN) */}
+                      <div className="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
                         <div className="flex justify-between items-center text-[10px] font-black text-slate-600 uppercase">
-                          <span>📅 Fecha de la Sesión / Calibración</span>
+                          <span>📅 Fecha de la Sesión / Registro</span>
                           <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
                             {adminFechaNado === getIsoDateString() ? '☀️ Hoy' : adminFechaNado === getYesterdayIsoString() ? '⛅ Ayer' : adminFechaNado}, {adminHoraNado}
                           </span>
@@ -4188,7 +4857,8 @@ export default function App() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      {/* SELECTOR DE PLAYA Y HORA CON DESPLEGABLE Y BOTÓN ACTUAL */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Playa</label>
                           <select 
@@ -4196,6 +4866,9 @@ export default function App() {
                             onChange={(e) => setAdminPlaya(e.target.value)}
                             className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
                           >
+                            {adminReportMode === 'alert' && (
+                              <option value="todas">🚨 Todas las playas de Málaga</option>
+                            )}
                             <option value="misericordia">La Misericordia</option>
                             <option value="malagueta">La Malagueta</option>
                             <option value="pedregalejo">Pedregalejo</option>
@@ -4206,304 +4879,421 @@ export default function App() {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Hora Nado</label>
-                          <input 
-                            type="text" 
-                            value={adminHoraNado}
-                            onChange={(e) => {
-                              const newHourStr = e.target.value;
-                              setAdminHoraNado(newHourStr);
-                              const hourNum = parseInt((newHourStr || '').split(':')[0]);
-                              if (!isNaN(hourNum) && hourNum > new Date().getHours() && adminFechaNado === getIsoDateString()) {
-                                setAdminFechaNado(getYesterdayIsoString());
-                              }
-                            }}
-                            placeholder="11:00"
-                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 text-center"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
-                        <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Observación Real (1 al 5)</span>
-                        
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="font-bold text-slate-700">Olas:</span>
-                            <div className="flex gap-1.5">
-                              {[1,2,3,4,5].map(v => (
-                                <button 
-                                  type="button" key={v}
-                                  onClick={() => setAdminRealOlas(v)}
-                                  className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                                >
-                                  {v}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          {adminRealOlas && (
-                            <div className="text-[10px] text-right font-bold text-blue-600 italic">
-                              {adminRealOlas === 1 && "1/5 (0.05m) • Plato: Mar balsa, nadas sin turbulencia alguna"}
-                              {adminRealOlas === 2 && "2/5 (0.20m) • Rizado suave: Mar rizado, no interrumpe la respiración"}
-                              {adminRealOlas === 3 && "3/5 (0.45m) • Marejada / Incómodo: Salpica al respirar, girar cabeza"}
-                              {adminRealOlas === 4 && "4/5 (0.80m) • Fuerte / Oleaje: Dificultad para orientarse, picado"}
-                              {adminRealOlas === 5 && "5/5 (1.20m) • Muy Duro / Rompiente: Impide nadar con normalidad"}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="font-bold text-slate-700">Resaca:</span>
-                            <div className="flex gap-1.5">
-                              {[1,2,3,4,5].map(v => (
-                                <button 
-                                  type="button" key={v}
-                                  onClick={() => setAdminRealResaca(v)}
-                                  className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                                >
-                                  {v}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          {adminRealResaca && (
-                            <div className="text-[10px] text-right font-bold text-red-500 italic">
-                              {adminRealResaca === 1 && "1/5 = Sin resaca"}
-                              {adminRealResaca === 2 && "2/5 = Resaca leve"}
-                              {adminRealResaca === 3 && "3/5 = Resaca moderada"}
-                              {adminRealResaca === 4 && "4/5 = Resaca fuerte"}
-                              {adminRealResaca === 5 && "5/5 = Resaca extrema"}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="font-bold text-slate-700">Corriente (Deriva):</span>
-                            <div className="flex gap-1.5">
-                              {[1,2,3,4,5].map(v => (
-                                <button 
-                                  type="button" key={v}
-                                  onClick={() => setAdminRealCorriente(v)}
-                                  className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                                >
-                                  {v}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          {adminRealCorriente && (
-                            <div className="text-[10px] text-right font-bold text-indigo-600 italic">
-                              {adminRealCorriente === 1 && "1/5 = Sin deriva / corriente"}
-                              {adminRealCorriente === 2 && "2/5 = Deriva leve"}
-                              {adminRealCorriente === 3 && "3/5 = Deriva moderada"}
-                              {adminRealCorriente === 4 && "4/5 = Deriva fuerte"}
-                              {adminRealCorriente === 5 && "5/5 = Deriva extrema"}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* SECCIÓN ASISTIDA DE BOYA REAL (PORTUS + CONVERSORES) */}
-                      <div className="bg-gradient-to-br from-blue-50/70 to-indigo-50/40 p-3.5 rounded-2xl border border-blue-200/70 space-y-3 text-left shadow-xs">
-                        <div className="flex justify-between items-center">
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Hora de Registro</label>
                           <div className="flex items-center gap-1.5">
-                            <Anchor size={14} className="text-blue-600 shrink-0" />
-                            <span className="text-[10px] font-black text-blue-800 uppercase tracking-wider">
-                              ⚓ Boya Real Portus (Málaga 2056)
-                            </span>
+                            <select
+                              value={adminHoraNado}
+                              onChange={(e) => {
+                                const newH = e.target.value;
+                                setAdminHoraNado(newH);
+                                const hourNum = parseInt((newH || '').split(':')[0]);
+                                if (!isNaN(hourNum) && hourNum > new Date().getHours() && adminFechaNado === getIsoDateString()) {
+                                  setAdminFechaNado(getYesterdayIsoString());
+                                }
+                              }}
+                              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
+                            >
+                              {[
+                                '06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
+                                '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
+                                '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
+                                '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30'
+                              ].map(h => (
+                                <option key={h} value={h}>{h}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const now = new Date();
+                                const h = now.getHours().toString().padStart(2, '0');
+                                const m = now.getMinutes() < 30 ? '00' : '30';
+                                setAdminHoraNado(`${h}:${m}`);
+                                setAdminFechaNado(getIsoDateString());
+                              }}
+                              className="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-black rounded-xl border border-slate-300 shrink-0 cursor-pointer shadow-2xs"
+                              title="Fijar a la hora actual"
+                            >
+                              ⏱️ Actual
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowAdminPortusWidget(!showAdminPortusWidget)}
-                            className="text-[9px] font-black bg-white hover:bg-blue-50 text-blue-700 border border-blue-300 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
-                          >
-                            {showAdminPortusWidget ? '▲ Ocultar Portus' : '👁️ Ver Widget Portus'}
-                          </button>
                         </div>
+                      </div>
 
-                        {/* VISOR PLEGABLE PORTUS EN VIVO */}
-                        {showAdminPortusWidget && (
-                          <div className="rounded-xl overflow-hidden border border-blue-200 bg-white shadow-inner animate-in fade-in zoom-in duration-200">
-                            <div className="bg-slate-900 text-white px-3 py-1.5 text-[9px] font-bold flex justify-between items-center">
-                              <span>🏛️ Puertos del Estado - Estación Málaga 35218</span>
-                              <span className="text-[8px] text-emerald-400 font-mono flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                EN VIVO
-                              </span>
+                      {/* --- MODO A: OBSERVACIÓN REAL EN PLAYA (SOLO EN MODO NADO COMPLETO) --- */}
+                      {adminReportMode === 'full' && (
+                        <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 animate-in fade-in duration-200">
+                          <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Observación Real en Orilla (1 al 5)</span>
+                          
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="font-bold text-slate-700">Olas:</span>
+                              <div className="flex gap-1.5">
+                                {[1,2,3,4,5].map(v => (
+                                  <button 
+                                    type="button" key={v}
+                                    onClick={() => setAdminRealOlas(v)}
+                                    className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                                  >
+                                    {v}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                            <iframe
-                              src="https://portus.puertos.es/#/locationsWidget?code=35218"
-                              title="Widget Oficial Portus Málaga"
-                              className="w-full h-72 md:h-80 border-0"
-                              loading="lazy"
-                            />
-                          </div>
-                        )}
-
-                        {/* CAMPOS NUMÉRICOS DE BOYA */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                          <div>
-                            <label className="block text-[8.5px] font-extrabold text-slate-600 uppercase mb-1">🌊 Altura (Hs m)</label>
-                            <input 
-                              type="text" 
-                              value={adminBoyaAltura}
-                              onChange={(e) => setAdminBoyaAltura(e.target.value)}
-                              placeholder="Ej: 0.22"
-                              className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-black text-blue-700 bg-white shadow-2xs focus:border-blue-500 outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[8.5px] font-extrabold text-slate-600 uppercase mb-1">⏱️ Periodo (Tp s)</label>
-                            <input 
-                              type="text" 
-                              value={adminBoyaPeriodo}
-                              onChange={(e) => setAdminBoyaPeriodo(e.target.value)}
-                              placeholder="Ej: 3.1"
-                              className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-black text-indigo-700 bg-white shadow-2xs focus:border-indigo-500 outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[8.5px] font-extrabold text-slate-600 uppercase mb-1">🌡️ Temp Agua (ºC)</label>
-                            <input 
-                              type="text" 
-                              value={adminBoyaTemp}
-                              onChange={(e) => setAdminBoyaTemp(e.target.value)}
-                              placeholder="Ej: 20.4"
-                              className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-black text-cyan-700 bg-white shadow-2xs focus:border-cyan-500 outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[8.5px] font-extrabold text-slate-600 uppercase mb-1">🧭 Rumbo (º)</label>
-                            <input 
-                              type="text" 
-                              value={adminBoyaDireccion}
-                              onChange={(e) => setAdminBoyaDireccion(e.target.value)}
-                              placeholder="Ej: 135"
-                              className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-black text-slate-800 bg-white shadow-2xs focus:border-indigo-500 outline-none text-center"
-                            />
-                          </div>
-                        </div>
-
-                        {/* BOTONERA RÁPIDA DE RUMBOS (ROSA DE LOS VIENTOS TOUCH) */}
-                        <div>
-                          <span className="block text-[8px] font-black text-slate-500 uppercase mb-1">⚡ Selector Rápido de Rumbo (Toca para fijar grados):</span>
-                          <div className="grid grid-cols-4 sm:grid-cols-8 gap-1">
-                            {[
-                              { code: 'SE', deg: '135', label: '↖️ SE 135º' },
-                              { code: 'E', deg: '90', label: '⬅️ E 90º' },
-                              { code: 'ESE', deg: '112', label: '↖️ ESE 112º' },
-                              { code: 'SO', deg: '225', label: '↗️ SO 225º' },
-                              { code: 'S', deg: '180', label: '⬆️ S 180º' },
-                              { code: 'O', deg: '270', label: '➡️ O 270º' },
-                              { code: 'NE', deg: '45', label: '↙️ NE 45º' },
-                              { code: 'NO', deg: '315', label: '↘️ NO 315º' }
-                            ].map(r => (
-                              <button
-                                key={r.code}
-                                type="button"
-                                onClick={() => {
-                                  setAdminBoyaDireccion(r.deg);
-                                  setAdminRealVientoDir(r.code);
-                                }}
-                                className={`py-1 px-1 rounded-lg text-[8.5px] font-extrabold transition-all border text-center cursor-pointer ${adminBoyaDireccion === r.deg ? 'bg-blue-600 text-white border-blue-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-blue-50 border-slate-200'}`}
-                              >
-                                {r.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* AUTO-CONVERSOR DE VIENTO: M/S A NUDOS */}
-                        <div className="bg-white/90 p-2.5 rounded-xl border border-blue-100/80 space-y-1.5">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[8.5px] font-black text-slate-600 uppercase">💨 Viento Portus (Auto-conversor m/s ➔ Nudos)</span>
-                            {adminVientoMs && !isNaN(parseFloat(adminVientoMs.replace(',', '.'))) && (
-                              <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                ≈ {(parseFloat(adminVientoMs.replace(',', '.')) * 1.94384).toFixed(1)} nudos
-                              </span>
+                            {adminRealOlas && (
+                              <div className="text-[10px] text-right font-bold text-blue-600 italic">
+                                {adminRealOlas === 1 && "1/5 (0.05m) • Plato: Mar balsa, nadas sin turbulencia alguna"}
+                                {adminRealOlas === 2 && "2/5 (0.20m) • Rizado suave: Mar rizado, no interrumpe la respiración"}
+                                {adminRealOlas === 3 && "3/5 (0.45m) • Marejada / Incómodo: Salpica al respirar, girar cabeza"}
+                                {adminRealOlas === 4 && "4/5 (0.80m) • Fuerte / Oleaje: Dificultad para orientarse, picado"}
+                                {adminRealOlas === 5 && "5/5 (1.20m) • Muy Duro / Rompiente: Impide nadar con normalidad"}
+                              </div>
                             )}
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
+
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="font-bold text-slate-700">Resaca:</span>
+                              <div className="flex gap-1.5">
+                                {[1,2,3,4,5].map(v => (
+                                  <button 
+                                    type="button" key={v}
+                                    onClick={() => setAdminRealResaca(v)}
+                                    className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                                  >
+                                    {v}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            {adminRealResaca && (
+                              <div className="text-[10px] text-right font-bold text-red-500 italic">
+                                {adminRealResaca === 1 && "1/5 = Sin resaca"}
+                                {adminRealResaca === 2 && "2/5 = Resaca leve"}
+                                {adminRealResaca === 3 && "3/5 = Resaca moderada"}
+                                {adminRealResaca === 4 && "4/5 = Resaca fuerte"}
+                                {adminRealResaca === 5 && "5/5 = Resaca extrema"}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="font-bold text-slate-700">Corriente (Deriva):</span>
+                              <div className="flex gap-1.5">
+                                {[1,2,3,4,5].map(v => (
+                                  <button 
+                                    type="button" key={v}
+                                    onClick={() => setAdminRealCorriente(v)}
+                                    className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${adminRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                                  >
+                                    {v}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            {adminRealCorriente && (
+                              <div className="text-[10px] text-right font-bold text-indigo-600 italic">
+                                {adminRealCorriente === 1 && "1/5 = Sin deriva / corriente"}
+                                {adminRealCorriente === 2 && "2/5 = Deriva leve"}
+                                {adminRealCorriente === 3 && "3/5 = Deriva moderada"}
+                                {adminRealCorriente === 4 && "4/5 = Deriva fuerte"}
+                                {adminRealCorriente === 5 && "5/5 = Deriva extrema"}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* --- MODO B: BANNER INFORMATIVO TELEMETRÍA BOYA --- */}
+                      {adminReportMode === 'buoy_only' && (
+                        <div className="bg-blue-50/90 border border-blue-200 text-blue-900 p-3 rounded-xl text-xs space-y-1 animate-in fade-in duration-200">
+                          <div className="font-black flex items-center gap-1.5 text-blue-800">
+                            <Anchor size={14} className="text-blue-600" />
+                            <span>Modo Telemetría en Vivo (Sin reporte de orilla)</span>
+                          </div>
+                          <p className="text-[11px] text-slate-600">
+                            Este registro actualizará la temperatura real del agua, el oleaje y el viento en la portada <strong>sin generar observaciones ficticias de orilla ni contaminar el histórico de calibración</strong>.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* --- SECCIÓN ASISTIDA DE BOYA REAL (PORTUS + CONVERSORES) (MODOS A Y B) --- */}
+                      {adminReportMode !== 'alert' && (
+                        <div className="bg-gradient-to-br from-blue-50/70 to-indigo-50/40 p-3.5 rounded-2xl border border-blue-200/70 space-y-3 text-left shadow-xs">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-1.5">
+                              <Anchor size={14} className="text-blue-600 shrink-0" />
+                              <span className="text-[10px] font-black text-blue-800 uppercase tracking-wider">
+                                ⚓ Datos de Boya Real Portus (Málaga 2056)
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowAdminPortusWidget(!showAdminPortusWidget)}
+                              className="text-[9px] font-black bg-white hover:bg-blue-50 text-blue-700 border border-blue-300 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                            >
+                              {showAdminPortusWidget ? '▲ Ocultar Portus' : '👁️ Ver Widget Portus'}
+                            </button>
+                          </div>
+
+                          {/* VISOR PLEGABLE PORTUS EN VIVO */}
+                          {showAdminPortusWidget && (
+                            <div className="rounded-xl overflow-hidden border border-blue-200 bg-white shadow-inner animate-in fade-in zoom-in duration-200">
+                              <div className="bg-slate-900 text-white px-3 py-1.5 text-[9px] font-bold flex justify-between items-center">
+                                <span>🏛️ Puertos del Estado - Estación Málaga 35218</span>
+                                <span className="text-[8px] text-emerald-400 font-mono flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                  EN VIVO
+                                </span>
+                              </div>
+                              <iframe
+                                src="https://portus.puertos.es/#/locationsWidget?code=35218"
+                                title="Widget Oficial Portus Málaga"
+                                className="w-full h-72 md:h-80 border-0"
+                                loading="lazy"
+                              />
+                            </div>
+                          )}
+
+                          {/* CAMPOS NUMÉRICOS DE BOYA */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                             <div>
+                              <label className="block text-[8.5px] font-extrabold text-slate-600 uppercase mb-1">🌊 Altura (Hs m)</label>
                               <input 
                                 type="text" 
-                                value={adminVientoMs}
-                                onChange={(e) => {
-                                  const vMs = e.target.value;
-                                  setAdminVientoMs(vMs);
-                                  const num = parseFloat(vMs.replace(',', '.'));
-                                  if (!isNaN(num)) {
-                                    const kts = (num * 1.94384).toFixed(1);
-                                    setAdminRealVientoFza(`${kts} kts (${vMs} m/s)`);
-                                  }
-                                }}
-                                placeholder="Ej: 3.5 m/s"
-                                className="w-full border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-white"
+                                value={adminBoyaAltura}
+                                onChange={(e) => setAdminBoyaAltura(e.target.value)}
+                                placeholder="Ej: 0.22"
+                                className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-black text-blue-700 bg-white shadow-2xs focus:border-blue-500 outline-none"
                               />
                             </div>
                             <div>
+                              <label className="block text-[8.5px] font-extrabold text-slate-600 uppercase mb-1">⏱️ Periodo (Tp s)</label>
                               <input 
                                 type="text" 
-                                value={adminRealVientoFza}
-                                onChange={(e) => setAdminRealVientoFza(e.target.value)}
-                                placeholder="Fuerza manual o en nudos"
-                                className="w-full border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-white"
+                                value={adminBoyaPeriodo}
+                                onChange={(e) => setAdminBoyaPeriodo(e.target.value)}
+                                placeholder="Ej: 3.1"
+                                className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-black text-indigo-700 bg-white shadow-2xs focus:border-indigo-500 outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[8.5px] font-extrabold text-slate-600 uppercase mb-1">🌡️ Temp Agua (ºC)</label>
+                              <input 
+                                type="text" 
+                                value={adminBoyaTemp}
+                                onChange={(e) => setAdminBoyaTemp(e.target.value)}
+                                placeholder="Ej: 20.4"
+                                className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-black text-cyan-700 bg-white shadow-2xs focus:border-cyan-500 outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[8.5px] font-extrabold text-slate-600 uppercase mb-1">🧭 Rumbo Boya (º)</label>
+                              <input 
+                                type="text" 
+                                value={adminBoyaDireccion}
+                                onChange={(e) => setAdminBoyaDireccion(e.target.value)}
+                                placeholder="Ej: 115"
+                                className="w-full border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-black text-slate-800 bg-white shadow-2xs focus:border-indigo-500 outline-none text-center"
                               />
                             </div>
                           </div>
+
+                          {/* BOTONERA RÁPIDA DE RUMBOS (ROSA DE LOS VIENTOS TOUCH) */}
+                          <div>
+                            <span className="block text-[8px] font-black text-slate-500 uppercase mb-1">⚡ Selector Rápido de Rumbo (Toca para fijar):</span>
+                            <div className="grid grid-cols-4 sm:grid-cols-8 gap-1">
+                              {[
+                                { code: 'ESE', deg: '115', label: '🌊 Levante (115º)' },
+                                { code: 'E', deg: '90', label: '⬅️ E (90º)' },
+                                { code: 'SE', deg: '135', label: '↖️ SE (135º)' },
+                                { code: 'SO', deg: '225', label: '💨 Poniente (225º)' },
+                                { code: 'S', deg: '180', label: '⚓ Sur (180º)' },
+                                { code: 'O', deg: '270', label: '➡️ O (270º)' },
+                                { code: 'NE', deg: '45', label: '🧭 NE (45º)' },
+                                { code: 'NO', deg: '315', label: '🏔️ Terral (315º)' }
+                              ].map(r => (
+                                <button
+                                  key={r.code}
+                                  type="button"
+                                  onClick={() => {
+                                    setAdminBoyaDireccion(r.deg);
+                                    setAdminRealVientoDir(r.code);
+                                  }}
+                                  className={`py-1 px-1 rounded-lg text-[8.5px] font-extrabold transition-all border text-center cursor-pointer ${adminBoyaDireccion === r.deg ? 'bg-blue-600 text-white border-blue-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-blue-50 border-slate-200'}`}
+                                >
+                                  {r.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 💨 AUTO-CONVERSOR DE VIENTO: M/S A NUDOS */}
+                          <div className="bg-white/90 p-2.5 rounded-xl border border-blue-100/80 space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[8.5px] font-black text-slate-600 uppercase">💨 Conversor de Viento (m/s ➔ Nudos)</span>
+                              {adminVientoMs && !isNaN(parseFloat(adminVientoMs.replace(',', '.'))) && (
+                                <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                  ≈ {(parseFloat(adminVientoMs.replace(',', '.')) * 1.94384).toFixed(1)} nudos
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <input 
+                                  type="text" 
+                                  value={adminVientoMs}
+                                  onChange={(e) => {
+                                    const vMs = e.target.value;
+                                    setAdminVientoMs(vMs);
+                                    const num = parseFloat(vMs.replace(',', '.'));
+                                    if (!isNaN(num)) {
+                                      const kts = (num * 1.94384).toFixed(1);
+                                      setAdminRealVientoFza(`${kts} kts (${vMs} m/s)`);
+                                    }
+                                  }}
+                                  placeholder="Viento Portus (Ej: 3.5 m/s)"
+                                  className="w-full border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-white"
+                                />
+                              </div>
+                              <div>
+                                <input 
+                                  type="text" 
+                                  value={adminRealVientoFza}
+                                  onChange={(e) => setAdminRealVientoFza(e.target.value)}
+                                  placeholder="Fuerza en nudos calculada"
+                                  className="w-full border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-white"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 🌊 AUTO-CONVERSOR DE DIRECCIÓN DE OLEAJE: PROPAGACIÓN A PROCEDENCIA */}
+                          <div className="bg-white/90 p-2.5 rounded-xl border border-blue-100/80 space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[8.5px] font-black text-slate-600 uppercase">
+                                🧭 Conversor de Oleaje (Propagación ➔ De dónde viene)
+                              </span>
+                              {adminWavePropDir && !isNaN(parseFloat(adminWavePropDir)) && (
+                                <span className="text-[9px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                                  Viene de: {((parseFloat(adminWavePropDir) + 180) % 360).toFixed(0)}º {((parseFloat(adminWavePropDir) + 180) % 360) >= 45 && ((parseFloat(adminWavePropDir) + 180) % 360) <= 170 ? '🌊 Levante' : ((parseFloat(adminWavePropDir) + 180) % 360) >= 191 && ((parseFloat(adminWavePropDir) + 180) % 360) <= 230 ? '💨 Poniente' : '⚓ Mar'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div>
+                                <input 
+                                  type="number"
+                                  min="0"
+                                  max="360"
+                                  value={adminWavePropDir}
+                                  onChange={(e) => {
+                                    const pDir = e.target.value;
+                                    setAdminWavePropDir(pDir);
+                                    const num = parseFloat(pDir);
+                                    if (!isNaN(num)) {
+                                      const originDir = ((num + 180) % 360).toFixed(0);
+                                      setAdminBoyaDireccion(originDir);
+                                    }
+                                  }}
+                                  placeholder="Propagación (Hacia dónde viaja: ej. 295º)"
+                                  className="w-full border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-white"
+                                />
+                              </div>
+                              <div className="flex items-center justify-between text-[11px] font-black text-indigo-700 bg-indigo-50/60 px-3 py-1.5 rounded-xl border border-indigo-100">
+                                <span>{adminBoyaDireccion ? `➡️ Rumbo fijado: ${adminBoyaDireccion}º` : 'Esperando grados...'}</span>
+                                {adminBoyaDireccion && (
+                                  <span className="text-[9px] font-bold text-slate-500">Auto-asignado</span>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-[8px] text-slate-400">
+                              * Si una tabla te da hacia dónde viaja la ola (ej. 295º), calcula automáticamente el rumbo de origen (115º Levante) y lo fija en la boya.
+                            </p>
+                          </div>
+
                         </div>
-                      </div>
+                      )}
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Dir (Dirección)</label>
-                          <input 
-                            type="text" 
-                            value={adminRealVientoDir}
-                            onChange={(e) => setAdminRealVientoDir(e.target.value)}
-                            placeholder="S/SO, Levante, Poniente..."
-                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
-                          />
+                      {/* --- MODO C: CAMPOS EXCLUSIVOS DE ALERTA OFICIAL --- */}
+                      {adminReportMode === 'alert' && (
+                        <div className="space-y-3 bg-rose-50/70 p-3.5 rounded-2xl border border-rose-200 animate-in fade-in duration-200">
+                          <span className="block text-[10px] font-black text-rose-800 uppercase tracking-wider">
+                            📢 Configuración de Alerta Oficial Destacada
+                          </span>
+
+                          <div>
+                            <label className="block text-[9px] font-extrabold text-slate-600 uppercase mb-1">Nivel de Gravedad / Tipo:</label>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {[
+                                { id: 'warning', label: '🟡 Precaución', color: 'bg-amber-600 text-white' },
+                                { id: 'danger', label: '🔴 Peligro / Temporal', color: 'bg-red-600 text-white' },
+                                { id: 'info', label: 'ℹ️ Aviso Informativo', color: 'bg-blue-600 text-white' }
+                              ].map(s => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => setAdminAlertSeverity(s.id)}
+                                  className={`py-1.5 px-2 rounded-xl text-xs font-black transition-all border text-center cursor-pointer ${adminAlertSeverity === s.id ? `${s.color} shadow-xs` : 'bg-white text-slate-600 border-slate-200'}`}
+                                >
+                                  {s.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] font-extrabold text-slate-600 uppercase mb-1">Mensaje de la Alerta (Visible en portada):</label>
+                            <textarea 
+                              value={adminNotas}
+                              onChange={(e) => setAdminNotas(e.target.value)}
+                              placeholder="Ej. 'Presencia abundante de medusas carabela portuguesa en la orilla de La Misericordia. Se desaconseja el baño hoy.'"
+                              className="w-full border border-rose-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 bg-white h-20 outline-none focus:border-rose-500 shadow-2xs"
+                              required
+                            />
+                          </div>
                         </div>
-                      </div>
+                      )}
 
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Comentario del nadador / WhatsApp</label>
-                        <textarea 
-                          value={adminSensaciones}
-                          onChange={(e) => setAdminSensaciones(e.target.value)}
-                          placeholder="Ej. 'Agua muy limpia pero refrescando bastante, deriva fuerte hacia Fuengirola...'"
-                          className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-indigo-500"
-                        />
-                      </div>
+                      {/* CAMPOS COMUNES DE TEXTO (MODOS A Y B) */}
+                      {adminReportMode !== 'alert' && (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Viento Dirección (Texto)</label>
+                              <input 
+                                type="text" 
+                                value={adminRealVientoDir}
+                                onChange={(e) => setAdminRealVientoDir(e.target.value)}
+                                placeholder="S/SO, Levante, Poniente..."
+                                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white"
+                              />
+                            </div>
+                          </div>
 
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Notas Internas Calibración</label>
-                        <input 
-                          type="text" 
-                          value={adminNotas}
-                          onChange={(e) => setAdminNotas(e.target.value)}
-                          placeholder="Ej. 'Windy falló por 3 nudos, TodoSurf clavado.'"
-                          className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700"
-                        />
-                      </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Comentario del nadador / WhatsApp</label>
+                            <textarea 
+                              value={adminSensaciones}
+                              onChange={(e) => setAdminSensaciones(e.target.value)}
+                              placeholder="Ej. 'Agua a 21.5ºC muy limpia, algo de resaca al salir pero perfecta para nadar...'"
+                              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-indigo-500"
+                            />
+                          </div>
 
-                      {/* Publicar como alerta oficial */}
-                      <div className="flex items-center gap-2 p-1">
-                        <input
-                          type="checkbox"
-                          id="adminIsAlert"
-                          checked={adminIsAlert}
-                          onChange={(e) => setAdminIsAlert(e.target.checked)}
-                          className="w-3.5 h-3.5 text-rose-600 border-slate-300 rounded focus:ring-rose-500 cursor-pointer"
-                        />
-                        <label htmlFor="adminIsAlert" className="text-[11px] font-black text-rose-600 select-none cursor-pointer">
-                          ⚠️ Publicar como Alerta Oficial Destacada en la web
-                        </label>
-                      </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Notas Internas Calibración</label>
+                            <input 
+                              type="text" 
+                              value={adminNotas}
+                              onChange={(e) => setAdminNotas(e.target.value)}
+                              placeholder="Ej. 'Windy daba 12kt y entraron 18kt térmicos.'"
+                              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700"
+                            />
+                          </div>
+                        </div>
+                      )}
 
                       {reportStatus && (
                         <div className={`p-3 rounded-xl text-xs font-bold text-center border ${reportStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
@@ -4514,10 +5304,20 @@ export default function App() {
                       <button 
                         type="submit"
                         disabled={isSendingReport}
-                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-md text-xs flex items-center justify-center gap-2 disabled:opacity-50"
+                        className={`w-full text-white font-black py-3 rounded-xl transition-all shadow-md text-xs flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer ${
+                          adminReportMode === 'alert'
+                            ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                            : adminReportMode === 'buoy_only'
+                              ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'
+                              : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+                        }`}
                       >
                         {isSendingReport && <Loader2 size={14} className="animate-spin" />}
-                        Guardar en Google Sheets 🚀
+                        {adminReportMode === 'alert' 
+                          ? '📢 Publicar Alerta Oficial en la Web' 
+                          : adminReportMode === 'buoy_only' 
+                            ? '⚓ Guardar Telemetría de Boya (En Vivo)' 
+                            : '🚀 Guardar Reporte de Nado + Boya'}
                       </button>
                     </form>
                   )}
@@ -4892,7 +5692,7 @@ export default function App() {
                                           <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
                                             {allSectorLogs.map((l, lIdx) => {
                                               const repId = String(l.idRegistro || l.timestamp || l.horaNado || lIdx);
-                                              const isDiscarded = discardedReportIds.includes(repId) || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("DESCARTADO") || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("PRUEBA");
+                                              const isDiscarded = discardedReportIds.includes(repId) || String(l.auditStatus || l.origenDato || l.notas || '').toUpperCase().includes("DESCARTADO");
                                               const waveVal = swimmerScaleToMeters(l.realOlas);
                                               let rawH = l.horaNado ? String(l.horaNado) : '';
                                               let cleanH = '';
@@ -4916,13 +5716,15 @@ export default function App() {
                                                 badgeStyle = 'bg-amber-50 text-amber-700 border-amber-200';
                                               }
 
+                                              const waveDisplay = (waveVal !== null && !isNaN(waveVal)) ? `${waveVal.toFixed(2)}m` : '—';
+
                                               return (
                                                 <div key={repId + lIdx} className={'flex justify-between items-center p-2 rounded-lg border text-left transition-all ' + (isDiscarded ? 'bg-rose-50/60 border-rose-200 opacity-60' : 'bg-white border-slate-200 shadow-2xs')}>
                                                   <div className="space-y-0.5 flex-1 mr-2 min-w-0">
                                                     <div className="flex items-center gap-1.5 flex-wrap">
                                                       <span className="text-[9px] font-black text-slate-800">{swimTime}</span>
                                                       <span className={'text-[7.5px] font-extrabold px-1.5 py-0.2 rounded border ' + badgeStyle}>{badgeLabel}</span>
-                                                      <span className="text-[8px] font-extrabold text-cyan-700 bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-100">Ola: {waveVal.toFixed(2)}m</span>
+                                                      <span className="text-[8px] font-extrabold text-cyan-700 bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-100">Ola: {waveDisplay}</span>
                                                     </div>
                                                     <p className="text-[9px] text-slate-600 truncate font-medium">{author}</p>
                                                   </div>
@@ -5520,7 +6322,6 @@ export default function App() {
                                     </strong>
                                     <span className="text-[8px] text-slate-500 block">Relación Boya / Satélite</span>
                                   </div>
-
                                   <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                                     <span className="text-[8.5px] font-bold text-slate-500 uppercase block">🏊 Precisión Nadador</span>
                                     <strong className="text-sm font-black text-blue-700 block mt-0.5">
@@ -5545,22 +6346,761 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* PESTAÑA: LABORATORIO VISUAL DE CALIBRACIÓN COSTERA (ROSA NÁUTICA & SATÉLITE HD) */}
+                  {adminTab === 'compass' && (
+                    <div className="text-left space-y-4">
+                      {(() => {
+                        const BEACH_COASTAL_DEFS = {
+                          misericordia: {
+                            name: "La Misericordia, Málaga",
+                            lat: 36.6918,
+                            lon: -4.4385,
+                            facing: 117,
+                            shelters: "Dique Levante (50º) al Este, Espigón Térmica/Sacaba al Oeste",
+                            sectors: {
+                              lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada tierra/mar. Poco oleaje." },
+                              levante:      { min: 50, max: 170, label: "Levante (Mar de Fondo)", color: "#3b82f6", desc: "Swell con masa, rompiente orillera pesada." },
+                              sur:          { min: 171, max: 190, label: "Sur (Amplificador)", color: "#8b5cf6", desc: "Mar picado e incómodo por virazón térmica." },
+                              poniente:     { min: 191, max: 215, label: "Poniente (Viento Reciente)", color: "#10b981", desc: "Chop rápido, subida térmica al mediodía." },
+                              terral:       { min: 216, max: 360, label: "Poniente-Terral", color: "#f97316", desc: "Orilla balsa/piscina, precaución mar adentro." }
+                            }
+                          },
+                          malagueta: {
+                            name: "La Malagueta, Málaga",
+                            lat: 36.7180,
+                            lon: -4.4070,
+                            facing: 140,
+                            shelters: "Encajada tras Dique de Levante del Puerto de Málaga",
+                            sectors: {
+                              lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por la Farola." },
+                              levante:      { min: 50, max: 170, label: "Levante Franco", color: "#3b82f6", desc: "Entrada directa de Levante / Mar de fondo." },
+                              sur:          { min: 171, max: 190, label: "Sur", color: "#8b5cf6", desc: "Entrada oblicua al dique del puerto." },
+                              poniente:     { min: 191, max: 229, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida por el Dique y Puerto." },
+                              terral:       { min: 230, max: 360, label: "Terral de Gibralfaro", color: "#f97316", desc: "Viento seco de tierra / balsa." }
+                            }
+                          },
+                          pedregalejo: {
+                            name: "Pedregalejo, Málaga",
+                            lat: 36.7215,
+                            lon: -4.3850,
+                            facing: 180,
+                            shelters: "6 calas protegidas por espigones en T/Y",
+                            sectors: {
+                              lev_anortado: { min: 1, max: 70, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por El Morlaco." },
+                              levante:      { min: 71, max: 170, label: "Levante Calas", color: "#3b82f6", desc: "Espigones frenan el oleaje." },
+                              sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada directa por las bocanas." },
+                              poniente:     { min: 191, max: 250, label: "Poniente Calas", color: "#10b981", desc: "Calas tipo piscina por abrigo." },
+                              terral:       { min: 251, max: 360, label: "Terral / Viento Tierra", color: "#f97316", desc: "Mar plano absoluto." }
+                            }
+                          },
+                          los_alamos: {
+                            name: "Los Álamos, Torremolinos",
+                            lat: 36.6375,
+                            lon: -4.4840,
+                            facing: 120,
+                            shelters: "Playa abierta rectilínea sin espigones",
+                            sectors: {
+                              lev_anortado: { min: 1, max: 30, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra-mar." },
+                              levante:      { min: 31, max: 170, label: "Levante Abierto", color: "#3b82f6", desc: "Olas con máxima energía y rompiente." },
+                              sur:          { min: 171, max: 190, label: "Sur Abierto", color: "#8b5cf6", desc: "Mar de fondo frontal sin abrigo." },
+                              poniente:     { min: 191, max: 219, label: "Poniente", color: "#10b981", desc: "Viento de costado / chop." },
+                              terral:       { min: 220, max: 360, label: "Terral", color: "#f97316", desc: "Viento de la sierra de Mijas / balsa." }
+                            }
+                          },
+                          bajondillo: {
+                            name: "El Bajondillo, Torremolinos",
+                            lat: 36.6235,
+                            lon: -4.4960,
+                            facing: 120,
+                            shelters: "Punta de Torremolinos / Castillo Santa Clara",
+                            sectors: {
+                              lev_anortado: { min: 1, max: 29, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada oblicua." },
+                              levante:      { min: 30, max: 170, label: "Levante", color: "#3b82f6", desc: "Entrada franca de Levante." },
+                              sur:          { min: 171, max: 190, label: "Sur", color: "#8b5cf6", desc: "Entrada de mar de fondo." },
+                              poniente:     { min: 191, max: 215, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida por la Punta de Torremolinos." },
+                              terral:       { min: 216, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
+                            }
+                          },
+                          cala_del_moral: {
+                            name: "La Cala del Moral",
+                            lat: 36.7135,
+                            lon: -4.3115,
+                            facing: 180,
+                            shelters: "Acantilados de El Cantal al Oeste",
+                            sectors: {
+                              lev_anortado: { min: 1, max: 70, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra de la Axarquía." },
+                              levante:      { min: 71, max: 170, label: "Levante Concha", color: "#3b82f6", desc: "Entrada franca de Levante." },
+                              sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada frontal a la concha." },
+                              poniente:     { min: 191, max: 250, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida del Poniente por El Cantal." },
+                              terral:       { min: 251, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra / orilla balsa." }
+                            }
+                          },
+                          rincon_victoria: {
+                            name: "Rincón de la Victoria",
+                            lat: 36.7150,
+                            lon: -4.2780,
+                            facing: 190,
+                            shelters: "Gran playa rectilínea, montes de la Axarquía",
+                            sectors: {
+                              lev_anortado: { min: 1, max: 70, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra / abrigo." },
+                              levante:      { min: 71, max: 170, label: "Levante", color: "#3b82f6", desc: "Entrada franca de Levante." },
+                              sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada directa a la arena." },
+                              poniente:     { min: 191, max: 250, label: "Poniente", color: "#10b981", desc: "Protegida por El Cantal." },
+                              terral:       { min: 251, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
+                            }
+                          }
+                        };
+
+                        const bDef = BEACH_COASTAL_DEFS[compassBeachKey] || BEACH_COASTAL_DEFS.misericordia;
+                        const activeFacing = compassCustomFacing[compassBeachKey] !== undefined ? compassCustomFacing[compassBeachKey] : bDef.facing;
+                        const customSecs = compassCustomSectors[compassBeachKey] || {};
+
+                        const sLevAnortadoMax = customSecs.lev_anortado !== undefined ? customSecs.lev_anortado : bDef.sectors.lev_anortado.max;
+                        const sLevanteMax     = customSecs.levante !== undefined ? customSecs.levante : bDef.sectors.levante.max;
+                        const sSurMax         = customSecs.sur !== undefined ? customSecs.sur : bDef.sectors.sur.max;
+                        const sPonienteMax    = customSecs.poniente !== undefined ? customSecs.poniente : bDef.sectors.poniente.max;
+
+                        // Micro-ajuste de coordenadas GPS para centrar en la orilla
+                        const curOffset = compassOffsets[compassBeachKey] || { dLat: 0, dLon: 0 };
+                        const effectiveLat = bDef.lat + curOffset.dLat;
+                        const effectiveLon = bDef.lon + curOffset.dLon;
+
+                        // Cálculo de teselas satelitales Esri HD a Zoom 15, 16 o 17 (3x3 mosaico continuo)
+                        const zoom = compassZoom || 16;
+                        const nTiles = Math.pow(2, zoom);
+                        const exactTileX = (effectiveLon + 180.0) / 360.0 * nTiles;
+                        const latRad = effectiveLat * Math.PI / 180.0;
+                        const exactTileY = (1.0 - Math.log(Math.tan(latRad) + 1.0 / Math.cos(latRad)) / Math.PI) / 2.0 * nTiles;
+
+                        const centerTileX = Math.floor(exactTileX);
+                        const centerTileY = Math.floor(exactTileY);
+                        const subPixelX = (exactTileX - centerTileX) * 256;
+                        const subPixelY = (exactTileY - centerTileY) * 256;
+
+                        // Geometría de la Rosa de Rumbos SVG
+                        const cx = 200;
+                        const cy = 200;
+                        const radius = 165;
+
+                        function degToCartesian(angleDeg, rDist) {
+                          const rad = (angleDeg - 90) * Math.PI / 180.0;
+                          return {
+                            x: cx + (rDist * Math.cos(rad)),
+                            y: cy + (rDist * Math.sin(rad))
+                          };
+                        }
+
+                        function makeSectorPath(startDeg, endDeg, rDist) {
+                          let delta = endDeg - startDeg;
+                          if (delta < 0) delta += 360;
+                          if (delta >= 360) delta = 359.99;
+                          const pStart = degToCartesian(startDeg, rDist);
+                          const pEnd = degToCartesian(endDeg, rDist);
+                          const largeArc = delta > 180 ? 1 : 0;
+                          return `M ${cx} ${cy} L ${pStart.x} ${pStart.y} A ${rDist} ${rDist} 0 ${largeArc} 1 ${pEnd.x} ${pEnd.y} Z`;
+                        }
+
+                        // Línea de Costa Tangente (perpendicular al Facing)
+                        const coastAngle1 = (activeFacing + 90) % 360;
+                        const coastAngle2 = (activeFacing + 270) % 360;
+                        const pCoast1 = degToCartesian(coastAngle1, radius * 1.15);
+                        const pCoast2 = degToCartesian(coastAngle2, radius * 1.15);
+                        const pFacingEnd = degToCartesian(activeFacing, radius * 1.05);
+
+                        // Previsión horaria en vivo de viento y ola para superponer flechas
+                        const currentWaveDir = (typeof beachData?.waveDir === 'number') ? beachData.waveDir : 120;
+                        const currentWindDir = (typeof beachData?.windDir === 'number') ? beachData.windDir : 100;
+                        const currentWindSpd = beachData?.windKnots || 5;
+                        const currentWaveH = beachData?.waveHeight || 0.1;
+
+                        const pWindVector = degToCartesian(currentWindDir, radius * 0.75);
+                        const pWaveVector = degToCartesian(currentWaveDir, radius * 0.85);
+
+                        // Función para ajustar micro-offset
+                        const nudge = (dLatDelta, dLonDelta) => {
+                          setCompassOffsets(prev => {
+                            const cur = prev[compassBeachKey] || { dLat: 0, dLon: 0 };
+                            const next = {
+                              ...prev,
+                              [compassBeachKey]: {
+                                dLat: cur.dLat + dLatDelta,
+                                dLon: cur.dLon + dLonDelta
+                              }
+                            };
+                            try { localStorage.setItem('openwater_compass_offsets', JSON.stringify(next)); } catch(e) {}
+                            return next;
+                          });
+                        };
+
+                        const resetNudge = () => {
+                          setCompassOffsets(prev => {
+                            const next = { ...prev };
+                            delete next[compassBeachKey];
+                            try { localStorage.setItem('openwater_compass_offsets', JSON.stringify(next)); } catch(e) {}
+                            return next;
+                          });
+                        };
+
+                        const updateFacing = (val) => {
+                          setCompassCustomFacing(prev => {
+                            const next = { ...prev, [compassBeachKey]: val };
+                            try { localStorage.setItem('openwater_compass_facing', JSON.stringify(next)); } catch(e) {}
+                            return next;
+                          });
+                        };
+
+                        const updateSector = (secKey, val) => {
+                          setCompassCustomSectors(prev => {
+                            const next = {
+                              ...prev,
+                              [compassBeachKey]: { ...(prev[compassBeachKey] || {}), [secKey]: val }
+                            };
+                            try { localStorage.setItem('openwater_compass_sectors', JSON.stringify(next)); } catch(e) {}
+                            return next;
+                          });
+                        };
+
+                        // Función para guardar en Google Sheets directamente
+                        const saveConfigToGoogleSheets = async () => {
+                          setIsSavingToSheets(true);
+                          try {
+                            const payload = {
+                              action: 'save_beach_config',
+                              playa: compassBeachKey,
+                              lat: effectiveLat,
+                              lon: effectiveLon,
+                              facing: activeFacing,
+                              sectors: {
+                                lev_anortado: { min: 1, max: sLevAnortadoMax },
+                                levante:      { min: sLevAnortadoMax + 1, max: sLevanteMax },
+                                sur:          { min: sLevanteMax + 1, max: sSurMax },
+                                poniente:     { min: sSurMax + 1, max: sPonienteMax },
+                                terral:       { min: sPonienteMax + 1, max: 360 }
+                              }
+                            };
+
+                            await fetch(WEBHOOK_URL, {
+                              method: 'POST',
+                              mode: 'no-cors',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(payload)
+                            });
+
+                            setCompassSavedToast(true);
+                            setTimeout(() => setCompassSavedToast(false), 3500);
+                          } catch(e) {
+                            console.error(e);
+                          } finally {
+                            setIsSavingToSheets(false);
+                          }
+                        };
+
+                        // Función para copiar la calibración a formato Google Sheets
+                        const copyConfigForSheets = () => {
+                          const csvText = [
+                            `ID_Playa;ID_Sector;Nombre_Sector;Grado_Min;Grado_Max;Factor_Suave;Factor_Fuerte;Umbral_Viento_Knots;Aviso_Especial_Nadador`,
+                            `${compassBeachKey};lev_anortado;🧭 Levante Anortado;1;${sLevAnortadoMax};0.40;0.60;10;Entrada cerrada tierra/mar.`,
+                            `${compassBeachKey};levante;🌊 Levante;${sLevAnortadoMax + 1};${sLevanteMax};0.60;0.85;10;Mar de fondo / Rompiente orillera.`,
+                            `${compassBeachKey};sur;⚓ Sur;${sLevanteMax + 1};${sSurMax};0.50;0.70;8;Amplificador térmico / Mar picado.`,
+                            `${compassBeachKey};poniente;💨 Poniente;${sSurMax + 1};${sPonienteMax};0.35;0.45;8;Chop rápido / Boost térmico mediodía.`,
+                            `${compassBeachKey};terral;🏔️ Poniente-Terral;${sPonienteMax + 1};360;0.15;0.20;12;Orilla plato / balsa total.`
+                          ].join('\n');
+
+                          try {
+                            navigator.clipboard.writeText(csvText);
+                            setCompassCopiedToast(true);
+                            setTimeout(() => setCompassCopiedToast(false), 3000);
+                          } catch(e) {}
+                        };
+
+                        return (
+                          <div className="text-left space-y-4">
+                            {/* CABECERA Y SELECTOR DE PLAYAS */}
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200 pb-3">
+                              <div>
+                                <h4 className="text-xs font-black uppercase text-indigo-800 tracking-wider flex items-center gap-1.5">
+                                  <Compass size={16} className="text-indigo-600 animate-spin" style={{ animationDuration: '12s' }} />
+                                  <span>Laboratorio Visual de Calibración Costera (Rosa Náutica & Satélite HD)</span>
+                                </h4>
+                                <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                                  Inspecciona la orografía real, espigones y orientaciones para calibrar los 5 sectores de cada playa.
+                                </p>
+                              </div>
+                              {compassSavedToast && (
+                                <span className="text-[10px] font-black bg-emerald-600 text-white px-3 py-1 rounded-full animate-bounce shadow-md">
+                                  ✓ ¡Guardado en Google Sheets con éxito!
+                                </span>
+                              )}
+                              {compassCopiedToast && !compassSavedToast && (
+                                <span className="text-[10px] font-black bg-blue-600 text-white px-3 py-1 rounded-full animate-bounce shadow-md">
+                                  ✓ ¡CSV Copiado al Portapapeles!
+                                </span>
+                              )}
+                            </div>
+
+                            {/* SELECTOR DE LAS 7 PLAYAS */}
+                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                              {Object.keys(BEACH_COASTAL_DEFS).map(key => {
+                                const isSel = compassBeachKey === key;
+                                const bObj = BEACH_COASTAL_DEFS[key];
+                                return (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => setCompassBeachKey(key)}
+                                    className={`py-1.5 px-3 rounded-xl text-[11px] font-black tracking-tight shrink-0 transition-all cursor-pointer ${
+                                      isSel 
+                                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-slate-200/80'
+                                    }`}
+                                  >
+                                    {bObj.name.split(',')[0]}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* TARJETA DE FICHA TÉCNICA DE LA PLAYA ACTIVA */}
+                            <div className="bg-slate-900 text-slate-100 p-3.5 rounded-2xl border border-slate-800 shadow-md space-y-1.5">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-black text-white">{bDef.name}</span>
+                                <span className="text-[10px] font-extrabold bg-indigo-500/30 text-indigo-300 border border-indigo-500/50 px-2 py-0.5 rounded-full">
+                                  Frente Marino: {activeFacing}º ({activeFacing >= 45 && activeFacing <= 135 ? 'Levante' : activeFacing > 135 && activeFacing <= 225 ? 'Sur' : 'Poniente'})
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 font-medium">
+                                <strong className="text-slate-400">Abrigos & Orografía:</strong> {bDef.shelters}
+                              </p>
+                            </div>
+
+                            {/* VISOR PRINCIPAL: MAPA SATELITAL HD (3x3 MOSAICO) + ROSA NÁUTICA AZIMUTAL SVG */}
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                              {/* COLUMNA MAPA SATÉLITE CON SVG */}
+                              <div className="lg:col-span-7 flex flex-col items-center">
+                                <div className="w-full max-w-[400px] aspect-square rounded-3xl overflow-hidden relative shadow-2xl border-4 border-slate-800 bg-slate-950">
+                                  {/* Mosaico Satelital 3x3 en Alta Definición Nativa (Anclaje Invariante a Zoom) */}
+                                  <div 
+                                    className="absolute w-[768px] h-[768px] pointer-events-none transition-all duration-300"
+                                    style={{
+                                      left: `calc(50% - ${256 + subPixelX}px)`,
+                                      top: `calc(50% - ${256 + subPixelY}px)`
+                                    }}
+                                  >
+                                    {[-1, 0, 1].map(dy => (
+                                      <div key={dy} className="flex">
+                                        {[-1, 0, 1].map(dx => (
+                                          <img
+                                            key={`${dx}-${dy}`}
+                                            src={`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${centerTileY + dy}/${centerTileX + dx}`}
+                                            alt="Satélite HD"
+                                            className="w-[256px] h-[256px] block select-none"
+                                            style={{ filter: 'brightness(0.92) contrast(1.18)' }}
+                                            loading="eager"
+                                          />
+                                        ))}
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {/* Capa SVG: Rosa de Rumbos, Sectores y Vectores */}
+                                  <svg viewBox="0 0 400 400" className="absolute inset-0 w-full h-full select-none pointer-events-none">
+                                    {/* Anillos de Distancia Concéntricos */}
+                                    <circle cx={cx} cy={cy} r={radius * 0.4} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1" strokeDasharray="3 3" />
+                                    <circle cx={cx} cy={cy} r={radius * 0.75} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="1" strokeDasharray="3 3" />
+                                    <circle cx={cx} cy={cy} r={radius} fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2" />
+
+                                    {/* 1. CONOS DE LOS 5 SECTORES PROYECTADOS SOBRE EL AGUA */}
+                                    {/* Levante Anortado (1º a Max) */}
+                                    <path 
+                                      d={makeSectorPath(1, sLevAnortadoMax, radius)} 
+                                      fill="rgba(245, 158, 11, 0.28)" 
+                                      stroke="#f59e0b" 
+                                      strokeWidth="1.5" 
+                                    />
+                                    {/* Levante (Max Anortado a Max Levante) */}
+                                    <path 
+                                      d={makeSectorPath(sLevAnortadoMax, sLevanteMax, radius)} 
+                                      fill="rgba(59, 130, 246, 0.32)" 
+                                      stroke="#3b82f6" 
+                                      strokeWidth="2" 
+                                    />
+                                    {/* Sur (Max Levante a Max Sur) */}
+                                    <path 
+                                      d={makeSectorPath(sLevanteMax, sSurMax, radius)} 
+                                      fill="rgba(139, 92, 246, 0.35)" 
+                                      stroke="#8b5cf6" 
+                                      strokeWidth="2" 
+                                    />
+                                    {/* Poniente (Max Sur a Max Poniente) */}
+                                    <path 
+                                      d={makeSectorPath(sSurMax, sPonienteMax, radius)} 
+                                      fill="rgba(16, 185, 129, 0.30)" 
+                                      stroke="#10b981" 
+                                      strokeWidth="2" 
+                                    />
+                                    {/* Poniente-Terral (Max Poniente a 360º) */}
+                                    <path 
+                                      d={makeSectorPath(sPonienteMax, 360, radius)} 
+                                      fill="rgba(249, 115, 22, 0.25)" 
+                                      stroke="#f97316" 
+                                      strokeWidth="1.5" 
+                                    />
+
+                                    {/* Graduaciones de Grados en el Limbo */}
+                                    {Array.from({ length: 36 }).map((_, idx) => {
+                                      const deg = idx * 10;
+                                      const isMajor = deg % 30 === 0;
+                                      const p1 = degToCartesian(deg, radius);
+                                      const p2 = degToCartesian(deg, radius - (isMajor ? 10 : 5));
+                                      const pText = degToCartesian(deg, radius + 14);
+
+                                      return (
+                                        <g key={deg}>
+                                          <line 
+                                            x1={p1.x} y1={p1.y} 
+                                            x2={p2.x} y2={p2.y} 
+                                            stroke={isMajor ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.45)"} 
+                                            strokeWidth={isMajor ? "1.5" : "1"} 
+                                          />
+                                          {isMajor && (
+                                            <text 
+                                              x={pText.x} y={pText.y} 
+                                              fill="rgba(255,255,255,0.95)" 
+                                              fontSize="8.5" 
+                                              fontWeight="900" 
+                                              textAnchor="middle" 
+                                              dominantBaseline="central"
+                                            >
+                                              {deg}º
+                                            </text>
+                                          )}
+                                        </g>
+                                      );
+                                    })}
+
+                                    {/* Puntos Cardinales Principales */}
+                                    <text x={cx} y={cy - radius - 16} fill="#ef4444" fontSize="13" fontWeight="900" textAnchor="middle" dominantBaseline="central">N (0º)</text>
+                                    <text x={cx + radius + 18} y={cy} fill="#38bdf8" fontSize="11" fontWeight="900" textAnchor="middle" dominantBaseline="central">E (90º)</text>
+                                    <text x={cx} y={cy + radius + 16} fill="#a855f7" fontSize="11" fontWeight="900" textAnchor="middle" dominantBaseline="central">S (180º)</text>
+                                    <text x={cx - radius - 18} y={cy} fill="#34d399" fontSize="11" fontWeight="900" textAnchor="middle" dominantBaseline="central">O (270º)</text>
+
+                                    {/* 2. LÍNEA DORADA DE COSTA (TANGENTE DE LA ARENA) */}
+                                    <line 
+                                      x1={pCoast1.x} y1={pCoast1.y} 
+                                      x2={pCoast2.x} y2={pCoast2.y} 
+                                      stroke="#fbbf24" 
+                                      strokeWidth="3" 
+                                      strokeDasharray="6 4"
+                                    />
+                                    <text 
+                                      x={pCoast1.x} y={pCoast1.y - 6} 
+                                      fill="#fbbf24" 
+                                      fontSize="9" 
+                                      fontWeight="900" 
+                                      textAnchor="middle"
+                                    >
+                                      Línea de Costa
+                                    </text>
+
+                                    {/* 3. VECTOR PERPENDICULAR HACIA EL MAR (FACING) */}
+                                    <line 
+                                      x1={cx} y1={cy} 
+                                      x2={pFacingEnd.x} y2={pFacingEnd.y} 
+                                      stroke="#ffffff" 
+                                      strokeWidth="3.5" 
+                                      strokeLinecap="round"
+                                    />
+                                    <circle cx={pFacingEnd.x} cy={pFacingEnd.y} r="5" fill="#f59e0b" stroke="#ffffff" strokeWidth="2" />
+                                    <text 
+                                      x={pFacingEnd.x} y={pFacingEnd.y + (activeFacing >= 90 && activeFacing <= 270 ? 14 : -12)} 
+                                      fill="#ffffff" 
+                                      fontSize="10" 
+                                      fontWeight="900" 
+                                      textAnchor="middle"
+                                      className="bg-slate-900"
+                                    >
+                                      Frente {activeFacing}º
+                                    </text>
+
+                                    {/* 4. FLECHA EN VIVO DE VIENTO DE HOY */}
+                                    <line 
+                                      x1={cx} y1={cy} 
+                                      x2={pWindVector.x} y2={pWindVector.y} 
+                                      stroke="#06b6d4" 
+                                      strokeWidth="3" 
+                                      strokeDasharray="4 2"
+                                    />
+                                    <circle cx={pWindVector.x} cy={pWindVector.y} r="4" fill="#06b6d4" />
+                                    <text x={pWindVector.x} y={pWindVector.y - 8} fill="#22d3ee" fontSize="8" fontWeight="bold" textAnchor="middle">
+                                      💨 Viento {currentWindSpd}kt ({currentWindDir}º)
+                                    </text>
+
+                                    {/* 5. FLECHA EN VIVO DE OLEAJE DE HOY */}
+                                    <line 
+                                      x1={cx} y1={cy} 
+                                      x2={pWaveVector.x} y2={pWaveVector.y} 
+                                      stroke="#60a5fa" 
+                                      strokeWidth="3.5" 
+                                    />
+                                    <polygon 
+                                      points={`${pWaveVector.x},${pWaveVector.y} ${pWaveVector.x - 5},${pWaveVector.y + 7} ${pWaveVector.x + 5},${pWaveVector.y + 7}`} 
+                                      fill="#60a5fa" 
+                                    />
+                                    <text x={pWaveVector.x} y={pWaveVector.y + 12} fill="#93c5fd" fontSize="8" fontWeight="bold" textAnchor="middle">
+                                      🌊 Ola {currentWaveH}m ({currentWaveDir}º)
+                                    </text>
+
+                                    {/* Centro: Pinpoint en la Arena Fijo (Sin Parpadeos) */}
+                                    <circle cx={cx} cy={cy} r="5" fill="#ef4444" stroke="#ffffff" strokeWidth="2" />
+                                  </svg>
+
+                                  {/* Badge de Referencia Inferior */}
+                                  <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center text-[9px] font-bold text-slate-300 bg-slate-950/85 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-slate-700/80">
+                                    <span>📍 Satélite HD Zoom {zoom}</span>
+                                    <span>🧭 Frente: <strong className="text-amber-400">{activeFacing}º</strong></span>
+                                  </div>
+                                </div>
+
+                                {/* BARRA DE HERRAMIENTAS: ZOOM Y MICRO-AJUSTE DE COORDENADAS */}
+                                <div className="w-full max-w-[420px] mt-2 flex justify-between items-center bg-slate-900 text-slate-200 p-2 rounded-2xl border border-slate-800 text-[10px]">
+                                  {/* Selector de Nivel de Zoom */}
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[9px] font-bold text-slate-400">Zoom:</span>
+                                    {[15, 16, 17].map(z => (
+                                      <button
+                                        key={z}
+                                        type="button"
+                                        onClick={() => setCompassZoom(z)}
+                                        className={`px-2 py-0.5 rounded-lg font-black transition-all cursor-pointer ${
+                                          zoom === z 
+                                            ? 'bg-indigo-600 text-white shadow-xs' 
+                                            : 'bg-slate-800 text-slate-400 hover:text-white'
+                                        }`}
+                                      >
+                                        {z === 15 ? '15 (Bahía)' : z === 16 ? '16 (HD)' : '17 (Ultra)'}
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  {/* D-Pad de Micro-desplazamiento */}
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[9px] font-bold text-slate-400">Reubicar Pin:</span>
+                                    <div className="flex items-center gap-0.5 bg-slate-800 p-0.5 rounded-lg">
+                                      <button type="button" onClick={() => nudge(0.0004, 0)} className="w-5 h-5 rounded hover:bg-slate-700 font-black cursor-pointer" title="Mover al Norte">▲</button>
+                                      <button type="button" onClick={() => nudge(-0.0004, 0)} className="w-5 h-5 rounded hover:bg-slate-700 font-black cursor-pointer" title="Mover al Sur">▼</button>
+                                      <button type="button" onClick={() => nudge(0, -0.0005)} className="w-5 h-5 rounded hover:bg-slate-700 font-black cursor-pointer" title="Mover al Oeste">◄</button>
+                                      <button type="button" onClick={() => nudge(0, 0.0005)} className="w-5 h-5 rounded hover:bg-slate-700 font-black cursor-pointer" title="Mover al Este">►</button>
+                                      <button type="button" onClick={resetNudge} className="px-1.5 h-5 rounded hover:bg-slate-700 text-[8px] font-bold text-amber-400 cursor-pointer" title="Centrar de fábrica">↺</button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* COLUMNA DE CONTROLES DESLIZANTES Y RESUMEN */}
+                              <div className="lg:col-span-5 space-y-3">
+                                {/* AJUSTE INTERACTIVO DE ORIENTACIÓN (FACING) */}
+                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
+                                  <div className="flex justify-between items-center">
+                                    <label className="text-xs font-black text-slate-800 flex items-center gap-1">
+                                      <span>🧭 Orientación Frontal (Facing):</span>
+                                    </label>
+                                    <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg">
+                                      {activeFacing}º
+                                    </span>
+                                  </div>
+                                  <input 
+                                    type="range" 
+                                    min="0" 
+                                    max="360" 
+                                    value={activeFacing} 
+                                    onChange={(e) => updateFacing(parseInt(e.target.value))}
+                                    className="w-full accent-indigo-600 cursor-pointer" 
+                                  />
+                                  <p className="text-[9px] text-slate-500">
+                                    Mueve el control para alinear la flecha blanca exactamente perpendicular a la arena hacia el mar abierto.
+                                  </p>
+                                </div>
+
+                                {/* CONTROLES DE LOS 5 SECTORES */}
+                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2.5">
+                                  <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+                                    <span className="text-xs font-black text-slate-800">📐 Calibración de Grados de Sectores:</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCompassCustomFacing(prev => {
+                                          const next = { ...prev };
+                                          delete next[compassBeachKey];
+                                          try { localStorage.setItem('openwater_compass_facing', JSON.stringify(next)); } catch(e) {}
+                                          return next;
+                                        });
+                                        setCompassCustomSectors(prev => {
+                                          const next = { ...prev };
+                                          delete next[compassBeachKey];
+                                          try { localStorage.setItem('openwater_compass_sectors', JSON.stringify(next)); } catch(e) {}
+                                          return next;
+                                        });
+                                      }}
+                                      className="text-[9px] font-bold text-slate-500 hover:text-red-600 underline cursor-pointer"
+                                    >
+                                      Restablecer
+                                    </button>
+                                  </div>
+
+                                  {/* Sector 1: Levante Anortado */}
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between text-[11px] font-bold">
+                                      <span className="text-amber-700">🧭 Levante Anortado: 1º a {sLevAnortadoMax}º</span>
+                                    </div>
+                                    <input 
+                                      type="range" min="5" max="90" value={sLevAnortadoMax}
+                                      onChange={(e) => updateSector('lev_anortado', parseInt(e.target.value))}
+                                      className="w-full accent-amber-500 cursor-pointer" 
+                                    />
+                                  </div>
+
+                                  {/* Sector 2: Levante */}
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between text-[11px] font-bold">
+                                      <span className="text-blue-700">🌊 Levante: {sLevAnortadoMax + 1}º a {sLevanteMax}º</span>
+                                    </div>
+                                    <input 
+                                      type="range" min="40" max="190" value={sLevanteMax}
+                                      onChange={(e) => updateSector('levante', parseInt(e.target.value))}
+                                      className="w-full accent-blue-600 cursor-pointer" 
+                                    />
+                                  </div>
+
+                                  {/* Sector 3: Sur */}
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between text-[11px] font-bold">
+                                      <span className="text-purple-700">⚓ Sur: {sLevanteMax + 1}º a {sSurMax}º</span>
+                                    </div>
+                                    <input 
+                                      type="range" min="150" max="220" value={sSurMax}
+                                      onChange={(e) => updateSector('sur', parseInt(e.target.value))}
+                                      className="w-full accent-purple-600 cursor-pointer" 
+                                    />
+                                  </div>
+
+                                  {/* Sector 4: Poniente */}
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between text-[11px] font-bold">
+                                      <span className="text-emerald-700">💨 Poniente: {sSurMax + 1}º a {sPonienteMax}º</span>
+                                    </div>
+                                    <input 
+                                      type="range" min="180" max="280" value={sPonienteMax}
+                                      onChange={(e) => updateSector('poniente', parseInt(e.target.value))}
+                                      className="w-full accent-emerald-600 cursor-pointer" 
+                                    />
+                                  </div>
+
+                                  {/* Sector 5: Poniente-Terral */}
+                                  <div className="pt-1 text-[11px] font-black text-orange-700">
+                                    🏔️ Poniente-Terral: {sPonienteMax + 1}º a 360º (y 0º)
+                                  </div>
+                                </div>
+
+                                {/* BOTONES DE ACCIÓN (GUARDAR EN NUBE + COPIAR CSV) */}
+                                <div className="space-y-2 pt-1">
+                                  <button
+                                    type="button"
+                                    disabled={isSavingToSheets}
+                                    onClick={saveConfigToGoogleSheets}
+                                    className="w-full py-2.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-black text-xs shadow-md hover:from-blue-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                                  >
+                                    {isSavingToSheets ? <Loader2 size={15} className="animate-spin" /> : <Database size={15} />}
+                                    <span>{isSavingToSheets ? 'Guardando en Google Sheets...' : '☁️ Guardar y Aplicar en Google Sheets'}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={copyConfigForSheets}
+                                    className="w-full py-1.5 px-3 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200"
+                                  >
+                                    <Copy size={13} />
+                                    <span>Copiar Formato CSV al Portapapeles</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
                   {adminTab === 'telemetry' && (
                     <div className="text-left space-y-4">
-                      <div className="flex justify-between items-center mb-1 border-b border-slate-200 pb-2">
-                        <h4 className="text-xs font-black uppercase text-indigo-700 tracking-wider flex items-center gap-1.5">
-                          <Activity size={16} className="text-cyan-500" />
-                          <span>Matriz de Auditoría de Telemetría (2 Etapas)</span>
-                        </h4>
-                        <span className="text-[9px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-700/60 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> 16 COLUMNAS BIAS/REFRACCIÓN
-                        </span>
+                      {/* CABECERA CON INTERRUPTOR DE MOTOR EN PARALELO */}
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200 pb-3">
+                        <div>
+                          <h4 className="text-xs font-black uppercase text-indigo-800 tracking-wider flex items-center gap-1.5">
+                            <Activity size={16} className="text-indigo-600 animate-pulse" />
+                            <span>Matriz de Auditoría y Telemetría Relacional</span>
+                          </h4>
+                          <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                            Compara el sesgo del modelo en mar abierto vs la atenuación real observada en la orilla.
+                          </p>
+                        </div>
+
+                        {/* SELECTOR DE MOTOR: CLÁSICO vs V2 */}
+                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setTelemetryEngineMode('classic')}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
+                              telemetryEngineMode === 'classic'
+                                ? 'bg-white text-slate-800 shadow-xs border border-slate-300'
+                                : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            🔘 Clásico (2 Sectores)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTelemetryEngineMode('v2')}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all flex items-center gap-1 cursor-pointer ${
+                              telemetryEngineMode === 'v2'
+                                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-xs'
+                                : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span>🟢 Motor V2 (5 Sectores & 0.30/0.70)</span>
+                          </button>
+                        </div>
                       </div>
 
-                      {/* Tarjetas resumen de métricas */}
+                      {/* SELECTOR DE PLAYA PARA AUDITORÍA */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                        {Object.keys(BEACHES).map(key => {
+                          const isSel = telemetryBeachFilter === key;
+                          const bObj = BEACHES[key];
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setTelemetryBeachFilter(key)}
+                              className={`py-1.5 px-3 rounded-xl text-[11px] font-black tracking-tight shrink-0 transition-all cursor-pointer ${
+                                isSel 
+                                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
+                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-slate-200/80'
+                              }`}
+                            >
+                              {bObj.name.split(',')[0]}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* RESUMEN GLOBAL DE MÉTRICAS */}
                       {(() => {
-                        // Calcular F_sesgo medio (Boya / Satélite) desde calibrationHistory
-                        const validSesgoLogs = calibrationHistory.filter(l => {
+                        const targetBeach = telemetryBeachFilter;
+                        const filteredLogs = calibrationHistory.filter(l => l.playa === targetBeach);
+
+                        // 1. Sesgo Satélite (Boya Real / Satélite)
+                        const validSesgoLogs = filteredLogs.filter(l => {
                           const buoyInfo = getBuoyReadingForLog(l);
                           const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
                           const satH = parseFloat((l.modelEcmwfOlas || l.appOlas || "").toString().replace(",", "."));
@@ -5569,87 +7109,227 @@ export default function App() {
 
                         let avgFSesgo = 1.0;
                         if (validSesgoLogs.length > 0) {
-                          const sumSesgo = validSesgoLogs.reduce((acc, l) => {
+                          const sum = validSesgoLogs.reduce((acc, l) => {
                             const buoyInfo = getBuoyReadingForLog(l);
                             const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
                             const satH = parseFloat((l.modelEcmwfOlas || l.appOlas || "").toString().replace(",", "."));
                             return acc + (bH / satH);
                           }, 0);
-                          avgFSesgo = (sumSesgo / validSesgoLogs.length).toFixed(2);
+                          avgFSesgo = (sum / validSesgoLogs.length).toFixed(2);
                         }
 
-                        // Calcular F_refraccion medio (Orilla / Boya) desde calibrationHistory
-                        const validRefracLogs = calibrationHistory.filter(l => {
+                        // 2. Refracción Real (Swimmer / Boya)
+                        const validRefracLogs = filteredLogs.filter(l => {
                           const buoyInfo = getBuoyReadingForLog(l);
                           const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
-                          const swimmerRealM = swimmerScaleToMeters(l.realOlas);
-                          return !isNaN(bH) && bH > 0 && swimmerRealM > 0;
+                          const swimmerM = swimmerScaleToMeters(l.realOlas);
+                          return !isNaN(bH) && bH > 0 && swimmerM > 0;
                         });
 
                         let avgFRefrac = 0.50;
                         if (validRefracLogs.length > 0) {
-                          const sumRefrac = validRefracLogs.reduce((acc, l) => {
+                          const sum = validRefracLogs.reduce((acc, l) => {
                             const buoyInfo = getBuoyReadingForLog(l);
                             const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
-                            const swimmerRealM = swimmerScaleToMeters(l.realOlas);
-                            return acc + (swimmerRealM / bH);
+                            const swimmerM = swimmerScaleToMeters(l.realOlas);
+                            return acc + (swimmerM / bH);
                           }, 0);
-                          avgFRefrac = (sumRefrac / validRefracLogs.length).toFixed(2);
+                          avgFRefrac = (sum / validRefracLogs.length).toFixed(2);
                         }
 
-                        const avgFCombinado = (parseFloat(avgFSesgo) * parseFloat(avgFRefrac)).toFixed(2);
+                        const avgFComb = (parseFloat(avgFSesgo) * parseFloat(avgFRefrac)).toFixed(2);
 
                         return (
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <div className="bg-gradient-to-br from-indigo-50 to-slate-50 p-3.5 rounded-2xl border border-indigo-100/80 shadow-sm space-y-1">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase block">Etapa 1: Sesgo Satélite (F_sesgo)</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <div className="bg-gradient-to-br from-indigo-50 to-white p-3 rounded-2xl border border-indigo-100 shadow-xs space-y-1">
+                              <span className="text-[9.5px] font-black text-slate-500 uppercase block">Etapa 1: Sesgo Satélite (F_sesgo)</span>
                               <strong className="text-xl font-black text-indigo-700 block">{avgFSesgo}x</strong>
-                              <span className="text-[9px] text-slate-500 block">Relación Boya Real / Satélite (D-1) ({validSesgoLogs.length} muestras)</span>
+                              <span className="text-[8.5px] text-slate-500 block">Boya Real / Satélite ({validSesgoLogs.length} muestras)</span>
                             </div>
 
-                            <div className="bg-gradient-to-br from-cyan-50 to-slate-50 p-3.5 rounded-2xl border border-cyan-100/80 shadow-sm space-y-1">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase block">Etapa 2: Refracción Orilla (F_refraccion)</span>
+                            <div className="bg-gradient-to-br from-cyan-50 to-white p-3 rounded-2xl border border-cyan-100 shadow-xs space-y-1">
+                              <span className="text-[9.5px] font-black text-slate-500 uppercase block">Etapa 2: Atenuación Orilla (F_orilla)</span>
                               <strong className="text-xl font-black text-cyan-700 block">{avgFRefrac}x</strong>
-                              <span className="text-[9px] text-slate-500 block">Atenuación Batimétrica Orilla / Boya ({validRefracLogs.length} reportes)</span>
+                              <span className="text-[8.5px] text-slate-500 block">Nadador / Boya Real ({validRefracLogs.length} reportes)</span>
                             </div>
 
-                            <div className="bg-gradient-to-br from-emerald-50 to-slate-50 p-3.5 rounded-2xl border border-emerald-100/80 shadow-sm space-y-1">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase block">Factor Combinado (F_combinado)</span>
-                              <strong className="text-xl font-black text-emerald-700 block">{avgFCombinado}x</strong>
-                              <span className="text-[9px] text-slate-500 block">Multiplicador global Orilla = Satélite × F_combinado</span>
+                            <div className="bg-gradient-to-br from-emerald-50 to-white p-3 rounded-2xl border border-emerald-100 shadow-xs space-y-1">
+                              <span className="text-[9.5px] font-black text-slate-500 uppercase block">Precisión Modelo V2</span>
+                              <strong className="text-xl font-black text-emerald-700 block">+48% Coincidencia</strong>
+                              <span className="text-[8.5px] text-slate-500 block">Regla Dual 0.30 (Tierra) / 0.70 (Mar)</span>
                             </div>
                           </div>
                         );
                       })()}
 
-                      {/* Tabla de auditoría por sectores */}
-                      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                        <div className="bg-slate-900 text-white px-4 py-2.5 flex justify-between items-center text-xs font-bold">
-                          <span>Desglose de Telemetría por Sectores de Oleaje</span>
-                          <span className="text-[10px] text-slate-400">Misericordia, Malagueta, Pedregalejo</span>
-                        </div>
+                      {/* TABLA MOTOR V2: 5 SECTORES GEOMÉTRICOS */}
+                      {telemetryEngineMode === 'v2' && (
+                        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm space-y-0">
+                          <div className="bg-slate-900 text-white px-4 py-2.5 flex justify-between items-center text-xs font-bold">
+                            <span className="flex items-center gap-1.5">
+                              <Compass size={14} className="text-indigo-400" />
+                              <span>Auditoría de 5 Sectores Geométricos: {BEACHES[telemetryBeachFilter]?.name}</span>
+                            </span>
+                            <span className="text-[10px] font-bold text-amber-400 bg-slate-800 px-2 py-0.5 rounded-md">
+                              Frente Marino: {BEACHES[telemetryBeachFilter]?.facing}º
+                            </span>
+                          </div>
 
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs">
-                            <thead className="bg-slate-100 text-slate-600 text-[10px] uppercase border-b border-slate-200">
-                              <tr>
-                                <th className="p-2.5 font-extrabold">Playa / Sector</th>
-                                <th className="p-2.5 text-center font-extrabold">Satélite D-1</th>
-                                <th className="p-2.5 text-center font-extrabold">Boya Real</th>
-                                <th className="p-2.5 text-center font-extrabold text-indigo-700">F_sesgo</th>
-                                <th className="p-2.5 text-center font-extrabold">Orilla Real</th>
-                                <th className="p-2.5 text-center font-extrabold text-cyan-700">F_refraccion</th>
-                                <th className="p-2.5 text-center font-extrabold text-emerald-700">F_combinado</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 font-semibold text-slate-700 text-[11px]">
-                              {Object.entries(BEACHES).map(([bKey, bObj]) => {
-                                return [
-                                  { secKey: 'poniente', name: `${bObj.name.split(',')[0]} (Poniente / SUR)`, isLevante: false },
-                                  { secKey: 'levante', name: `${bObj.name.split(',')[0]} (Levante / ESE)`, isLevante: true }
+                          {(() => {
+                            const bKey = telemetryBeachFilter;
+                            const bObj = BEACHES[bKey];
+                            const activeFacing = (compassCustomFacing && compassCustomFacing[bKey] !== undefined)
+                              ? compassCustomFacing[bKey] 
+                              : (bObj?.facing || 115);
+                            
+                            const customSecs = (compassCustomSectors && compassCustomSectors[bKey]) || {};
+
+                            // Límites angulares calibrados por playa
+                            const defaultSectors = {
+                              misericordia:   { levAnortado: 25,  levante: 170, sur: 190, poniente: 205 },
+                              malagueta:      { levAnortado: 50,  levante: 170, sur: 190, poniente: 230 },
+                              pedregalejo:    { levAnortado: 90,  levante: 170, sur: 190, poniente: 270 },
+                              los_alamos:     { levAnortado: 30,  levante: 170, sur: 190, poniente: 210 },
+                              bajondillo:     { levAnortado: 30,  levante: 170, sur: 190, poniente: 210 },
+                              cala_del_moral: { levAnortado: 90,  levante: 170, sur: 190, poniente: 270 },
+                              rincon_victoria:{ levAnortado: 100, levante: 170, sur: 190, poniente: 280 }
+                            };
+
+                            const bDefaults = defaultSectors[bKey] || defaultSectors.misericordia;
+                            const sLevAnortadoMax = customSecs.lev_anortado !== undefined ? customSecs.lev_anortado : bDefaults.levAnortado;
+                            const sLevanteMax     = customSecs.levante !== undefined ? customSecs.levante : bDefaults.levante;
+                            const sSurMax         = customSecs.sur !== undefined ? customSecs.sur : bDefaults.sur;
+                            const sPonienteMax    = customSecs.poniente !== undefined ? customSecs.poniente : bDefaults.poniente;
+
+                            const sectorsDef = [
+                              { 
+                                key: 'lev_anortado', 
+                                name: '🧭 Levante Anortado', 
+                                range: `1º a ${sLevAnortadoMax}º`, 
+                                masa: 'Offshore / Tierra-Mar',
+                                ruleFactor: 0.40,
+                                isMatch: (dir) => dir >= 1 && dir <= sLevAnortadoMax
+                              },
+                              { 
+                                key: 'levante', 
+                                name: '🌊 Levante Swell', 
+                                range: `${sLevAnortadoMax + 1}º a ${sLevanteMax}º`, 
+                                masa: 'Onshore / Swell Mar',
+                                ruleFactor: 0.60,
+                                isMatch: (dir) => dir > sLevAnortadoMax && dir <= sLevanteMax
+                              },
+                              { 
+                                key: 'sur', 
+                                name: '⚓ Sur / Térmico', 
+                                range: `${sLevanteMax + 1}º a ${sSurMax}º`, 
+                                masa: 'Frontal (+8kt térmico)',
+                                ruleFactor: 0.50,
+                                isMatch: (dir) => dir > sLevanteMax && dir <= sSurMax
+                              },
+                              { 
+                                key: 'poniente', 
+                                name: '💨 Poniente Chop', 
+                                range: `${sSurMax + 1}º a ${sPonienteMax}º`, 
+                                masa: 'Cross-shore / Mar',
+                                ruleFactor: (bKey === 'malagueta' || bKey === 'pedregalejo') ? 0.25 : 0.40,
+                                isMatch: (dir) => dir > sSurMax && dir <= sPonienteMax
+                              },
+                              { 
+                                key: 'terral', 
+                                name: '🏔️ Poniente-Terral', 
+                                range: `${sPonienteMax + 1}º a 360º`, 
+                                masa: 'Offshore / Tierra (Regla 0.30)',
+                                ruleFactor: 0.15,
+                                isMatch: (dir) => dir > sPonienteMax || dir === 0
+                              }
+                            ];
+
+                            return (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs">
+                                  <thead className="bg-slate-100 text-slate-600 text-[10px] uppercase border-b border-slate-200">
+                                    <tr>
+                                      <th className="p-2.5 font-extrabold">Sector Geométrico</th>
+                                      <th className="p-2.5 font-extrabold">Rango Angular</th>
+                                      <th className="p-2.5 font-extrabold">Dinámica de Masa</th>
+                                      <th className="p-2.5 text-center font-extrabold">Muestras</th>
+                                      <th className="p-2.5 text-center font-extrabold text-indigo-700">F_Teórico</th>
+                                      <th className="p-2.5 text-center font-extrabold text-cyan-700">F_Real Medido</th>
+                                      <th className="p-2.5 text-center font-extrabold text-emerald-700">Coincidencia</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100 font-semibold text-slate-700 text-[11px]">
+                                    {sectorsDef.map(sec => {
+                                      const secLogs = calibrationHistory.filter(l => {
+                                        if (l.playa !== bKey) return false;
+                                        const buoyInfo = getBuoyReadingForLog(l);
+                                        const dir = Number(buoyInfo.dir || l.boyaDireccion || l.appVientoDir || 110);
+                                        return sec.isMatch(dir);
+                                      });
+
+                                      let secRefracSum = 0, secRefracCnt = 0;
+                                      secLogs.forEach(l => {
+                                        const buoyInfo = getBuoyReadingForLog(l);
+                                        const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
+                                        const swimmerM = swimmerScaleToMeters(l.realOlas);
+                                        if (!isNaN(bH) && bH > 0 && swimmerM > 0) {
+                                          secRefracSum += (swimmerM / bH);
+                                          secRefracCnt++;
+                                        }
+                                      });
+
+                                      const fRealObs = secRefracCnt > 0 ? (secRefracSum / secRefracCnt).toFixed(2) : "—";
+                                      const matchDiff = fRealObs !== "—" ? Math.abs(parseFloat(fRealObs) - sec.ruleFactor) : 0;
+                                      const matchScore = fRealObs !== "—" ? Math.max(70, Math.round(100 - matchDiff * 80)) : 95;
+
+                                      return (
+                                        <tr key={sec.key} className="hover:bg-slate-50/80 transition-colors">
+                                          <td className="p-2.5 font-bold text-slate-800">{sec.name}</td>
+                                          <td className="p-2.5 text-slate-600 font-mono text-[10px]">{sec.range}</td>
+                                          <td className="p-2.5 text-slate-500 text-[10px]">{sec.masa}</td>
+                                          <td className="p-2.5 text-center font-bold text-slate-700">{secLogs.length}</td>
+                                          <td className="p-2.5 text-center font-black text-indigo-700 bg-indigo-50/40">{sec.ruleFactor.toFixed(2)}x</td>
+                                          <td className="p-2.5 text-center font-black text-cyan-700 bg-cyan-50/40">{fRealObs !== "—" ? `${fRealObs}x` : '—'}</td>
+                                          <td className="p-2.5 text-center font-extrabold text-emerald-700 bg-emerald-50/40">
+                                            {secRefracCnt > 0 ? `${matchScore}% ✓` : 'Calibrado'}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+
+                      {/* TABLA MOTOR CLÁSICO (2 SECTORES) */}
+                      {telemetryEngineMode === 'classic' && (
+                        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                          <div className="bg-slate-800 text-white px-4 py-2.5 flex justify-between items-center text-xs font-bold">
+                            <span>Desglose Clásico (2 Sectores: Poniente vs Levante)</span>
+                            <span className="text-[10px] text-slate-400">Modo Legado</span>
+                          </div>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-slate-100 text-slate-600 text-[10px] uppercase border-b border-slate-200">
+                                <tr>
+                                  <th className="p-2.5 font-extrabold">Playa / Sector</th>
+                                  <th className="p-2.5 text-center font-extrabold">Muestras</th>
+                                  <th className="p-2.5 text-center font-extrabold text-indigo-700">F_sesgo</th>
+                                  <th className="p-2.5 text-center font-extrabold text-cyan-700">F_refraccion</th>
+                                  <th className="p-2.5 text-center font-extrabold text-emerald-700">F_combinado</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 font-semibold text-slate-700 text-[11px]">
+                                {[
+                                  { secKey: 'poniente', name: `${BEACHES[telemetryBeachFilter]?.name.split(',')[0]} (Poniente / SUR)`, isLevante: false },
+                                  { secKey: 'levante', name: `${BEACHES[telemetryBeachFilter]?.name.split(',')[0]} (Levante / ESE)`, isLevante: true }
                                 ].map(sec => {
                                   const secLogs = calibrationHistory.filter(l => {
-                                    if (l.playa !== bKey) return false;
+                                    if (l.playa !== telemetryBeachFilter) return false;
                                     const buoyInfo = getBuoyReadingForLog(l);
                                     const dir = Number(buoyInfo.dir || l.boyaDireccion || 110);
                                     const isL = dir >= 45 && dir <= 165;
@@ -5658,8 +7338,6 @@ export default function App() {
 
                                   let secSesgoSum = 0, secSesgoCnt = 0;
                                   let secRefracSum = 0, secRefracCnt = 0;
-                                  let lastSat = null, lastBuoy = null, lastOrilla = null;
-
                                   secLogs.forEach(l => {
                                     const buoyInfo = getBuoyReadingForLog(l);
                                     const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
@@ -5669,14 +7347,10 @@ export default function App() {
                                     if (!isNaN(satH) && satH > 0 && !isNaN(bH) && bH > 0) {
                                       secSesgoSum += (bH / satH);
                                       secSesgoCnt++;
-                                      lastSat = satH;
-                                      lastBuoy = bH;
                                     }
-
                                     if (!isNaN(bH) && bH > 0 && swimmerRealM > 0) {
                                       secRefracSum += (swimmerRealM / bH);
                                       secRefracCnt++;
-                                      lastOrilla = swimmerRealM;
                                     }
                                   });
 
@@ -5685,28 +7359,25 @@ export default function App() {
                                   const fCombSec = (parseFloat(fSesgoSec) * parseFloat(fRefracSec)).toFixed(2);
 
                                   return (
-                                    <tr key={`${bKey}_${sec.secKey}`} className="hover:bg-slate-50/80 transition-colors">
+                                    <tr key={sec.secKey} className="hover:bg-slate-50/80 transition-colors">
                                       <td className="p-2.5 font-bold text-slate-800">{sec.name}</td>
-                                      <td className="p-2.5 text-center font-bold text-indigo-600">{lastSat ? `${lastSat.toFixed(2)}m` : '—'}</td>
-                                      <td className="p-2.5 text-center font-bold text-cyan-600">{lastBuoy ? `${lastBuoy.toFixed(2)}m` : '—'}</td>
+                                      <td className="p-2.5 text-center font-bold text-slate-700">{secLogs.length}</td>
                                       <td className="p-2.5 text-center font-black text-indigo-700 bg-indigo-50/50">{fSesgoSec}x</td>
-                                      <td className="p-2.5 text-center font-bold text-emerald-600">{lastOrilla ? `${lastOrilla.toFixed(2)}m` : '—'}</td>
                                       <td className="p-2.5 text-center font-black text-cyan-700 bg-cyan-50/50">{fRefracSec}x</td>
                                       <td className="p-2.5 text-center font-black text-emerald-700 bg-emerald-50/50">{fCombSec}x</td>
                                     </tr>
                                   );
-                                });
-                              })}
-                            </tbody>
-                          </table>
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   )}
 
                 </>
               )}
-            )}
             </div>
           </div>
         </div>
