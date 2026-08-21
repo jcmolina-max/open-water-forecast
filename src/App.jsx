@@ -5527,41 +5527,104 @@ export default function App() {
                           }
 
                           const defaultFactoryMap = {
-                            misericordia:   { levante_fuerte: 0.85, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.35, terral: 0.15 },
-                            malagueta:      { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.30, terral: 0.15 },
-                            pedregalejo:    { levante_fuerte: 0.65, levante_suave: 0.50, poniente_fuerte: 0.40, poniente_suave: 0.30, terral: 0.15 },
-                            los_alamos:     { levante_fuerte: 0.90, levante_suave: 0.85, poniente_fuerte: 0.90, poniente_suave: 0.75, terral: 0.20 },
-                            bajondillo:     { levante_fuerte: 0.80, levante_suave: 0.70, poniente_fuerte: 0.70, poniente_suave: 0.60, terral: 0.20 },
-                            cala_del_moral: { levante_fuerte: 0.75, levante_suave: 0.65, poniente_fuerte: 0.70, poniente_suave: 0.45, terral: 0.15 },
-                            rincon_victoria:{ levante_fuerte: 0.85, levante_suave: 0.80, poniente_fuerte: 0.70, poniente_suave: 0.50, terral: 0.15 }
+                            misericordia: {
+                              lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+                              levante_suave: 0.45, levante_fuerte: 0.85,
+                              sur_suave: 0.50, sur_fuerte: 0.70,
+                              poniente_suave: 0.50, poniente_fuerte: 0.65,
+                              terral_suave: 0.25, terral_fuerte: 0.20
+                            },
+                            malagueta: {
+                              lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+                              levante_suave: 0.60, levante_fuerte: 0.85,
+                              sur_suave: 0.50, sur_fuerte: 0.70,
+                              poniente_suave: 0.45, poniente_fuerte: 0.60,
+                              terral_suave: 0.25, terral_fuerte: 0.20
+                            },
+                            pedregalejo: {
+                              lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+                              levante_suave: 0.60, levante_fuerte: 0.85,
+                              sur_suave: 0.50, sur_fuerte: 0.70,
+                              poniente_suave: 0.60, poniente_fuerte: 0.70,
+                              terral_suave: 0.25, terral_fuerte: 0.20
+                            },
+                            los_alamos: {
+                              lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+                              levante_suave: 0.70, levante_fuerte: 0.85,
+                              sur_suave: 0.50, sur_fuerte: 0.70,
+                              poniente_suave: 0.60, poniente_fuerte: 0.70,
+                              terral_suave: 0.25, terral_fuerte: 0.20
+                            },
+                            bajondillo: {
+                              lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+                              levante_suave: 0.70, levante_fuerte: 0.85,
+                              sur_suave: 0.50, sur_fuerte: 0.70,
+                              poniente_suave: 0.60, poniente_fuerte: 0.70,
+                              terral_suave: 0.25, terral_fuerte: 0.20
+                            },
+                            cala_del_moral: {
+                              lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+                              levante_suave: 0.70, levante_fuerte: 0.85,
+                              sur_suave: 0.50, sur_fuerte: 0.70,
+                              poniente_suave: 0.90, poniente_fuerte: 0.90,
+                              terral_suave: 0.25, terral_fuerte: 0.20
+                            },
+                            rincon_victoria: {
+                              lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+                              levante_suave: 0.70, levante_fuerte: 0.85,
+                              sur_suave: 0.50, sur_fuerte: 0.70,
+                              poniente_suave: 1.00, poniente_fuerte: 1.00,
+                              terral_suave: 0.25, terral_fuerte: 0.20
+                            }
                           };
-                          const bFact = defaultFactoryMap[bKey] || { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.50, poniente_suave: 0.35, terral: 0.15 };
-                          const sectors = [
-                            { key: 'levante_fuerte', title: '🌅 Sector LEVANTE FUERTE (E / SE ≥ 10 kn)', defaultFactor: bFact.levante_fuerte },
-                            { key: 'levante_suave',  title: '☀️ Sector LEVANTE SUAVE / BRISA (E / SE < 10 kn)', defaultFactor: bFact.levante_suave },
-                            { key: 'poniente_fuerte',title: '🌊 Sector PONIENTE FUERTE (S / SO ≥ 10 kn)', defaultFactor: bFact.poniente_fuerte },
-                            { key: 'poniente_suave', title: '🏖️ Sector PONIENTE SUAVE / RESACA (S / SO < 10 kn)', defaultFactor: bFact.poniente_suave },
-                            { key: 'terral',         title: '🔥 Sector Clima TERRAL (Viento NW / N de Tierra)', defaultFactor: bFact.terral }
-                          ];
+
+                          const bDef = BEACH_COASTAL_DEFS[bKey] || BEACH_COASTAL_DEFS.misericordia;
+                          const bFact = defaultFactoryMap[bKey] || defaultFactoryMap.misericordia;
+                          
+                          const secKeys = ['lev_anortado', 'levante', 'sur', 'poniente', 'terral'];
+                          const sectors = [];
+
+                          secKeys.forEach(sKey => {
+                            const sDef = bDef.sectors[sKey] || { min: 1, max: 360, label: sKey };
+                            const suaveKey = `${sKey}_suave`;
+                            const fuerteKey = `${sKey}_fuerte`;
+
+                            sectors.push({
+                              key: suaveKey,
+                              title: `🟢 ${sDef.label} SUAVE (${sDef.min}º-${sDef.max}º / < 12 kn)`,
+                              defaultFactor: bFact[suaveKey] !== undefined ? bFact[suaveKey] : 0.50,
+                              beachKey: bKey,
+                              secBaseKey: sKey,
+                              isFuerte: false
+                            });
+                            sectors.push({
+                              key: fuerteKey,
+                              title: `🔴 ${sDef.label} FUERTE (${sDef.min}º-${sDef.max}º / ≥ 12 kn)`,
+                              defaultFactor: bFact[fuerteKey] !== undefined ? bFact[fuerteKey] : 0.70,
+                              beachKey: bKey,
+                              secBaseKey: sKey,
+                              isFuerte: true
+                            });
+                          });
 
                           return (
                             <div key={bKey} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5">
                               <div className="border-b border-slate-200 pb-1.5 flex justify-between items-center">
                                 <strong className="text-slate-900 font-black text-sm">{bName}</strong>
-                                <span className="text-[9px] font-bold text-slate-400 uppercase">5 Sectores Marinos</span>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase">10 Sectores (5 × 2 Intensidades / 12 kn)</span>
                               </div>
 
                               <div className="grid grid-cols-1 gap-2.5">
                                 {sectors.map(sec => {
                                   const storageKey = `${bKey}_${sec.key}`;
                                   
-                                  // 1. Obtener todos los reportes del sector clasificados en los 5 sectores por el viento de la hora
+                                  // 1. Obtener todos los reportes del sector clasificados por la playa activa y los 12 nudos
                                   const allSectorLogs = calibrationHistory.filter(l => {
                                     if (l.playa !== bKey) return false;
                                     if (l.realOlas === undefined || l.realOlas === null || l.realOlas === "") return false;
                                     if (l.origenDato && String(l.origenDato).indexOf("Sincronizaci") !== -1) return false;
 
-                                    // EXCLUIR ALERTAS DE TEXTO (Avisos de banderas/niebla sin medición real de ola)
+                                    // EXCLUIR ALERTAS DE TEXTO
                                     const orig = String(l.origenDato || '').trim().toLowerCase();
                                     if (orig.includes("alerta") || orig.includes("mensaje") || String(l.notasCalibracion || '').includes("[ALERTA_OFICIAL]")) return false;
 
@@ -5569,14 +5632,7 @@ export default function App() {
                                     const wSpd = Number(l.realVientoKnots || l.appVientoNudos || 6.5);
                                     const temp = Number(l.tempAire || 29);
 
-                                    let logSec = 'levante_suave';
-                                    if ((wDir >= 285 && wDir <= 360) || (wDir >= 0 && wDir <= 35) || (temp >= 27.5 && wDir >= 270)) {
-                                      logSec = 'terral';
-                                    } else if (wDir >= 45 && wDir <= 155) {
-                                      logSec = wSpd >= 10.0 ? 'levante_fuerte' : 'levante_suave';
-                                    } else if (wDir >= 175 && wDir <= 284) {
-                                      logSec = wSpd >= 10.0 ? 'poniente_fuerte' : 'poniente_suave';
-                                    }
+                                    const logSec = getSectorKeyForHour(bKey, wDir, wDir, wSpd, temp);
                                     return logSec === sec.key;
                                   });
 
