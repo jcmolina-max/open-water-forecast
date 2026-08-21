@@ -1417,38 +1417,83 @@ export default function App() {
   }
 
   // Clasificador Físico de los 5 Sectores Meteorológicos
-  function getSectorKeyForHour(waveDir, windDir, windKnots, tempAire) {
+  // Clasificador Físico por Playa (5 Sectores × 2 Intensidades con Umbral de 12 nudos)
+  function getSectorKeyForHour(beachKey, waveDir, windDir, windKnots, tempAire) {
     const wDir = Number(windDir !== undefined && windDir !== null && !isNaN(windDir) ? windDir : (waveDir || 120));
     const wSpd = Number(windKnots || 6.5);
     const temp = Number(tempAire || 26);
+    const isFuerte = wSpd >= 12.0;
 
-    // 1. Terral Puro: Viento N/NW de tierra o viento oeste con alta temperatura térmica
-    if ((wDir >= 285 && wDir <= 360) || (wDir >= 0 && wDir <= 35) || (temp >= 27.5 && wDir >= 270)) {
-      return 'terral';
-    } 
-    // 2. Levante: E/SE (45° a 155°)
-    else if (wDir >= 45 && wDir <= 155) {
-      return wSpd >= 10.0 ? 'levante_fuerte' : 'levante_suave';
-    } 
-    // 3. Poniente: S/SO/W (175° a 284°)
-    else if (wDir >= 175 && wDir <= 284) {
-      return wSpd >= 10.0 ? 'poniente_fuerte' : 'poniente_suave';
+    // Terral por temperatura extrema de tierra
+    if (temp >= 27.5 && wDir >= 260) {
+      return isFuerte ? 'terral_fuerte' : 'terral_suave';
     }
-    // 4. Default según intensidad
-    return wSpd >= 10.0 ? 'levante_fuerte' : 'levante_suave';
+
+    const bKey = beachKey || 'misericordia';
+    if (bKey === 'pedregalejo' || bKey === 'cala_del_moral') {
+      if (wDir >= 1 && wDir <= 90) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
+      if (wDir >= 91 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
+      if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
+      if (wDir >= 191 && wDir <= 270) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
+      return isFuerte ? 'terral_fuerte' : 'terral_suave';
+    } else if (bKey === 'rincon_victoria') {
+      if (wDir >= 1 && wDir <= 100) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
+      if (wDir >= 101 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
+      if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
+      if (wDir >= 191 && wDir <= 280) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
+      return isFuerte ? 'terral_fuerte' : 'terral_suave';
+    } else if (bKey === 'malagueta') {
+      if (wDir >= 1 && wDir <= 49) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
+      if (wDir >= 50 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
+      if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
+      if (wDir >= 191 && wDir <= 229) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
+      return isFuerte ? 'terral_fuerte' : 'terral_suave';
+    } else if (bKey === 'los_alamos') {
+      if (wDir >= 1 && wDir <= 30) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
+      if (wDir >= 31 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
+      if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
+      if (wDir >= 191 && wDir <= 219) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
+      return isFuerte ? 'terral_fuerte' : 'terral_suave';
+    } else if (bKey === 'bajondillo') {
+      if (wDir >= 1 && wDir <= 29) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
+      if (wDir >= 30 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
+      if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
+      if (wDir >= 191 && wDir <= 215) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
+      return isFuerte ? 'terral_fuerte' : 'terral_suave';
+    } else {
+      if (wDir >= 1 && wDir <= 25) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
+      if (wDir >= 26 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
+      if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
+      if (wDir >= 191 && wDir <= 210) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
+      return isFuerte ? 'terral_fuerte' : 'terral_suave';
+    }
   }
 
   // Dynamic Buoy Scale Factor por 5 Sectores (Conexión Directa Panel Admin ↔ Portada)
   function getBoyaScaleFactor(beachKey, waveDir, windDir, windKnots, tempAire) {
-    const sectorKey = getSectorKeyForHour(waveDir, windDir, windKnots, tempAire);
+    const sectorKey = getSectorKeyForHour(beachKey, waveDir, windDir, windKnots, tempAire);
     const storageKey = `${beachKey}_${sectorKey}`;
 
-    // 1. Si el Administrador fijó un factor manual o aprobó una sugerencia para este sector de 5
+    // 1. Si el Administrador fijó un factor manual o aprobó una sugerencia para este sector
     if (adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null) {
       return parseFloat(adminManualScaleFactors[storageKey]);
     }
 
-    // 2. Compatibilidad retroactiva si hay fijado un factor antiguo de 2 sectores (levante / poniente)
+    // 2. Comprobar si viene de Google Sheets (cloudConfigSectores)
+    if (cloudConfigSectores && cloudConfigSectores[beachKey] && Array.isArray(cloudConfigSectores[beachKey].sectors)) {
+      const wSpd = Number(windKnots || 6.5);
+      const isFuerte = wSpd >= 12.0;
+      const secBaseKey = sectorKey.replace(/_(suave|fuerte)$/, '');
+      const cloudSec = cloudConfigSectores[beachKey].sectors.find(s => s.id === secBaseKey || String(s.name || '').toLowerCase().includes(secBaseKey));
+      if (cloudSec) {
+        const cloudFactor = isFuerte ? cloudSec.factor_fuerte : cloudSec.factor_suave;
+        if (cloudFactor !== null && cloudFactor !== undefined && !isNaN(Number(cloudFactor))) {
+          return Number(cloudFactor);
+        }
+      }
+    }
+
+    // 3. Compatibilidad retroactiva si hay fijado un factor antiguo de 2 sectores
     const isLevante = (windDir || waveDir || 110) >= 45 && (windDir || waveDir || 110) <= 165;
     const legacyStorageKey = `${beachKey}_${isLevante ? 'levante' : 'poniente'}`;
     if (adminManualScaleFactors && adminManualScaleFactors[legacyStorageKey] !== undefined && adminManualScaleFactors[legacyStorageKey] !== null) {
@@ -1458,18 +1503,67 @@ export default function App() {
       return parseFloat(adminManualScaleFactors[beachKey]);
     }
 
-    // 3. Factores de fábrica calibrados por playa y sector
+    // 3. Factores de fábrica calibrados por playa y sector (Matriz Oficial de Reset Base)
     const defaultFactoryMap = {
-      misericordia:   { levante_fuerte: 0.85, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.35, terral: 0.15 },
-      malagueta:      { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.45, poniente_suave: 0.30, terral: 0.15 },
-      pedregalejo:    { levante_fuerte: 0.65, levante_suave: 0.50, poniente_fuerte: 0.40, poniente_suave: 0.30, terral: 0.15 },
-      los_alamos:     { levante_fuerte: 0.90, levante_suave: 0.85, poniente_fuerte: 0.90, poniente_suave: 0.75, terral: 0.20 },
-      bajondillo:     { levante_fuerte: 0.80, levante_suave: 0.70, poniente_fuerte: 0.70, poniente_suave: 0.60, terral: 0.20 },
-      cala_del_moral: { levante_fuerte: 0.75, levante_suave: 0.65, poniente_fuerte: 0.70, poniente_suave: 0.45, terral: 0.15 },
-      rincon_victoria:{ levante_fuerte: 0.85, levante_suave: 0.80, poniente_fuerte: 0.70, poniente_suave: 0.50, terral: 0.15 }
+      misericordia: {
+        lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+        levante_suave: 0.45, levante_fuerte: 0.85,
+        sur_suave: 0.50, sur_fuerte: 0.70,
+        poniente_suave: 0.50, poniente_fuerte: 0.65,
+        terral_suave: 0.25, terral_fuerte: 0.20,
+        levante_fuerte: 0.85, levante_suave: 0.45, poniente_fuerte: 0.65, poniente_suave: 0.50, terral: 0.25
+      },
+      malagueta: {
+        lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+        levante_suave: 0.60, levante_fuerte: 0.85,
+        sur_suave: 0.50, sur_fuerte: 0.70,
+        poniente_suave: 0.45, poniente_fuerte: 0.60,
+        terral_suave: 0.25, terral_fuerte: 0.20,
+        levante_fuerte: 0.85, levante_suave: 0.60, poniente_fuerte: 0.60, poniente_suave: 0.45, terral: 0.25
+      },
+      pedregalejo: {
+        lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+        levante_suave: 0.60, levante_fuerte: 0.85,
+        sur_suave: 0.50, sur_fuerte: 0.70,
+        poniente_suave: 0.60, poniente_fuerte: 0.70,
+        terral_suave: 0.25, terral_fuerte: 0.20,
+        levante_fuerte: 0.85, levante_suave: 0.60, poniente_fuerte: 0.70, poniente_suave: 0.60, terral: 0.25
+      },
+      los_alamos: {
+        lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+        levante_suave: 0.70, levante_fuerte: 0.85,
+        sur_suave: 0.50, sur_fuerte: 0.70,
+        poniente_suave: 0.60, poniente_fuerte: 0.70,
+        terral_suave: 0.25, terral_fuerte: 0.20,
+        levante_fuerte: 0.85, levante_suave: 0.70, poniente_fuerte: 0.70, poniente_suave: 0.60, terral: 0.25
+      },
+      bajondillo: {
+        lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+        levante_suave: 0.70, levante_fuerte: 0.85,
+        sur_suave: 0.50, sur_fuerte: 0.70,
+        poniente_suave: 0.60, poniente_fuerte: 0.70,
+        terral_suave: 0.25, terral_fuerte: 0.20,
+        levante_fuerte: 0.85, levante_suave: 0.70, poniente_fuerte: 0.70, poniente_suave: 0.60, terral: 0.25
+      },
+      cala_del_moral: {
+        lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+        levante_suave: 0.70, levante_fuerte: 0.85,
+        sur_suave: 0.50, sur_fuerte: 0.70,
+        poniente_suave: 0.90, poniente_fuerte: 0.90,
+        terral_suave: 0.25, terral_fuerte: 0.20,
+        levante_fuerte: 0.85, levante_suave: 0.70, poniente_fuerte: 0.90, poniente_suave: 0.90, terral: 0.25
+      },
+      rincon_victoria: {
+        lev_anortado_suave: 0.40, lev_anortado_fuerte: 0.60,
+        levante_suave: 0.70, levante_fuerte: 0.85,
+        sur_suave: 0.50, sur_fuerte: 0.70,
+        poniente_suave: 1.00, poniente_fuerte: 1.00,
+        terral_suave: 0.25, terral_fuerte: 0.20,
+        levante_fuerte: 0.85, levante_suave: 0.70, poniente_fuerte: 1.00, poniente_suave: 1.00, terral: 0.25
+      }
     };
 
-    const bMap = defaultFactoryMap[beachKey] || { levante_fuerte: 0.75, levante_suave: 0.60, poniente_fuerte: 0.50, poniente_suave: 0.35, terral: 0.15 };
+    const bMap = defaultFactoryMap[beachKey] || defaultFactoryMap.misericordia;
     return bMap[sectorKey] !== undefined ? bMap[sectorKey] : 0.50;
   }
 
@@ -6425,11 +6519,11 @@ export default function App() {
                             facing: 180,
                             shelters: "6 calas protegidas por espigones en T/Y",
                             sectors: {
-                              lev_anortado: { min: 1, max: 70, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por El Morlaco." },
-                              levante:      { min: 71, max: 170, label: "Levante Calas", color: "#3b82f6", desc: "Espigones frenan el oleaje." },
+                              lev_anortado: { min: 1, max: 90, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por El Morlaco." },
+                              levante:      { min: 91, max: 170, label: "Levante Calas", color: "#3b82f6", desc: "Espigones frenan el oleaje." },
                               sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada directa por las bocanas." },
-                              poniente:     { min: 191, max: 250, label: "Poniente Calas", color: "#10b981", desc: "Calas tipo piscina por abrigo." },
-                              terral:       { min: 251, max: 360, label: "Terral / Viento Tierra", color: "#f97316", desc: "Mar plano absoluto." }
+                              poniente:     { min: 191, max: 270, label: "Poniente Calas", color: "#10b981", desc: "Calas tipo piscina por abrigo." },
+                              terral:       { min: 271, max: 360, label: "Terral / Viento Tierra", color: "#f97316", desc: "Mar plano absoluto." }
                             }
                           },
                           los_alamos: {
@@ -6467,11 +6561,11 @@ export default function App() {
                             facing: 180,
                             shelters: "Acantilados de El Cantal al Oeste",
                             sectors: {
-                              lev_anortado: { min: 1, max: 70, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra de la Axarquía." },
-                              levante:      { min: 71, max: 170, label: "Levante Concha", color: "#3b82f6", desc: "Entrada franca de Levante." },
+                              lev_anortado: { min: 1, max: 90, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra de la Axarquía." },
+                              levante:      { min: 91, max: 170, label: "Levante Concha", color: "#3b82f6", desc: "Entrada franca de Levante." },
                               sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada frontal a la concha." },
-                              poniente:     { min: 191, max: 250, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida del Poniente por El Cantal." },
-                              terral:       { min: 251, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra / orilla balsa." }
+                              poniente:     { min: 191, max: 270, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida del Poniente por El Cantal." },
+                              terral:       { min: 271, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra / orilla balsa." }
                             }
                           },
                           rincon_victoria: {
@@ -6481,11 +6575,11 @@ export default function App() {
                             facing: 190,
                             shelters: "Gran playa rectilínea, montes de la Axarquía",
                             sectors: {
-                              lev_anortado: { min: 1, max: 70, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra / abrigo." },
-                              levante:      { min: 71, max: 170, label: "Levante", color: "#3b82f6", desc: "Entrada franca de Levante." },
+                              lev_anortado: { min: 1, max: 100, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra / abrigo." },
+                              levante:      { min: 101, max: 170, label: "Levante", color: "#3b82f6", desc: "Entrada franca de Levante." },
                               sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada directa a la arena." },
-                              poniente:     { min: 191, max: 250, label: "Poniente", color: "#10b981", desc: "Protegida por El Cantal." },
-                              terral:       { min: 251, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
+                              poniente:     { min: 191, max: 280, label: "Poniente", color: "#10b981", desc: "Protegida por El Cantal." },
+                              terral:       { min: 281, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
                             }
                           }
                         };
