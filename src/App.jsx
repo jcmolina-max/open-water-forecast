@@ -1621,10 +1621,33 @@ export default function App() {
     return filtered.length > 0 ? filtered : valid;
   }
 
-  // Clasificador Físico de los 5 Sectores Meteorológicos
-  // Clasificador Físico por Playa (5 Sectores × 2 Intensidades con Umbral de 12 nudos)
+  // Traductor Unificado de Dirección de Viento/Ola (Texto o Número ➔ Grados 0º-360º)
+  function parseWindDirToDegrees(val) {
+    if (val === undefined || val === null || val === "") return null;
+    if (typeof val === 'number' && !isNaN(val)) {
+      return ((val % 360) + 360) % 360;
+    }
+    const str = String(val).trim().toUpperCase();
+    const num = parseFloat(str.replace(',', '.'));
+    if (!isNaN(num)) return ((num % 360) + 360) % 360;
+
+    if (str === "N" || (str.includes("NORTE") && !str.includes("OESTE") && !str.includes("ESTE"))) return 0;
+    if (str.includes("NE") || str.includes("NORESTE") || str.includes("NORDESTE")) return 45;
+    if (str === "E" || str.includes("ESTE") || str.includes("LEVANTE")) return 90;
+    if (str.includes("SE") || str.includes("SURESTE") || str.includes("SUDESTE")) return 135;
+    if (str === "S" || (str.includes("SUR") && !str.includes("OESTE") && !str.includes("ESTE"))) return 180;
+    if (str.includes("SO") || str.includes("SW") || str.includes("SUROESTE") || str.includes("SUDOESTE") || str.includes("PONIENTE")) return 225;
+    if (str === "O" || str === "W" || str.includes("OESTE")) return 270;
+    if (str.includes("NO") || str.includes("NW") || str.includes("NOROESTE") || str.includes("TERRAL")) return 315;
+
+    return null;
+  }
+
+  // Clasificador Físico de los 5 Sectores Meteorológicos Unificado por Playa
   function getSectorKeyForHour(beachKey, waveDir, windDir, windKnots, tempAire) {
-    const wDir = Number(windDir !== undefined && windDir !== null && !isNaN(windDir) ? windDir : (waveDir || 120));
+    const parsedWind = parseWindDirToDegrees(windDir);
+    const parsedWave = parseWindDirToDegrees(waveDir);
+    const wDir = parsedWind !== null ? parsedWind : (parsedWave !== null ? parsedWave : 110);
     const wSpd = Number(windKnots || 6.5);
     const temp = Number(tempAire || 26);
     const isFuerte = wSpd >= 12.0;
@@ -1656,9 +1679,9 @@ export default function App() {
       }
     }
 
-    // Fallback de seguridad
-    if (wDir >= 1 && wDir <= 25) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
-    if (wDir >= 26 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
+    // Fallback de seguridad por grados
+    if (wDir >= 1 && wDir <= 49) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
+    if (wDir >= 50 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
     if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
     if (wDir >= 191 && wDir <= 230) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
     return isFuerte ? 'terral_fuerte' : 'terral_suave';
@@ -5869,7 +5892,7 @@ export default function App() {
                                 {sectors.map(sec => {
                                   const storageKey = `${bKey}_${sec.key}`;
                                   
-                                  // 1. Obtener todos los reportes del sector clasificados por la playa activa y los 12 nudos
+                                  // 1. Obtener todos los reportes del sector clasificados por la playa activa
                                   const allSectorLogs = calibrationHistory.filter(l => {
                                     if (l.playa !== bKey) return false;
                                     if (l.realOlas === undefined || l.realOlas === null || l.realOlas === "") return false;
@@ -5879,11 +5902,12 @@ export default function App() {
                                     const orig = String(l.origenDato || '').trim().toLowerCase();
                                     if (orig.includes("alerta") || orig.includes("mensaje") || String(l.notasCalibracion || '').includes("[ALERTA_OFICIAL]")) return false;
 
-                                    const wDir = Number(l.realVientoDirGrados || l.appVientoDir || l.boyaDireccion || 120);
-                                    const wSpd = Number(l.realVientoKnots || l.appVientoNudos || 6.5);
-                                    const temp = Number(l.tempAire || 29);
+                                    const rWDir = parseWindDirToDegrees(l.realVientoDirGrados || l.realVientoDir || l.boyaVientoDir || l.appVientoDir || l.boyaDireccion);
+                                    const rWaveDir = parseWindDirToDegrees(l.boyaDireccion || l.realVientoDir);
+                                    const rKnots = l.realVientoKnots || l.appVientoNudos || 6.5;
+                                    const rTemp = l.tempAire || 26;
 
-                                    const logSec = getSectorKeyForHour(bKey, wDir, wDir, wSpd, temp);
+                                    const logSec = getSectorKeyForHour(bKey, rWaveDir, rWDir, rKnots, rTemp);
                                     return logSec === sec.key;
                                   });
 
