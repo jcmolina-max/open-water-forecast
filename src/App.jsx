@@ -61,8 +61,8 @@ const BEACH_COASTAL_DEFS = {
       lev_anortado: { min: 1, max: 25, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada tierra/mar. Poco oleaje en orilla." },
       levante:      { min: 26, max: 170, label: "Levante (Swell)", color: "#3b82f6", desc: "Mar de fondo / Rompiente orillera pesada." },
       sur:          { min: 171, max: 190, label: "Sur", color: "#8b5cf6", desc: "Amplificador térmico / Mar picado e incómodo." },
-      poniente:     { min: 191, max: 210, label: "Poniente", color: "#10b981", desc: "Chop rápido / Boost térmico al mediodía." },
-      terral:       { min: 211, max: 360, label: "Poniente-Terral", color: "#f97316", desc: "Orilla plato / balsa total. Precaución mar adentro." }
+      poniente:     { min: 191, max: 230, label: "Poniente", color: "#10b981", desc: "Chop rápido / Boost térmico al mediodía." },
+      terral:       { min: 231, max: 360, label: "Poniente-Terral", color: "#f97316", desc: "Orilla plato / balsa total. Precaución mar adentro." }
     }
   },
   malagueta: {
@@ -1531,43 +1531,33 @@ export default function App() {
     }
 
     const bKey = beachKey || 'misericordia';
-    if (bKey === 'pedregalejo' || bKey === 'cala_del_moral') {
-      if (wDir >= 1 && wDir <= 90) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
-      if (wDir >= 91 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
-      if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
-      if (wDir >= 191 && wDir <= 270) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
-      return isFuerte ? 'terral_fuerte' : 'terral_suave';
-    } else if (bKey === 'rincon_victoria') {
-      if (wDir >= 1 && wDir <= 100) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
-      if (wDir >= 101 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
-      if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
-      if (wDir >= 191 && wDir <= 280) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
-      return isFuerte ? 'terral_fuerte' : 'terral_suave';
-    } else if (bKey === 'malagueta') {
-      if (wDir >= 1 && wDir <= 49) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
-      if (wDir >= 50 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
-      if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
-      if (wDir >= 191 && wDir <= 229) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
-      return isFuerte ? 'terral_fuerte' : 'terral_suave';
-    } else if (bKey === 'los_alamos') {
-      if (wDir >= 1 && wDir <= 30) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
-      if (wDir >= 31 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
-      if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
-      if (wDir >= 191 && wDir <= 219) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
-      return isFuerte ? 'terral_fuerte' : 'terral_suave';
-    } else if (bKey === 'bajondillo') {
-      if (wDir >= 1 && wDir <= 29) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
-      if (wDir >= 30 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
-      if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
-      if (wDir >= 191 && wDir <= 215) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
-      return isFuerte ? 'terral_fuerte' : 'terral_suave';
-    } else {
-      if (wDir >= 1 && wDir <= 25) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
-      if (wDir >= 26 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
-      if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
-      if (wDir >= 191 && wDir <= 210) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
-      return isFuerte ? 'terral_fuerte' : 'terral_suave';
+
+    // 1. Si tenemos cargada la configuración dinámica de sectores desde Google Sheets (cloudConfigSectores)
+    if (cloudConfigSectores && cloudConfigSectores[bKey] && Array.isArray(cloudConfigSectores[bKey].sectors)) {
+      const cloudSecs = cloudConfigSectores[bKey].sectors;
+      const matched = cloudSecs.find(s => s.min !== null && s.max !== null && wDir >= s.min && wDir <= s.max);
+      if (matched && matched.id) {
+        return isFuerte ? `${matched.id}_fuerte` : `${matched.id}_suave`;
+      }
     }
+
+    // 2. Si tenemos la definición geométrica en BEACH_COASTAL_DEFS
+    const bDef = BEACH_COASTAL_DEFS[bKey] || BEACH_COASTAL_DEFS.misericordia;
+    if (bDef && bDef.sectors) {
+      for (const sKey of ['lev_anortado', 'levante', 'sur', 'poniente', 'terral']) {
+        const s = bDef.sectors[sKey];
+        if (s && wDir >= s.min && wDir <= s.max) {
+          return isFuerte ? `${sKey}_fuerte` : `${sKey}_suave`;
+        }
+      }
+    }
+
+    // Fallback de seguridad
+    if (wDir >= 1 && wDir <= 25) return isFuerte ? 'lev_anortado_fuerte' : 'lev_anortado_suave';
+    if (wDir >= 26 && wDir <= 170) return isFuerte ? 'levante_fuerte' : 'levante_suave';
+    if (wDir >= 171 && wDir <= 190) return isFuerte ? 'sur_fuerte' : 'sur_suave';
+    if (wDir >= 191 && wDir <= 230) return isFuerte ? 'poniente_fuerte' : 'poniente_suave';
+    return isFuerte ? 'terral_fuerte' : 'terral_suave';
   }
 
   // Dynamic Buoy Scale Factor por 5 Sectores (Conexión Directa Panel Admin ↔ Portada)
