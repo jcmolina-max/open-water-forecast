@@ -5583,10 +5583,29 @@ export default function App() {
                           }
 
                           function saveFactorChangeToCloud(bKey, secKey, fixedVal, nowTs, bName, extraTelem = {}) {
+                            // 1. Actualizar el estado de cloudConfigSectores en vivo para que la UI muestre el nuevo factor de inmediato
+                            const isFuerte = secKey.endsWith('_fuerte');
+                            const secBaseKey = secKey.replace(/_(suave|fuerte)$/, '');
+
+                            if (cloudConfigSectores && cloudConfigSectores[bKey] && Array.isArray(cloudConfigSectores[bKey].sectors)) {
+                              const updatedCloud = { ...cloudConfigSectores };
+                              const secObj = updatedCloud[bKey].sectors.find(s => s.id === secBaseKey || String(s.name || '').toLowerCase().includes(secBaseKey));
+                              if (secObj) {
+                                if (isFuerte) secObj.factor_fuerte = fixedVal;
+                                else secObj.factor_suave = fixedVal;
+                              }
+                              setCloudConfigSectores(updatedCloud);
+                              localStorage.setItem('openwater_config_sectores', JSON.stringify(updatedCloud));
+                            }
+
                             const storageKey = `${bKey}_${secKey}`;
                             const nowStr = new Date().toLocaleString('es-ES');
                             const payload = {
-                              action: 'registrar_telemetria',
+                              action: 'save_sector_factor',
+                              playa: bKey,
+                              sectorId: secBaseKey,
+                              isFuerte: isFuerte,
+                              factor: fixedVal,
                               fechaHora: nowStr,
                               playaSector: storageKey,
                               prevOlaSat: extraTelem.prevOlaSat !== undefined ? extraTelem.prevOlaSat : '',
@@ -5602,7 +5621,6 @@ export default function App() {
                               fRefraccion: extraTelem.fRefraccion !== undefined ? extraTelem.fRefraccion : '',
                               fCombinado: fixedVal !== null ? fixedVal : '',
                               origenDato: 'Admin: Factor',
-                              playa: bKey,
                               horaNado: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
                               sensaciones: `[FactorConfig: ${JSON.stringify({ storageKey, factor: fixedVal, timestamp: nowTs })}]`,
                               notas: `Ajuste de calibración para ${bName} ${secKey.toUpperCase()}`
