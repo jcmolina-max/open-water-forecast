@@ -1565,12 +1565,7 @@ export default function App() {
     const sectorKey = getSectorKeyForHour(beachKey, waveDir, windDir, windKnots, tempAire);
     const storageKey = `${beachKey}_${sectorKey}`;
 
-    // 1. Si el Administrador fijó un factor manual o aprobó una sugerencia para este sector
-    if (adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null) {
-      return parseFloat(adminManualScaleFactors[storageKey]);
-    }
-
-    // 2. Comprobar si viene de Google Sheets (cloudConfigSectores)
+    // 1. Google Sheets cloud config (Prioridad #1: Fuente de verdad oficial)
     if (cloudConfigSectores && cloudConfigSectores[beachKey] && Array.isArray(cloudConfigSectores[beachKey].sectors)) {
       const wSpd = Number(windKnots || 6.5);
       const isFuerte = wSpd >= 12.0;
@@ -1582,6 +1577,11 @@ export default function App() {
           return Number(cloudFactor);
         }
       }
+    }
+
+    // 2. Si el Administrador fijó un factor manual en esta sesión del navegador (Prioridad #2)
+    if (adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null) {
+      return parseFloat(adminManualScaleFactors[storageKey]);
     }
 
     // 3. Compatibilidad retroactiva si hay fijado un factor antiguo de 2 sectores
@@ -5795,8 +5795,27 @@ export default function App() {
                                     devPercentText = `${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(0)}%`;
                                   }
 
-                                  const isOverridden = adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null;
-                                  const activeFactor = isOverridden ? adminManualScaleFactors[storageKey] : sec.defaultFactor;
+                                  let cloudFactorVal = null;
+                                  if (cloudConfigSectores && cloudConfigSectores[bKey] && Array.isArray(cloudConfigSectores[bKey].sectors)) {
+                                    const cloudSec = cloudConfigSectores[bKey].sectors.find(s => s.id === sec.secBaseKey || String(s.name || '').toLowerCase().includes(sec.secBaseKey));
+                                    if (cloudSec) {
+                                      const cVal = sec.isFuerte ? cloudSec.factor_fuerte : cloudSec.factor_suave;
+                                      if (cVal !== null && cVal !== undefined && !isNaN(Number(cVal))) {
+                                        cloudFactorVal = Number(cVal);
+                                      }
+                                    }
+                                  }
+
+                                  const isCloudOverridden = cloudFactorVal !== null;
+                                  const isLocalOverridden = adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null;
+
+                                  const activeFactor = isCloudOverridden 
+                                    ? cloudFactorVal 
+                                    : (isLocalOverridden ? adminManualScaleFactors[storageKey] : sec.defaultFactor);
+
+                                  const activeBadgeLabel = isCloudOverridden 
+                                    ? '🔒 (Google Sheets)' 
+                                    : (isLocalOverridden ? '🔒 (Aprobado Admin)' : '(Default Fábrica)');
 
                                   return (
                                     <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2.5">
@@ -5815,8 +5834,8 @@ export default function App() {
 
                                       <div className="flex justify-between items-center text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
                                         <span className="text-slate-500 font-medium">Activo en Web:</span>
-                                        <strong className={`font-black text-sm ${isOverridden ? 'text-emerald-700' : 'text-indigo-600'}`}>
-                                          {Number(activeFactor).toFixed(2)}x {isOverridden ? '🔒 (Aprobado Admin)' : '(Default Fábrica)'}
+                                        <strong className={`font-black text-sm ${(isCloudOverridden || isLocalOverridden) ? 'text-emerald-700' : 'text-indigo-600'}`}>
+                                          {Number(activeFactor).toFixed(2)}x {activeBadgeLabel}
                                         </strong>
                                       </div>
 
@@ -5913,6 +5932,7 @@ export default function App() {
                                           type="button"
                                           onClick={() => {
                                             const nowTs = Date.now();
+                                            const factoryVal = sec.defaultFactor;
                                             const updated = { ...adminManualScaleFactors };
                                             delete updated[storageKey];
                                             const updatedTimes = { ...adminFactorApprovalTimes };
@@ -5921,7 +5941,6 @@ export default function App() {
                                             setAdminFactorApprovalTimes(updatedTimes);
                                             localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
                                             localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                            saveFactorChangeToCloud(bKey, sec.key, null, nowTs, bName);
                                             setDataRefreshKey(k => k + 1);
                                             setFactorFeedbackMsg(`🔄 ¡Reset a Fábrica (${sec.defaultFactor.toFixed(2)}x) para ${bName}! Sincronizado.`);
                                             setTimeout(() => setFactorFeedbackMsg(null), 4000);
