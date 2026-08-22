@@ -6054,11 +6054,6 @@ export default function App() {
                                               const waveVal = swimmerScaleToMeters(l.realOlas);
                                               let rawH = l.horaNado ? String(l.horaNado) : '';
                                               let cleanH = '';
-                                              if (rawH.includes('T')) {
-                                                cleanH = rawH.split('T')[1].substring(0, 5);
-                                              } else if (rawH.includes(':') && !rawH.includes('1899')) {
-                                                cleanH = rawH.substring(0, 5);
-                                              }
                                               const datePrefix = l.timestamp ? formatFriendlyDate(l.timestamp).split(',')[0] : '';
                                               const swimTime = datePrefix ? (datePrefix + (cleanH ? ' ' + cleanH : '')) : (cleanH || 'Hoy');
                                               const author = l.sensaciones ? (l.sensaciones.length > 35 ? l.sensaciones.substring(0, 35) + '...' : l.sensaciones) : (l.origenDato || 'Reporte');
@@ -6075,6 +6070,10 @@ export default function App() {
                                               }
 
                                               const waveDisplay = (waveVal !== null && !isNaN(waveVal)) ? `${waveVal.toFixed(2)}m` : '—';
+                                              const logWDir = l.realVientoDir || l.boyaVientoDir || l.appVientoDir || l.boyaDireccion;
+                                              const logWaveDir = l.boyaDireccion || l.realVientoDir;
+                                              const computed5S = getSectorKeyForHour(bKey, logWaveDir, logWDir, l.appVientoNudos || 6.5, 26);
+                                              const label5S = computed5S.replace(/_(suave|fuerte)$/, '').toUpperCase();
 
                                               return (
                                                 <div key={repId + lIdx} className={'flex justify-between items-center p-2 rounded-lg border text-left transition-all ' + (isDiscarded ? 'bg-rose-50/60 border-rose-200 opacity-60' : 'bg-white border-slate-200 shadow-2xs')}>
@@ -6083,6 +6082,7 @@ export default function App() {
                                                       <span className="text-[9px] font-black text-slate-800">{swimTime}</span>
                                                       <span className={'text-[7.5px] font-extrabold px-1.5 py-0.2 rounded border ' + badgeStyle}>{badgeLabel}</span>
                                                       <span className="text-[8px] font-extrabold text-cyan-700 bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-100">Ola: {waveDisplay}</span>
+                                                      <span className="text-[7.5px] font-black text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-100/80">5S: {label5S}</span>
                                                     </div>
                                                     <p className="text-[9px] text-slate-600 truncate font-medium">{author}</p>
                                                   </div>
