@@ -637,17 +637,26 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, 
               </marker>
             </defs>
 
-            {/* CAPA 2: ROSA DE LOS VIENTOS SUTIL AL 35% DE OPACIDAD */}
-            <g opacity="0.35">
-              <circle cx={cx} cy={cy} r={R} fill="none" stroke="#ffffff" strokeWidth="1.2" strokeDasharray="3 3" />
-              <circle cx={cx} cy={cy} r={R * 0.5} fill="none" stroke="#ffffff" strokeWidth="0.8" strokeDasharray="2 4" />
-              <line x1={cx} y1={cy - R - 6} x2={cx} y2={cy + R + 6} stroke="#ffffff" strokeWidth="1" strokeDasharray="2 2" />
-              <line x1={cx - R - 6} y1={cy} x2={cx + R + 6} y2={cy} stroke="#ffffff" strokeWidth="1" strokeDasharray="2 2" />
-              <text x={cx} y={cy - R + 14} fontSize="11" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">N (0º)</text>
-              <text x={cx + R - 14} y={cy + 4} fontSize="10" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">E (90º)</text>
-              <text x={cx} y={cy + R - 6} fontSize="10" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">S (180º)</text>
-              <text x={cx - R + 14} y={cy + 4} fontSize="10" fontWeight="black" fill="#ffffff" textAnchor="middle" filter="url(#vectorDropGlow)">W (270º)</text>
-              <line x1={xCoast1} y1={yCoast1} x2={xCoast2} y2={yCoast2} stroke="#f59e0b" strokeWidth="2.2" strokeDasharray="4 2" />
+            {/* CAPA 2: ROSA DE LOS VIENTOS DE ALTO CONTRASTE CON HALOS SLATE */}
+            <g opacity="0.90">
+              {/* Sombra oscura posterior en líneas para que resalten sobre mapa claro u oscuro */}
+              <circle cx={cx} cy={cy} r={R} fill="none" stroke="rgba(15,23,42,0.8)" strokeWidth="3" strokeDasharray="3 3" />
+              <circle cx={cx} cy={cy} r={R} fill="none" stroke="#ffffff" strokeWidth="1.5" strokeDasharray="3 3" />
+              <circle cx={cx} cy={cy} r={R * 0.5} fill="none" stroke="rgba(15,23,42,0.8)" strokeWidth="2.5" strokeDasharray="2 4" />
+              <circle cx={cx} cy={cy} r={R * 0.5} fill="none" stroke="#ffffff" strokeWidth="1" strokeDasharray="2 4" />
+              <line x1={cx} y1={cy - R - 6} x2={cx} y2={cy + R + 6} stroke="rgba(15,23,42,0.8)" strokeWidth="2.5" strokeDasharray="2 2" />
+              <line x1={cx} y1={cy - R - 6} x2={cx} y2={cy + R + 6} stroke="#ffffff" strokeWidth="1.2" strokeDasharray="2 2" />
+              <line x1={cx - R - 6} y1={cy} x2={cx + R + 6} y2={cy} stroke="rgba(15,23,42,0.8)" strokeWidth="2.5" strokeDasharray="2 2" />
+              <line x1={cx - R - 6} y1={cy} x2={cx + R + 6} y2={cy} stroke="#ffffff" strokeWidth="1.2" strokeDasharray="2 2" />
+              
+              {/* Textos Cardinales con Borde Oscuro Slate #0f172a Hyper-Nítidos */}
+              <text x={cx} y={cy - R + 14} fontSize="11" fontWeight="900" fill="#f87171" stroke="#0f172a" strokeWidth="3" style={{ paintOrder: 'stroke fill' }} textAnchor="middle">N (0º)</text>
+              <text x={cx + R - 14} y={cy + 4} fontSize="10" fontWeight="900" fill="#38bdf8" stroke="#0f172a" strokeWidth="3" style={{ paintOrder: 'stroke fill' }} textAnchor="middle">E (90º)</text>
+              <text x={cx} y={cy + R - 6} fontSize="10" fontWeight="900" fill="#c084fc" stroke="#0f172a" strokeWidth="3" style={{ paintOrder: 'stroke fill' }} textAnchor="middle">S (180º)</text>
+              <text x={cx - R + 14} y={cy + 4} fontSize="10" fontWeight="900" fill="#34d399" stroke="#0f172a" strokeWidth="3" style={{ paintOrder: 'stroke fill' }} textAnchor="middle">O (270º)</text>
+              
+              {/* Línea Dorada de Costa */}
+              <line x1={xCoast1} y1={yCoast1} x2={xCoast2} y2={yCoast2} stroke="#f59e0b" strokeWidth="3" strokeDasharray="4 2" filter="url(#vectorDropGlow)" />
             </g>
 
             {/* CAPA 3: VECTORES DE PRECISIÓN (TRAZO Y PUNTA MICRO) */}
