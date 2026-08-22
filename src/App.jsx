@@ -5802,11 +5802,17 @@ export default function App() {
                                     }).filter(r => !isNaN(r) && isFinite(r) && r > 0);
                                     const cleanRecentRatios = countRecent >= 5 ? filterOutliers(recentRatios) : recentRatios;
                                     if (cleanRecentRatios.length > 0) {
-                                        const sumRecent = cleanRecentRatios.reduce((a, b) => a + b, 0);
-                                        suggestedRecentFactor = Math.max(0.1, Math.min(1.5, sumRecent / cleanRecentRatios.length));
+                                      const sumRecent = cleanRecentRatios.reduce((a, b) => a + b, 0);
+                                      suggestedRecentFactor = Math.max(0.1, Math.min(1.5, sumRecent / cleanRecentRatios.length));
                                     }
                                   }
 
+                                  // C) CALCULO DE DESVÍO (%) ENTRE SUGERENCIA RECIENTE E HISTÓRICA
+                                  let devPercentText = null;
+                                  if (suggestedRecentFactor !== null && suggestedGlobalFactor !== null && suggestedGlobalFactor > 0) {
+                                    const diffPct = ((suggestedRecentFactor - suggestedGlobalFactor) / suggestedGlobalFactor) * 100;
+                                    devPercentText = `${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(0)}%`;
+                                  }
 
                                   let cloudFactorVal = null;
                                   if (cloudConfigSectores && cloudConfigSectores[bKey] && Array.isArray(cloudConfigSectores[bKey].sectors)) {
