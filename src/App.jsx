@@ -1621,6 +1621,122 @@ export default function App() {
     return filtered.length > 0 ? filtered : valid;
   }
 
+  // Calculador de Tendencia Panorámica del Día (Hito 29 - 3 Tramos: Mañana, Tarde, Noche)
+  function getDayTrendSummary(hourlyData) {
+    if (!hourlyData || hourlyData.length === 0) return null;
+
+    const parseHourNum = (hStr) => parseInt(String(hStr || '00:00').split(':')[0], 10);
+
+    const morningHours = hourlyData.filter(h => {
+      const hNum = parseHourNum(h.time);
+      return hNum >= 6 && hNum <= 11;
+    });
+
+    const afternoonHours = hourlyData.filter(h => {
+      const hNum = parseHourNum(h.time);
+      return hNum >= 12 && hNum <= 17;
+    });
+
+    const eveningHours = hourlyData.filter(h => {
+      const hNum = parseHourNum(h.time);
+      return hNum >= 18 && hNum <= 21;
+    });
+
+    function evaluateSegment(hours, defaultRangeName) {
+      if (!hours || hours.length === 0) {
+        return { label: 'Sin datos', score: 100, bg: 'bg-slate-800 border-slate-700 text-slate-300', icon: '⚪' };
+      }
+
+      const avgScore = Math.round(hours.reduce((acc, h) => acc + Number(h.hourScore || 100), 0) / hours.length);
+      const avgWave = (hours.reduce((acc, h) => acc + Number(h.swellH || 0.1), 0) / hours.length).toFixed(2);
+      const avgWind = Math.round(hours.reduce((acc, h) => acc + Number(h.windS || 0), 0) / hours.length);
+
+      const validWindDirs = hours.map(h => Number(h.windDir)).filter(d => !isNaN(d) && d >= 0);
+      let windTag = '';
+      if (validWindDirs.length > 0) {
+        const avgDir = Math.round(validWindDirs.reduce((a, b) => a + b, 0) / validWindDirs.length);
+        let wCompIcon = '💨';
+        let wCompName = 'Poniente';
+        if (avgDir >= 45 && avgDir <= 155) {
+          wCompIcon = '🌊';
+          wCompName = 'Levante';
+        } else if (avgDir >= 156 && avgDir <= 174) {
+          wCompIcon = '⚓';
+          wCompName = 'Sur';
+        } else if (avgDir >= 175 && avgDir <= 284) {
+          wCompIcon = '💨';
+          wCompName = 'Poniente';
+        } else {
+          wCompIcon = '🏔️';
+          wCompName = 'Terral';
+        }
+        const dirClean = getWindDirection(avgDir);
+        const dirShort = dirClean ? dirClean.replace(/[^A-Z]/g, '') : '';
+        windTag = ` · ${wCompIcon} ${wCompName} (${dirShort} ${avgWind}kt)`;
+      }
+
+      const activeRules = hours.map(h => h.localRule).filter(r => r && r !== 'Normal' && r !== 'Escudo Activo');
+      const hasLavadora = activeRules.some(r => String(r).includes('Lavadora'));
+      const hasMarPicado = activeRules.some(r => String(r).includes('Mar Picado') || String(r).includes('Incómodo'));
+      const hasFalsaCalma = activeRules.some(r => String(r).includes('Falsa Calma'));
+      const hasTaro = activeRules.some(r => String(r).includes('Taró') || String(r).includes('Bruma'));
+      const hasTormenta = activeRules.some(r => String(r).includes('Tormenta'));
+
+      let waterLabel = 'Mar Calmo';
+      let icon = '☀️';
+      let bg = 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300';
+
+      if (hasTormenta) {
+        waterLabel = 'Riesgo Tormenta ⚡';
+        icon = '⚡';
+        bg = 'bg-yellow-950/90 border-yellow-500/50 text-yellow-300';
+      } else if (hasTaro) {
+        waterLabel = 'Riesgo Taró 🌫️';
+        icon = '🌫️';
+        bg = 'bg-slate-900 border-slate-600 text-slate-200';
+      } else if (hasLavadora) {
+        waterLabel = 'Lavadora';
+        icon = '🚨';
+        bg = 'bg-red-950/90 border-red-500/50 text-red-300';
+      } else if (hasMarPicado || avgScore < 65) {
+        waterLabel = 'Mar Picado';
+        icon = '⚠️';
+        bg = 'bg-amber-950/90 border-amber-500/50 text-amber-300';
+      } else if (hasFalsaCalma) {
+        waterLabel = 'Falsa Calma';
+        icon = '⚠️';
+        bg = 'bg-amber-950/90 border-amber-500/50 text-amber-300';
+      } else if (avgScore >= 85) {
+        waterLabel = avgWave <= 0.15 ? 'Balsa' : 'Calmo';
+        icon = '🟢';
+        bg = 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300';
+      } else {
+        waterLabel = 'Rizado';
+        icon = '🟡';
+        bg = 'bg-amber-950/80 border-amber-500/40 text-amber-200';
+      }
+
+      const combinedLabel = `${waterLabel}${windTag}`;
+
+      return {
+        label: combinedLabel,
+        waterLabel,
+        windTag,
+        score: avgScore,
+        avgWave,
+        avgWind,
+        icon,
+        bg
+      };
+    }
+
+    return {
+      morning: evaluateSegment(morningHours, '06-11h'),
+      afternoon: evaluateSegment(afternoonHours, '12-17h'),
+      evening: evaluateSegment(eveningHours, '18-21h')
+    };
+  }
+
   // Traductor Unificado de Dirección de Viento/Ola (Texto o Número ➔ Grados 0º-360º)
   function parseWindDirToDegrees(val) {
     if (val === undefined || val === null || val === "") return null;
@@ -2105,9 +2221,8 @@ export default function App() {
             const rainProb = localClimateDown ? "-" : (weatherJson?.hourly?.precipitation_probability?.[i] || 0);
             const dewPoint = localClimateDown ? 0 : (weatherJson?.hourly?.dew_point_2m?.[i] || 0);
             
-            // Regla: Multiplicador Térmico de Mediodía en Misericordia (v9.5)
-            const isMisericordia = selectedBeach === 'misericordia';
-            if (isMisericordia && !localClimateDown) {
+            // Regla: Multiplicador Térmico Universal de Mediodía en toda la Bahía (Hito 32)
+            if (!localClimateDown) {
                 const isNoonWindow = displayHour >= 12 && displayHour <= 18;
                 const isSouthOrSouthWestWind = windDir >= 157.5 && windDir <= 247.5;
                 if (isNoonWindow && isSouthOrSouthWestWind) {
@@ -2227,16 +2342,35 @@ export default function App() {
                 }
             }
             
+            function getKnotsForIndex(idx) {
+              if (idx < 0 || !weatherJson?.hourly?.wind_speed_10m || idx >= weatherJson.hourly.wind_speed_10m.length) return windKnots;
+              const kmh = weatherJson.hourly.wind_speed_10m[idx] || 0;
+              let knots = Math.round(kmh / 1.852);
+              const hNum = idx % 24;
+              const hDir = weatherJson?.hourly?.wind_direction_10m?.[idx] || 0;
+              if (hNum >= 12 && hNum <= 18 && hDir >= 157.5 && hDir <= 247.5) {
+                knots += 10;
+              }
+              return knots;
+            }
+
+            const prevKnots = getKnotsForIndex(i - 1);
+            const currKnots = windKnots;
+            const nextKnots = getKnotsForIndex(i + 1);
+            const avg3hWindKnots = (prevKnots + currKnots + nextKnots) / 3.0;
+
             if (!localClimateDown) {
-                // Viento genérico
-                if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
+                // Viento genérico con suavizado por inercia de 3 horas (Hito 30)
+                if (avg3hWindKnots > 8) {
+                    hourScore -= Math.round((avg3hWindKnots - 8) * 3.5);
+                }
                 
                 // Rachas penalizan extra
                 if (gustKnots > 15) {
                     hourScore -= ((gustKnots - 15) * 2);
                 }
                 
-                // MAGÓN (Ahora estrictamente limitado a olas de 0.5m o menos)
+                // MAGÓN (Ahora strictly limitado a olas de 0.5m o menos)
                 if (effectiveWaveHeight >= 0.4 && effectiveWaveHeight <= 0.5 && windKnots < 8 && period > 5.5) {
                     hourScore = 100 - (effectiveWaveHeight * 10); 
                     localRule = "Magón";
@@ -2245,7 +2379,7 @@ export default function App() {
 
                 // Lavadora
                 const isPoniente = windDir > 202.5 && windDir <= 292.5;
-                if (isPoniente && displayHour >= 12 && displayHour <= 18 && windKnots > dynWindLavadora) {
+                if (isPoniente && displayHour >= 12 && displayHour <= 18 && avg3hWindKnots > dynWindLavadora) {
                     hourScore -= 25;
                     localRule = "Lavadora";
                     ruleColor = "text-amber-600";
@@ -2262,6 +2396,7 @@ export default function App() {
                 // Regla: Batalla Térmica en Misericordia (v9.5)
                 const isWestOrNorthWestWind = windDir >= 247.5 && windDir <= 337.5;
                 const isNoonWindow = displayHour >= 12 && displayHour <= 18;
+                const isMisericordia = selectedBeach === 'misericordia';
                 if (isMisericordia && isNoonWindow && isWestOrNorthWestWind && windKnots < 15) {
                     if (!localRule || localRule === "Escudo Activo" || localRule === "Magón") {
                         localRule = "Batalla Térmica ⚔️";
@@ -2269,12 +2404,24 @@ export default function App() {
                     }
                 }
 
-                // Regla: Desacople de Incomodidad vs Altura (Mar Picado / Incómodo) en Misericordia (v9.5)
-                if (isMisericordia && windKnots > 10) {
-                    if (hourScore > 60) hourScore = 60;
-                    if (!localRule || localRule === "Escudo Activo" || localRule === "Magón" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo") {
-                        localRule = "Mar Picado / Incómodo";
-                        ruleColor = "text-amber-700 bg-amber-50 border border-amber-200 shadow-sm";
+                // Regla: Incomodidad por Viento Sostenido (Hito 30/32 - Suavizado Progresivo 3h Universal)
+                if (avg3hWindKnots >= 10) {
+                    if (avg3hWindKnots > 12) {
+                        // Sostenido >12kt: Mar Picado Real
+                        const maxAllowedScore = Math.max(35, Math.round(75 - (avg3hWindKnots - 12) * 5));
+                        if (hourScore > maxAllowedScore) hourScore = maxAllowedScore;
+                        if (!localRule || localRule === "Escudo Activo" || localRule === "Magón" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo") {
+                            localRule = "Mar Picado / Incómodo";
+                            ruleColor = "text-amber-800 bg-amber-100 border border-amber-300 font-bold shadow-sm";
+                        }
+                    } else {
+                        // Sostenido 10kt - 12kt: Brisa Sostenida / Rizado Suave (Transición Amarilla)
+                        const maxAllowedScore = Math.round(88 - (avg3hWindKnots - 10) * 6);
+                        if (hourScore > maxAllowedScore) hourScore = maxAllowedScore;
+                        if (!localRule || localRule === "Escudo Activo" || localRule === "Magón") {
+                            localRule = "Brisa Sostenida / Mar Rizado";
+                            ruleColor = "text-amber-700 bg-amber-50 border border-amber-200 shadow-sm";
+                        }
                     }
                 }
             }
@@ -3411,6 +3558,49 @@ export default function App() {
                 Boya vs Previsiones
               </button>
             </div>
+
+            {/* BARRA PANORÁMICA DE TENDENCIA GENERAL DEL DÍA (HITO 29 / PUNTO 1) */}
+            {!isLoading && currentDayData && (() => {
+              const dayTrend = getDayTrendSummary(currentDayData.hourly);
+              if (!dayTrend) return null;
+              return (
+                <div className="bg-slate-900 text-white p-3 sm:p-3.5 rounded-2xl shadow-sm border border-slate-800 mb-4 animate-in fade-in duration-300">
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="p-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                        <Compass size={16} className="text-amber-400 animate-spin" style={{ animationDuration: '15s' }} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-black uppercase text-amber-300 tracking-wider block">
+                          🧭 Tendencia {currentDayData.dayLabel.split(' ')[0]}:
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-medium">3 tramos de la jornada (06-21h)</span>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 w-full text-[11px] font-bold">
+                      {/* Tramo 1: Mañana */}
+                      <div className={`px-2.5 py-1.5 rounded-xl border flex items-center justify-between gap-1.5 shadow-2xs ${dayTrend.morning.bg}`}>
+                        <span className="truncate">{dayTrend.morning.icon} 06-11h: {dayTrend.morning.label}</span>
+                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-black/30 shrink-0">Score {dayTrend.morning.score}</span>
+                      </div>
+
+                      {/* Tramo 2: Tarde */}
+                      <div className={`px-2.5 py-1.5 rounded-xl border flex items-center justify-between gap-1.5 shadow-2xs ${dayTrend.afternoon.bg}`}>
+                        <span className="truncate">{dayTrend.afternoon.icon} 12-17h: {dayTrend.afternoon.label}</span>
+                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-black/30 shrink-0">Score {dayTrend.afternoon.score}</span>
+                      </div>
+
+                      {/* Tramo 3: Noche */}
+                      <div className={`px-2.5 py-1.5 rounded-xl border flex items-center justify-between gap-1.5 shadow-2xs ${dayTrend.evening.bg}`}>
+                        <span className="truncate">{dayTrend.evening.icon} 18-21h: {dayTrend.evening.label}</span>
+                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-black/30 shrink-0">Score {dayTrend.evening.score}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {activeTab === 'forecast' ? (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
