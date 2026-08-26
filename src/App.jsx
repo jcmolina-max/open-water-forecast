@@ -40,13 +40,12 @@ import { Analytics } from '@vercel/analytics/react';
 
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
 const BEACHES = {
-  misericordia: { name: "La Misericordia, Málaga", lat: 36.688139, lon: -4.441750, facing: 115 },
-  malagueta: { name: "La Malagueta, Málaga", lat: 36.718556, lon: -4.407750, facing: 140 },
-  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.720444, lon: -4.374278, facing: 180 },
-  // v9.4+ — expansión costera (Open-Meteo: mismos endpoints, lat/lon por playa)
-  los_alamos: { name: "Los Álamos, Torremolinos", lat: 36.635500, lon: -4.484639, facing: 120 },
-  bajondillo: { name: "El Bajondillo, Torremolinos", lat: 36.626250, lon: -4.491472, facing: 120 },
-  cala_del_moral: { name: "La Cala del Moral, Rincón de la Victoria", lat: 36.714194, lon: -4.305167, facing: 180 },
+  misericordia: { name: "La Misericordia, Málaga", lat: 36.6918, lon: -4.4385, facing: 115 },
+  malagueta: { name: "La Malagueta, Málaga", lat: 36.7180, lon: -4.4070, facing: 140 },
+  pedregalejo: { name: "Pedregalejo, Málaga", lat: 36.7215, lon: -4.3850, facing: 180 },
+  los_alamos: { name: "Los Álamos, Torremolinos", lat: 36.6375, lon: -4.4840, facing: 120 },
+  bajondillo: { name: "El Bajondillo, Torremolinos", lat: 36.6235, lon: -4.4960, facing: 120 },
+  cala_del_moral: { name: "La Cala del Moral", lat: 36.7135, lon: -4.3115, facing: 180 },
   rincon_victoria: { name: "Rincón de la Victoria, Málaga", lat: 36.714417, lon: -4.287972, facing: 190 }
 };
 
@@ -55,14 +54,16 @@ const BEACH_COASTAL_DEFS = {
     name: "La Misericordia, Málaga",
     lat: 36.6918,
     lon: -4.4385,
-    facing: 117,
+    facing: 115,
+    ejeCostaInicio: 205,
+    ejeCostaFin: 25,
     shelters: "Dique Levante (50º) al Este, Espigón Térmica/Sacaba al Oeste",
     sectors: {
       lev_anortado: { min: 1, max: 25, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada tierra/mar. Poco oleaje en orilla." },
       levante:      { min: 26, max: 170, label: "Levante (Swell)", color: "#3b82f6", desc: "Mar de fondo / Rompiente orillera pesada." },
       sur:          { min: 171, max: 190, label: "Sur", color: "#8b5cf6", desc: "Amplificador térmico / Mar picado e incómodo." },
-      poniente:     { min: 191, max: 230, label: "Poniente", color: "#10b981", desc: "Chop rápido / Boost térmico al mediodía." },
-      terral:       { min: 231, max: 360, label: "Poniente-Terral", color: "#f97316", desc: "Orilla plato / balsa total. Precaución mar adentro." }
+      poniente:     { min: 191, max: 205, label: "Poniente", color: "#10b981", desc: "Chop rápido / Boost térmico al mediodía." },
+      terral:       { min: 206, max: 360, label: "Poniente-Terral", color: "#f97316", desc: "Orilla plato / balsa total. Precaución mar adentro." }
     }
   },
   malagueta: {
@@ -70,13 +71,15 @@ const BEACH_COASTAL_DEFS = {
     lat: 36.7180,
     lon: -4.4070,
     facing: 140,
+    ejeCostaInicio: 230,
+    ejeCostaFin: 50,
     shelters: "Encajada tras Dique de Levante del Puerto de Málaga",
     sectors: {
       lev_anortado: { min: 1, max: 49, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por la Farola." },
       levante:      { min: 50, max: 170, label: "Levante Franco", color: "#3b82f6", desc: "Entrada directa de Levante / Mar de fondo." },
       sur:          { min: 171, max: 190, label: "Sur", color: "#8b5cf6", desc: "Entrada oblicua al dique del puerto." },
-      poniente:     { min: 191, max: 229, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida por el Dique y Puerto." },
-      terral:       { min: 230, max: 360, label: "Terral de Gibralfaro", color: "#f97316", desc: "Viento seco de tierra / balsa." }
+      poniente:     { min: 191, max: 230, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida por el Dique y Puerto." },
+      terral:       { min: 231, max: 360, label: "Terral de Gibralfaro", color: "#f97316", desc: "Viento seco de tierra / balsa." }
     }
   },
   pedregalejo: {
@@ -84,10 +87,12 @@ const BEACH_COASTAL_DEFS = {
     lat: 36.7215,
     lon: -4.3850,
     facing: 180,
+    ejeCostaInicio: 270,
+    ejeCostaFin: 90,
     shelters: "6 calas protegidas por espigones en T/Y",
     sectors: {
-      lev_anortado: { min: 1, max: 90, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por El Morlaco." },
-      levante:      { min: 91, max: 170, label: "Levante Calas", color: "#3b82f6", desc: "Espigones frenan el oleaje." },
+      lev_anortado: { min: 1, max: 89, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada cerrada por El Morlaco." },
+      levante:      { min: 90, max: 170, label: "Levante Calas", color: "#3b82f6", desc: "Espigones frenan el oleaje." },
       sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada directa por las bocanas." },
       poniente:     { min: 191, max: 270, label: "Poniente Calas", color: "#10b981", desc: "Calas tipo piscina por abrigo." },
       terral:       { min: 271, max: 360, label: "Terral / Viento Tierra", color: "#f97316", desc: "Mar plano absoluto en las calas." }
@@ -98,13 +103,15 @@ const BEACH_COASTAL_DEFS = {
     lat: 36.6375,
     lon: -4.4840,
     facing: 120,
+    ejeCostaInicio: 210,
+    ejeCostaFin: 30,
     shelters: "Playa abierta rectilínea sin espigones",
     sectors: {
-      lev_anortado: { min: 1, max: 30, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra-mar." },
-      levante:      { min: 31, max: 170, label: "Levante Abierto", color: "#3b82f6", desc: "Olas con máxima energía y rompiente." },
+      lev_anortado: { min: 1, max: 29, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra-mar." },
+      levante:      { min: 30, max: 170, label: "Levante Abierto", color: "#3b82f6", desc: "Olas con máxima energía y rompiente." },
       sur:          { min: 171, max: 190, label: "Sur Abierto", color: "#8b5cf6", desc: "Mar de fondo frontal sin abrigo." },
-      poniente:     { min: 191, max: 219, label: "Poniente", color: "#10b981", desc: "Viento de costado / chop." },
-      terral:       { min: 220, max: 360, label: "Terral", color: "#f97316", desc: "Viento de la sierra de Mijas / balsa." }
+      poniente:     { min: 191, max: 210, label: "Poniente", color: "#10b981", desc: "Viento de costado / chop." },
+      terral:       { min: 211, max: 360, label: "Terral", color: "#f97316", desc: "Viento de la sierra de Mijas / balsa." }
     }
   },
   bajondillo: {
@@ -112,13 +119,15 @@ const BEACH_COASTAL_DEFS = {
     lat: 36.6235,
     lon: -4.4960,
     facing: 120,
+    ejeCostaInicio: 210,
+    ejeCostaFin: 30,
     shelters: "Punta de Torremolinos / Castillo Santa Clara",
     sectors: {
       lev_anortado: { min: 1, max: 29, label: "Levante Anortado", color: "#f59e0b", desc: "Entrada oblicua." },
       levante:      { min: 30, max: 170, label: "Levante", color: "#3b82f6", desc: "Entrada franca de Levante." },
       sur:          { min: 171, max: 190, label: "Sur", color: "#8b5cf6", desc: "Entrada de mar de fondo." },
-      poniente:     { min: 191, max: 215, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida por la Punta de Torremolinos." },
-      terral:       { min: 216, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
+      poniente:     { min: 191, max: 210, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida por la Punta de Torremolinos." },
+      terral:       { min: 211, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
     }
   },
   cala_del_moral: {
@@ -126,10 +135,12 @@ const BEACH_COASTAL_DEFS = {
     lat: 36.7135,
     lon: -4.3115,
     facing: 180,
+    ejeCostaInicio: 270,
+    ejeCostaFin: 90,
     shelters: "Acantilados de El Cantal al Oeste",
     sectors: {
-      lev_anortado: { min: 1, max: 90, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra de la Axarquía." },
-      levante:      { min: 91, max: 170, label: "Levante Concha", color: "#3b82f6", desc: "Entrada franca de Levante." },
+      lev_anortado: { min: 1, max: 89, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra de la Axarquía." },
+      levante:      { min: 90, max: 170, label: "Levante Concha", color: "#3b82f6", desc: "Entrada franca de Levante." },
       sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada frontal a la concha." },
       poniente:     { min: 191, max: 270, label: "Poniente Abrigado", color: "#10b981", desc: "Protegida del Poniente por El Cantal." },
       terral:       { min: 271, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra / orilla balsa." }
@@ -140,10 +151,12 @@ const BEACH_COASTAL_DEFS = {
     lat: 36.7150,
     lon: -4.2780,
     facing: 190,
+    ejeCostaInicio: 280,
+    ejeCostaFin: 100,
     shelters: "Gran playa rectilínea, montes de la Axarquía",
     sectors: {
-      lev_anortado: { min: 1, max: 100, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra / abrigo." },
-      levante:      { min: 101, max: 170, label: "Levante", color: "#3b82f6", desc: "Entrada franca de Levante." },
+      lev_anortado: { min: 1, max: 99, label: "Levante Anortado", color: "#f59e0b", desc: "Viento de tierra / abrigo." },
+      levante:      { min: 100, max: 170, label: "Levante", color: "#3b82f6", desc: "Entrada franca de Levante." },
       sur:          { min: 171, max: 190, label: "Sur Frontal", color: "#8b5cf6", desc: "Entrada directa a la arena." },
       poniente:     { min: 191, max: 280, label: "Poniente", color: "#10b981", desc: "Protegida por El Cantal." },
       terral:       { min: 281, max: 360, label: "Terral", color: "#f97316", desc: "Viento de tierra." }
@@ -2221,11 +2234,13 @@ export default function App() {
             const rainProb = localClimateDown ? "-" : (weatherJson?.hourly?.precipitation_probability?.[i] || 0);
             const dewPoint = localClimateDown ? 0 : (weatherJson?.hourly?.dew_point_2m?.[i] || 0);
             
-            // Regla: Multiplicador Térmico Universal de Mediodía en toda la Bahía (Hito 32)
+            // Regla: Multiplicador Térmico Universal Dinámico por Eje de Costa (Hito 33)
             if (!localClimateDown) {
+                const bDef = BEACH_COASTAL_DEFS[selectedBeach] || BEACH_COASTAL_DEFS.misericordia;
+                const maxThermalAngle = bDef.ejeCostaInicio || (bDef.facing + 90);
                 const isNoonWindow = displayHour >= 12 && displayHour <= 18;
-                const isSouthOrSouthWestWind = windDir >= 157.5 && windDir <= 247.5;
-                if (isNoonWindow && isSouthOrSouthWestWind) {
+                const isThermalWindWindow = windDir >= 170 && windDir <= maxThermalAngle;
+                if (isNoonWindow && isThermalWindWindow) {
                     windKnots += 10;
                     gustKnots += 10;
                 }
@@ -2348,7 +2363,9 @@ export default function App() {
               let knots = Math.round(kmh / 1.852);
               const hNum = idx % 24;
               const hDir = weatherJson?.hourly?.wind_direction_10m?.[idx] || 0;
-              if (hNum >= 12 && hNum <= 18 && hDir >= 157.5 && hDir <= 247.5) {
+              const bDef = BEACH_COASTAL_DEFS[selectedBeach] || BEACH_COASTAL_DEFS.misericordia;
+              const maxThermalAngle = bDef.ejeCostaInicio || (bDef.facing + 90);
+              if (hNum >= 12 && hNum <= 18 && hDir >= 170 && hDir <= maxThermalAngle) {
                 knots += 10;
               }
               return knots;
