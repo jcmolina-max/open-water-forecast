@@ -1621,6 +1621,94 @@ export default function App() {
     return filtered.length > 0 ? filtered : valid;
   }
 
+  // Calculador de Tendencia Panorámica del Día (Hito 29 - 3 Tramos: Mañana, Tarde, Noche)
+  function getDayTrendSummary(hourlyData) {
+    if (!hourlyData || hourlyData.length === 0) return null;
+
+    const parseHourNum = (hStr) => parseInt(String(hStr || '00:00').split(':')[0], 10);
+
+    const morningHours = hourlyData.filter(h => {
+      const hNum = parseHourNum(h.time);
+      return hNum >= 6 && hNum <= 11;
+    });
+
+    const afternoonHours = hourlyData.filter(h => {
+      const hNum = parseHourNum(h.time);
+      return hNum >= 12 && hNum <= 17;
+    });
+
+    const eveningHours = hourlyData.filter(h => {
+      const hNum = parseHourNum(h.time);
+      return hNum >= 18 && hNum <= 21;
+    });
+
+    function evaluateSegment(hours, defaultRangeName) {
+      if (!hours || hours.length === 0) {
+        return { label: 'Sin datos', score: 100, bg: 'bg-slate-800 border-slate-700 text-slate-300', icon: '⚪' };
+      }
+
+      const avgScore = Math.round(hours.reduce((acc, h) => acc + Number(h.hourScore || 100), 0) / hours.length);
+      const avgWave = (hours.reduce((acc, h) => acc + Number(h.swellH || 0.1), 0) / hours.length).toFixed(2);
+      const avgWind = Math.round(hours.reduce((acc, h) => acc + Number(h.windS || 0), 0) / hours.length);
+
+      const activeRules = hours.map(h => h.localRule).filter(r => r && r !== 'Normal' && r !== 'Escudo Activo');
+      const hasLavadora = activeRules.some(r => String(r).includes('Lavadora'));
+      const hasMarPicado = activeRules.some(r => String(r).includes('Mar Picado') || String(r).includes('Incómodo'));
+      const hasFalsaCalma = activeRules.some(r => String(r).includes('Falsa Calma'));
+      const hasTaro = activeRules.some(r => String(r).includes('Taró') || String(r).includes('Bruma'));
+      const hasTormenta = activeRules.some(r => String(r).includes('Tormenta'));
+
+      let label = 'Mar Calmo';
+      let icon = '☀️';
+      let bg = 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300';
+
+      if (hasTormenta) {
+        label = 'Riesgo Tormenta ⚡';
+        icon = '⚡';
+        bg = 'bg-yellow-950/90 border-yellow-500/50 text-yellow-300';
+      } else if (hasTaro) {
+        label = 'Riesgo de Taró / Bruma 🌫️';
+        icon = '🌫️';
+        bg = 'bg-slate-900 border-slate-600 text-slate-200';
+      } else if (hasLavadora) {
+        label = `Lavadora (SO ${avgWind}kt)`;
+        icon = '🚨';
+        bg = 'bg-red-950/90 border-red-500/50 text-red-300';
+      } else if (hasMarPicado || avgScore < 65) {
+        label = `Mar Picado / Incómodo (${avgWind}kt)`;
+        icon = '⚠️';
+        bg = 'bg-amber-950/90 border-amber-500/50 text-amber-300';
+      } else if (hasFalsaCalma) {
+        label = 'Falsa Calma (Corriente Fondo)';
+        icon = '⚠️';
+        bg = 'bg-amber-950/90 border-amber-500/50 text-amber-300';
+      } else if (avgScore >= 85) {
+        label = avgWave <= 0.15 ? 'Mar Espejo / Balsa' : 'Mar Calmo / Óptimo';
+        icon = '🟢';
+        bg = 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300';
+      } else {
+        label = `Rizado Suave (${avgWave}m)`;
+        icon = '🟡';
+        bg = 'bg-amber-950/80 border-amber-500/40 text-amber-200';
+      }
+
+      return {
+        label,
+        score: avgScore,
+        avgWave,
+        avgWind,
+        icon,
+        bg
+      };
+    }
+
+    return {
+      morning: evaluateSegment(morningHours, '06-11h'),
+      afternoon: evaluateSegment(afternoonHours, '12-17h'),
+      evening: evaluateSegment(eveningHours, '18-21h')
+    };
+  }
+
   // Traductor Unificado de Dirección de Viento/Ola (Texto o Número ➔ Grados 0º-360º)
   function parseWindDirToDegrees(val) {
     if (val === undefined || val === null || val === "") return null;
@@ -3411,6 +3499,49 @@ export default function App() {
                 Boya vs Previsiones
               </button>
             </div>
+
+            {/* BARRA PANORÁMICA DE TENDENCIA GENERAL DEL DÍA (HITO 29 / PUNTO 1) */}
+            {!isLoading && currentDayData && (() => {
+              const dayTrend = getDayTrendSummary(currentDayData.hourly);
+              if (!dayTrend) return null;
+              return (
+                <div className="bg-slate-900 text-white p-3 sm:p-3.5 rounded-2xl shadow-sm border border-slate-800 mb-4 animate-in fade-in duration-300">
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="p-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                        <Compass size={16} className="text-amber-400 animate-spin" style={{ animationDuration: '15s' }} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-black uppercase text-amber-300 tracking-wider block">
+                          🧭 Tendencia {currentDayData.dayLabel.split(' ')[0]}:
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-medium">3 tramos de la jornada (06-21h)</span>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 w-full text-[11px] font-bold">
+                      {/* Tramo 1: Mañana */}
+                      <div className={`px-2.5 py-1.5 rounded-xl border flex items-center justify-between gap-1.5 shadow-2xs ${dayTrend.morning.bg}`}>
+                        <span className="truncate">{dayTrend.morning.icon} 06-11h: {dayTrend.morning.label}</span>
+                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-black/30 shrink-0">Score {dayTrend.morning.score}</span>
+                      </div>
+
+                      {/* Tramo 2: Tarde */}
+                      <div className={`px-2.5 py-1.5 rounded-xl border flex items-center justify-between gap-1.5 shadow-2xs ${dayTrend.afternoon.bg}`}>
+                        <span className="truncate">{dayTrend.afternoon.icon} 12-17h: {dayTrend.afternoon.label}</span>
+                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-black/30 shrink-0">Score {dayTrend.afternoon.score}</span>
+                      </div>
+
+                      {/* Tramo 3: Noche */}
+                      <div className={`px-2.5 py-1.5 rounded-xl border flex items-center justify-between gap-1.5 shadow-2xs ${dayTrend.evening.bg}`}>
+                        <span className="truncate">{dayTrend.evening.icon} 18-21h: {dayTrend.evening.label}</span>
+                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-black/30 shrink-0">Score {dayTrend.evening.score}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {activeTab === 'forecast' ? (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
