@@ -2221,9 +2221,8 @@ export default function App() {
             const rainProb = localClimateDown ? "-" : (weatherJson?.hourly?.precipitation_probability?.[i] || 0);
             const dewPoint = localClimateDown ? 0 : (weatherJson?.hourly?.dew_point_2m?.[i] || 0);
             
-            // Regla: Multiplicador Térmico de Mediodía en Misericordia (v9.5)
-            const isMisericordia = selectedBeach === 'misericordia';
-            if (isMisericordia && !localClimateDown) {
+            // Regla: Multiplicador Térmico Universal de Mediodía en toda la Bahía (Hito 32)
+            if (!localClimateDown) {
                 const isNoonWindow = displayHour >= 12 && displayHour <= 18;
                 const isSouthOrSouthWestWind = windDir >= 157.5 && windDir <= 247.5;
                 if (isNoonWindow && isSouthOrSouthWestWind) {
@@ -2349,7 +2348,7 @@ export default function App() {
               let knots = Math.round(kmh / 1.852);
               const hNum = idx % 24;
               const hDir = weatherJson?.hourly?.wind_direction_10m?.[idx] || 0;
-              if (isMisericordia && hNum >= 12 && hNum <= 18 && hDir >= 157.5 && hDir <= 247.5) {
+              if (hNum >= 12 && hNum <= 18 && hDir >= 157.5 && hDir <= 247.5) {
                 knots += 10;
               }
               return knots;
@@ -2371,7 +2370,7 @@ export default function App() {
                     hourScore -= ((gustKnots - 15) * 2);
                 }
                 
-                // MAGÓN (Ahora estrictamente limitado a olas de 0.5m o menos)
+                // MAGÓN (Ahora strictly limitado a olas de 0.5m o menos)
                 if (effectiveWaveHeight >= 0.4 && effectiveWaveHeight <= 0.5 && windKnots < 8 && period > 5.5) {
                     hourScore = 100 - (effectiveWaveHeight * 10); 
                     localRule = "Magón";
@@ -2397,6 +2396,7 @@ export default function App() {
                 // Regla: Batalla Térmica en Misericordia (v9.5)
                 const isWestOrNorthWestWind = windDir >= 247.5 && windDir <= 337.5;
                 const isNoonWindow = displayHour >= 12 && displayHour <= 18;
+                const isMisericordia = selectedBeach === 'misericordia';
                 if (isMisericordia && isNoonWindow && isWestOrNorthWestWind && windKnots < 15) {
                     if (!localRule || localRule === "Escudo Activo" || localRule === "Magón") {
                         localRule = "Batalla Térmica ⚔️";
@@ -2404,8 +2404,8 @@ export default function App() {
                     }
                 }
 
-                // Regla: Incomodidad por Viento Sostenido en La Misericordia (Hito 30 - Suavizado Progresivo 3h)
-                if (isMisericordia && avg3hWindKnots >= 10) {
+                // Regla: Incomodidad por Viento Sostenido (Hito 30/32 - Suavizado Progresivo 3h Universal)
+                if (avg3hWindKnots >= 10) {
                     if (avg3hWindKnots > 12) {
                         // Sostenido >12kt: Mar Picado Real
                         const maxAllowedScore = Math.max(35, Math.round(75 - (avg3hWindKnots - 12) * 5));
