@@ -1651,6 +1651,30 @@ export default function App() {
       const avgWave = (hours.reduce((acc, h) => acc + Number(h.swellH || 0.1), 0) / hours.length).toFixed(2);
       const avgWind = Math.round(hours.reduce((acc, h) => acc + Number(h.windS || 0), 0) / hours.length);
 
+      const validWindDirs = hours.map(h => Number(h.windDir)).filter(d => !isNaN(d) && d >= 0);
+      let windTag = '';
+      if (validWindDirs.length > 0) {
+        const avgDir = Math.round(validWindDirs.reduce((a, b) => a + b, 0) / validWindDirs.length);
+        let wCompIcon = '💨';
+        let wCompName = 'Poniente';
+        if (avgDir >= 45 && avgDir <= 155) {
+          wCompIcon = '🌊';
+          wCompName = 'Levante';
+        } else if (avgDir >= 156 && avgDir <= 174) {
+          wCompIcon = '⚓';
+          wCompName = 'Sur';
+        } else if (avgDir >= 175 && avgDir <= 284) {
+          wCompIcon = '💨';
+          wCompName = 'Poniente';
+        } else {
+          wCompIcon = '🏔️';
+          wCompName = 'Terral';
+        }
+        const dirClean = getWindDirection(avgDir);
+        const dirShort = dirClean ? dirClean.replace(/[^A-Z]/g, '') : '';
+        windTag = ` · ${wCompIcon} ${wCompName} (${dirShort} ${avgWind}kt)`;
+      }
+
       const activeRules = hours.map(h => h.localRule).filter(r => r && r !== 'Normal' && r !== 'Escudo Activo');
       const hasLavadora = activeRules.some(r => String(r).includes('Lavadora'));
       const hasMarPicado = activeRules.some(r => String(r).includes('Mar Picado') || String(r).includes('Incómodo'));
@@ -1658,42 +1682,46 @@ export default function App() {
       const hasTaro = activeRules.some(r => String(r).includes('Taró') || String(r).includes('Bruma'));
       const hasTormenta = activeRules.some(r => String(r).includes('Tormenta'));
 
-      let label = 'Mar Calmo';
+      let waterLabel = 'Mar Calmo';
       let icon = '☀️';
       let bg = 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300';
 
       if (hasTormenta) {
-        label = 'Riesgo Tormenta ⚡';
+        waterLabel = 'Riesgo Tormenta ⚡';
         icon = '⚡';
         bg = 'bg-yellow-950/90 border-yellow-500/50 text-yellow-300';
       } else if (hasTaro) {
-        label = 'Riesgo de Taró / Bruma 🌫️';
+        waterLabel = 'Riesgo Taró 🌫️';
         icon = '🌫️';
         bg = 'bg-slate-900 border-slate-600 text-slate-200';
       } else if (hasLavadora) {
-        label = `Lavadora (SO ${avgWind}kt)`;
+        waterLabel = 'Lavadora';
         icon = '🚨';
         bg = 'bg-red-950/90 border-red-500/50 text-red-300';
       } else if (hasMarPicado || avgScore < 65) {
-        label = `Mar Picado / Incómodo (${avgWind}kt)`;
+        waterLabel = 'Mar Picado';
         icon = '⚠️';
         bg = 'bg-amber-950/90 border-amber-500/50 text-amber-300';
       } else if (hasFalsaCalma) {
-        label = 'Falsa Calma (Corriente Fondo)';
+        waterLabel = 'Falsa Calma';
         icon = '⚠️';
         bg = 'bg-amber-950/90 border-amber-500/50 text-amber-300';
       } else if (avgScore >= 85) {
-        label = avgWave <= 0.15 ? 'Mar Espejo / Balsa' : 'Mar Calmo / Óptimo';
+        waterLabel = avgWave <= 0.15 ? 'Balsa' : 'Calmo';
         icon = '🟢';
         bg = 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300';
       } else {
-        label = `Rizado Suave (${avgWave}m)`;
+        waterLabel = 'Rizado';
         icon = '🟡';
         bg = 'bg-amber-950/80 border-amber-500/40 text-amber-200';
       }
 
+      const combinedLabel = `${waterLabel}${windTag}`;
+
       return {
-        label,
+        label: combinedLabel,
+        waterLabel,
+        windTag,
         score: avgScore,
         avgWave,
         avgWind,
