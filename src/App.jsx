@@ -6570,10 +6570,14 @@ export default function App() {
                           const buoyInfo = getBuoyReadingForLog(item);
                           const bH = parseBoyaNum(buoyInfo.height || item.boyaAltura, 0.01, 2.5);
 
-                          // Ola Nadador: Estrictamente solo si viene de un reporte de nadador con escala válida
-                          const isSwimmerReport = (item.origenDato && String(item.origenDato).toLowerCase().includes('nadador')) || 
+                          // Ola Nadador / Admin: Incluir reportes de nadadores y calibraciones del Admin (Hito 34)
+                          const origLower = String(item.origenDato || '').toLowerCase();
+                          const isSwimmerReport = origLower.includes('nadador') || 
+                                                  origLower.includes('admin') || 
+                                                  origLower.includes('calibraci') || 
                                                   (item.sensaciones && String(item.sensaciones).includes('[Nombre:'));
-                          const swimmerH = isSwimmerReport && item.realOlas ? swimmerScaleToMeters(item.realOlas) : null;
+                          const rawWaveVal = item.realOlas || item.orillaOlaNadador || item.boyaAltura;
+                          const swimmerH = isSwimmerReport && rawWaveVal ? swimmerScaleToMeters(rawWaveVal) : null;
 
                           // Nombre nadador
                           const sens = String(item.sensaciones || '');
