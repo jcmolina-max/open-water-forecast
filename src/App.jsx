@@ -2315,9 +2315,28 @@ export default function App() {
                 }
             }
             
+            function getKnotsForIndex(idx) {
+              if (idx < 0 || !weatherJson?.hourly?.wind_speed_10m || idx >= weatherJson.hourly.wind_speed_10m.length) return windKnots;
+              const kmh = weatherJson.hourly.wind_speed_10m[idx] || 0;
+              let knots = Math.round(kmh / 1.852);
+              const hNum = idx % 24;
+              const hDir = weatherJson?.hourly?.wind_direction_10m?.[idx] || 0;
+              if (isMisericordia && hNum >= 12 && hNum <= 18 && hDir >= 157.5 && hDir <= 247.5) {
+                knots += 10;
+              }
+              return knots;
+            }
+
+            const prevKnots = getKnotsForIndex(i - 1);
+            const currKnots = windKnots;
+            const nextKnots = getKnotsForIndex(i + 1);
+            const avg3hWindKnots = (prevKnots + currKnots + nextKnots) / 3.0;
+
             if (!localClimateDown) {
-                // Viento genérico
-                if (windKnots > 8) hourScore -= ((windKnots - 8) * 2);
+                // Viento genérico con suavizado por inercia de 3 horas (Hito 30)
+                if (avg3hWindKnots > 8) {
+                    hourScore -= Math.round((avg3hWindKnots - 8) * 3.5);
+                }
                 
                 // Rachas penalizan extra
                 if (gustKnots > 15) {
@@ -2333,7 +2352,7 @@ export default function App() {
 
                 // Lavadora
                 const isPoniente = windDir > 202.5 && windDir <= 292.5;
-                if (isPoniente && displayHour >= 12 && displayHour <= 18 && windKnots > dynWindLavadora) {
+                if (isPoniente && displayHour >= 12 && displayHour <= 18 && avg3hWindKnots > dynWindLavadora) {
                     hourScore -= 25;
                     localRule = "Lavadora";
                     ruleColor = "text-amber-600";
@@ -2357,12 +2376,24 @@ export default function App() {
                     }
                 }
 
-                // Regla: Desacople de Incomodidad vs Altura (Mar Picado / Incómodo) en Misericordia (v9.5)
-                if (isMisericordia && windKnots > 10) {
-                    if (hourScore > 60) hourScore = 60;
-                    if (!localRule || localRule === "Escudo Activo" || localRule === "Magón" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo") {
-                        localRule = "Mar Picado / Incómodo";
-                        ruleColor = "text-amber-700 bg-amber-50 border border-amber-200 shadow-sm";
+                // Regla: Incomodidad por Viento Sostenido en La Misericordia (Hito 30 - Suavizado Progresivo 3h)
+                if (isMisericordia && avg3hWindKnots >= 10) {
+                    if (avg3hWindKnots > 12) {
+                        // Sostenido >12kt: Mar Picado Real
+                        const maxAllowedScore = Math.max(35, Math.round(75 - (avg3hWindKnots - 12) * 5));
+                        if (hourScore > maxAllowedScore) hourScore = maxAllowedScore;
+                        if (!localRule || localRule === "Escudo Activo" || localRule === "Magón" || localRule === "Batalla Térmica ⚔️" || localRule === "Falsa Calma: Corriente de Fondo") {
+                            localRule = "Mar Picado / Incómodo";
+                            ruleColor = "text-amber-800 bg-amber-100 border border-amber-300 font-bold shadow-sm";
+                        }
+                    } else {
+                        // Sostenido 10kt - 12kt: Brisa Sostenida / Rizado Suave (Transición Amarilla)
+                        const maxAllowedScore = Math.round(88 - (avg3hWindKnots - 10) * 6);
+                        if (hourScore > maxAllowedScore) hourScore = maxAllowedScore;
+                        if (!localRule || localRule === "Escudo Activo" || localRule === "Magón") {
+                            localRule = "Brisa Sostenida / Mar Rizado";
+                            ruleColor = "text-amber-700 bg-amber-50 border border-amber-200 shadow-sm";
+                        }
                     }
                 }
             }
