@@ -38,13 +38,43 @@ import {
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
-// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Idea 1)
+// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 37)
 const APP_BUILD_INFO = {
-  version: "v9.4.34",
-  hito: "HITO_34",
-  nombreHito: "Integración de Calibraciones Admin en Triangulación Cuádruple",
+  version: "v9.4.37",
+  hito: "HITO_37",
+  nombreHito: "Mensajes 350ch + Matriz Tolerancia + Banner Admin",
   rama: "MEJORAS",
-  fechaBuild: "2026-08-30"
+  fechaBuild: "2026-08-31"
+};
+
+/**
+ * HITO 36: Evaluador de acierto no lineal adaptado a la sensibilidad del nadador en orilla.
+ * @param {number} predHs - Altura de ola prevista o calibrada por la app (m)
+ * @param {number} realHs - Altura de ola real medida por Boya o Nadador (m)
+ * @returns {object|null} { isAccurate: boolean, allowedMargin: number, diff: number }
+ */
+const isForecastAccurate = (predHs, realHs) => {
+  if (predHs === null || realHs === null || isNaN(Number(predHs)) || isNaN(Number(realHs))) return null;
+  const p = Number(predHs);
+  const r = Number(realHs);
+  const diff = Math.abs(p - r);
+  let allowedMargin = 0.10; // Default para balsa
+
+  if (p <= 0.10) {
+    allowedMargin = 0.10; // 100% (+-0.10m)
+  } else if (p <= 0.20) {
+    allowedMargin = p * 0.50; // 50% (+-0.08 - 0.10m)
+  } else if (p <= 0.45) {
+    allowedMargin = p * 0.25; // 25% (+-0.07 - 0.11m)
+  } else {
+    allowedMargin = p * 0.15; // 15% (estricto mar picado)
+  }
+
+  return {
+    isAccurate: diff <= allowedMargin,
+    allowedMargin,
+    diff
+  };
 };
 
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
@@ -1311,7 +1341,8 @@ export default function App() {
         const absDiff = Math.abs(swimmerWave - buoyWave);
         sumAbsError += absDiff;
 
-        if (absDiff <= 0.25) {
+        const accEval = isForecastAccurate(swimmerWave, buoyWave);
+        if (accEval && accEval.isAccurate) {
           matchSensationCount++;
         }
 
@@ -4228,7 +4259,7 @@ export default function App() {
                           <option value="">-- Seleccionar Sesión Guardada --</option>
                           {calibrationLogsOnly.map((item, idx) => {
                             const cleanSens = String(item.sensaciones || "").replace(/^\[.*?\]\s*/, '').trim();
-                            const sensPreview = cleanSens ? ` - "${cleanSens.substring(0, 25)}${cleanSens.length > 25 ? '...' : ''}"` : '';
+                            const sensPreview = cleanSens ? ` - "${cleanSens}"` : '';
                             return (
                               <option key={idx} value={idx}>
                                 {formatSwimFriendly(item.fechaRegistro || item.fecha, item.horaNado)} - {BEACHES[item.playa]?.name.split(',')[0] || item.playa || 'Misericordia'}{sensPreview}
@@ -5326,6 +5357,19 @@ export default function App() {
                 </form>
               ) : (
                 <>
+                  {/* HITO 37: Indicador Visual de Versión y Entorno en Panel de Admin */}
+                  <div className="bg-slate-900 text-white px-3.5 py-2.5 rounded-2xl mb-4 flex items-center justify-between shadow-md border border-slate-800">
+                    <div className="flex items-center gap-2 text-xs font-black tracking-wide">
+                      <span className="bg-emerald-400 text-slate-950 px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-wider">
+                        ENTORNO {APP_BUILD_INFO.rama}
+                      </span>
+                      <span className="text-slate-200">🛠️ {APP_BUILD_INFO.hito} — {APP_BUILD_INFO.nombreHito}</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                      Build: {APP_BUILD_INFO.fechaBuild} ({APP_BUILD_INFO.version})
+                    </span>
+                  </div>
+
                   {/* PESTAÑAS NAVEGACIÓN ADMIN */}
                   <div className="flex border-b border-slate-200 mb-5 bg-slate-100/80 p-1 rounded-2xl gap-1 overflow-x-auto">
                     <button
@@ -6398,7 +6442,7 @@ export default function App() {
                                               let cleanH = '';
                                               const datePrefix = l.timestamp ? formatFriendlyDate(l.timestamp).split(',')[0] : '';
                                               const swimTime = datePrefix ? (datePrefix + (cleanH ? ' ' + cleanH : '')) : (cleanH || 'Hoy');
-                                              const author = l.sensaciones ? (l.sensaciones.length > 35 ? l.sensaciones.substring(0, 35) + '...' : l.sensaciones) : (l.origenDato || 'Reporte');
+                                              const author = l.sensaciones ? l.sensaciones : (l.origenDato || 'Reporte');
 
                                               const orig = String(l.origenDato || '').trim().toLowerCase();
                                               let badgeLabel = '👤 Nadador';
@@ -6934,7 +6978,7 @@ export default function App() {
                             {/* TARJETA TOOLTIP FLOTANTE / DETALLE DEL PUNTO ACTIVO */}
                             {activePoint && (
                               <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-3.5 rounded-2xl border border-indigo-500/30 shadow-lg space-y-2">
-                                <div className="flex justify-between items-center border-b border-indigo-500/20 pb-1.5">
+                                <div className="flex justify-between items-center border-b border-indigo-500/20 pb-1.5 flex-wrap gap-1">
                                   <div className="flex items-center gap-1.5">
                                     <span className="text-xs">📅</span>
                                     <strong className="text-xs font-black text-white">{activePoint.label}</strong>
@@ -6942,7 +6986,15 @@ export default function App() {
                                       {chartBeach.replace('_', ' ')}
                                     </span>
                                   </div>
-                                  <span className="text-[9px] text-slate-400 font-semibold">Toca cualquier punto del gráfico</span>
+                                  {(() => {
+                                    const acc = isForecastAccurate(activePoint.ourAppWave, activePoint.buoyWave !== null ? activePoint.buoyWave : activePoint.swimmerWave);
+                                    if (!acc) return <span className="text-[9px] text-slate-400 font-semibold">Toca cualquier punto del gráfico</span>;
+                                    return (
+                                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-black tracking-wide ${acc.isAccurate ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
+                                        {acc.isAccurate ? `✅ ACIERTO TOTAL (±${acc.allowedMargin.toFixed(2)}m)` : `❌ DESVIADO (±${acc.allowedMargin.toFixed(2)}m)`}
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
 
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-left">
@@ -7090,9 +7142,9 @@ export default function App() {
                             </div>
 
                             <div className="bg-blue-50 border border-blue-200 p-3 rounded-2xl">
-                              <span className="text-[9px] font-extrabold text-blue-600 uppercase block">📊 Coincidencia Nota</span>
+                              <span className="text-[9px] font-extrabold text-blue-600 uppercase block">📊 Acierto No Lineal</span>
                               <strong className="text-xl font-black text-blue-900 block mt-0.5">{shadowLabAnalysis.accuracyPct}%</strong>
-                              <span className="text-[8px] text-blue-500 font-bold block mt-0.5">Sensación vs Algoritmo</span>
+                              <span className="text-[8px] text-blue-500 font-bold block mt-0.5">Matriz Náutica Tolerancia</span>
                             </div>
 
                             <div className="bg-purple-50 border border-purple-200 p-3 rounded-2xl">
@@ -8358,7 +8410,7 @@ export default function App() {
                     placeholder={swimmerIsOnlyMessage ? "Ej. '¿Quién se apunta a nadar a las 19:00?' o 'Mar de fondo fuerte, precaución hoy...'" : "Ej. 'El agua estaba plato pero fría, no hay medusas hoy...'"}
                     required={swimmerIsOnlyMessage}
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-blue-500"
-                    maxLength={150}
+                    maxLength={350}
                   />
                 </div>
 
