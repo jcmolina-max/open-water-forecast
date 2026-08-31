@@ -36,6 +36,8 @@ import {
   Database,
   Video
 } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
+
 // CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Idea 1)
 const APP_BUILD_INFO = {
   version: "v9.4.34",
