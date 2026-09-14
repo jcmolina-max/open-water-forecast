@@ -2583,8 +2583,7 @@ export default function App() {
               const isGentleWind = windKnots >= 3 && windKnots <= 12; // Viento suave que empuja pero no dispersa la niebla
               const humidity = weatherJson?.hourly?.relative_humidity_2m?.[i] || 0;
               const vis = visibility !== undefined ? visibility : 10000;
-              const hourNum = parseInt((cleanHourString(hStr) || '12').split(':')[0]);
-              const isEarlyMorning = hourNum >= 5 && hourNum <= 10;
+              const isEarlyMorning = displayHour >= 5 && displayHour <= 10;
 
               // CASO A (Hito 38): NIEBLA SATURADA DE RADIACIÓN / LLOVIZNA EN ORILLA ("Calabobos")
               if (humidity >= 85 && deltaDewAir <= 2.0 && isLandOrCalmWind && isEarlyMorning) {
