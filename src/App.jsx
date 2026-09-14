@@ -2577,7 +2577,7 @@ export default function App() {
 
             if (!localClimateDown && dewPoint !== undefined && taroEffectiveWaterTemp !== undefined) {
               const deltaT = dewPoint - taroEffectiveWaterTemp;
-              const deltaDewAir = Math.abs((temp || 20) - dewPoint);
+              const deltaDewAir = Math.abs((hourAirTemp || 20) - dewPoint);
               const isSeaBreezeWind = windDir >= 80 && windDir <= 220; // Vientos de componente marítima (Levante, Sur, Sudeste)
               const isLandOrCalmWind = windDir >= 250 || windDir <= 40 || windKnots <= 5; // Viento de tierra o calma chicha
               const isGentleWind = windKnots >= 3 && windKnots <= 12; // Viento suave que empuja pero no dispersa la niebla
