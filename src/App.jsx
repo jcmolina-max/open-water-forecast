@@ -34,17 +34,18 @@ import {
   ChevronUp,
   Users,
   Database,
-  Video
+  Video,
+  Navigation
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
-// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 40)
+// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 41)
 const APP_BUILD_INFO = {
-  version: "v9.4.40",
-  hito: "HITO_40",
-  nombreHito: "Niebla Saturada + Caja Negra Anomalías + Re-evaluador Admin",
+  version: "v9.4.41",
+  hito: "HITO_41",
+  nombreHito: "Módulo Deriva Litoral Oblicua + Ficha Náutica",
   rama: "MEJORAS",
-  fechaBuild: "2026-09-14"
+  fechaBuild: "2026-09-18"
 };
 
 /**
@@ -112,6 +113,83 @@ const logAtmosphericAnomaly = async (data) => {
   } catch (err) {
     console.error("Error en logAtmosphericAnomaly:", err);
   }
+};
+
+/**
+ * HITO 41: Cálculo de Deriva Litoral Oblicua y Vector de Arrastre Superficial (Longshore Drift)
+ */
+const calculateLongshoreDrift = (swellH, swellDir, windSpeedKts, windDir, oceanCurrVel, oceanCurrDir, beachFacing = 115) => {
+  const g = 9.81;
+  const Hs = Math.max(0, parseFloat(swellH) || 0);
+  const facing = parseFloat(beachFacing) || 115;
+  const sDir = parseFloat(swellDir) !== undefined && !isNaN(parseFloat(swellDir)) ? parseFloat(swellDir) : facing;
+  const wSpdKts = parseFloat(windSpeedKts) || 0;
+  const wDir = parseFloat(windDir) !== undefined && !isNaN(parseFloat(windDir)) ? parseFloat(windDir) : facing;
+
+  // 1. Componente por Ola Oblicua (Longuet-Higgins ajustado con Hs de previsión sin factor)
+  const deltaRadWave = ((sDir - facing) * Math.PI) / 180;
+  const vOlaMs = 1.2 * Math.sqrt(g * Hs) * Math.sin(deltaRadWave) * Math.cos(deltaRadWave);
+  const vOlaKts = Math.abs(vOlaMs * 1.94384);
+
+  // 2. Componente por Arrastre Superficial de Viento (2.5% velocidad del viento)
+  const deltaRadWind = ((wDir - facing) * Math.PI) / 180;
+  const vWindKtsComponent = wSpdKts * 0.025 * Math.sin(deltaRadWind);
+
+  // 3. Componente por Corriente Marina Satelital (si existe)
+  let vCurrKtsComponent = 0;
+  if (oceanCurrVel !== undefined && oceanCurrVel !== null && !isNaN(parseFloat(oceanCurrVel))) {
+    const currVelKts = parseFloat(oceanCurrVel) * 1.94384;
+    const cDir = parseFloat(oceanCurrDir) || facing;
+    const deltaRadCurr = ((cDir - facing) * Math.PI) / 180;
+    vCurrKtsComponent = currVelKts * Math.sin(deltaRadCurr);
+  }
+
+  // Vector resultante lateral (positivo = empuje a Levante/Este, negativo = empuje a Poniente/Oeste)
+  const netLateralKts = (vOlaMs >= 0 ? vOlaKts : -vOlaKts) + vWindKtsComponent + vCurrKtsComponent;
+  const absTotalKts = Math.abs(netLateralKts);
+
+  let directionText = "Sin deriva definida";
+  let arrowIcon = "↔️";
+  if (netLateralKts > 0.08) {
+    directionText = "Levante (El Rincón)";
+    arrowIcon = "➡️";
+  } else if (netLateralKts < -0.08) {
+    directionText = "Poniente (Guadalmar)";
+    arrowIcon = "⬅️";
+  } else {
+    directionText = "Nula / Despreciable";
+    arrowIcon = "🟢";
+  }
+
+  let nivel = "Nula";
+  let badgeClass = "bg-emerald-950/80 text-emerald-300 border-emerald-500/40";
+  let statusColor = "text-emerald-400";
+
+  if (absTotalKts >= 0.8) {
+    nivel = "Fuerte";
+    badgeClass = "bg-red-950/80 text-red-300 border-red-500/40";
+    statusColor = "text-red-400";
+  } else if (absTotalKts >= 0.35) {
+    nivel = "Moderada";
+    badgeClass = "bg-amber-950/80 text-amber-300 border-amber-500/40";
+    statusColor = "text-amber-400";
+  } else if (absTotalKts >= 0.12) {
+    nivel = "Leve";
+    badgeClass = "bg-cyan-950/80 text-cyan-300 border-cyan-500/40";
+    statusColor = "text-cyan-400";
+  }
+
+  return {
+    velocityKts: absTotalKts.toFixed(1),
+    velocityKmh: (absTotalKts * 1.852).toFixed(1),
+    directionText,
+    arrowIcon,
+    netLateralKts,
+    nivel,
+    badgeClass,
+    statusColor,
+    vOlaKts: vOlaKts.toFixed(1)
+  };
 };
 
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
@@ -540,7 +618,14 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, 
   const isPoniente = wDir >= 191 && wDir <= ejeOeste;
   const isSur = wDir >= 171 && wDir <= 190;
 
-  if (isOffshore && wSpd >= 8) {
+  // HITO 41: Cálculo de Deriva Litoral Oblicua para el Visor Náutico
+  const drift = calculateLongshoreDrift(sH, sDir, wSpd, wDir, currentHour.currVel, currentHour.currDir, facing);
+
+  if (drift.nivel === "Fuerte" || drift.nivel === "Moderada") {
+    diagTitle = `🧭 Deriva ${drift.nivel}: ${drift.directionText}`;
+    diagDesc = `Ola oblicua (${sDir}°) y viento (${wSpd}kt) empujan ${drift.velocityKts}kt (${drift.velocityKmh}km/h)`;
+    diagBadgeClass = drift.badgeClass;
+  } else if (isOffshore && wSpd >= 8) {
     diagTitle = "🏔️ Terral / Viento Tierra";
     diagDesc = "Orilla plato / Balsa total";
     diagBadgeClass = "bg-emerald-950/80 text-emerald-300 border-emerald-500/50";
@@ -631,8 +716,8 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, 
         </div>
       </div>
 
-      {/* 2. BARRA HUD LIMPIA (DATOS EN HORIZONTAL JUSTO ENCIMA DEL MAPA) */}
-      <div className="grid grid-cols-2 gap-2 text-left">
+      {/* 2. BARRA HUD LIMPIA (3 CHIPS EN HORIZONTAL CON DERIVA LITORAL) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-left">
         {/* Chip Viento */}
         <div className="bg-slate-800/90 p-2 sm:p-2.5 rounded-xl border border-slate-700 flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2 min-w-0">
@@ -675,6 +760,29 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, 
             </span>
             <span className="text-[8px] font-extrabold text-indigo-300 block mt-0.5">
               {isLevante ? '🌊 Levante' : isPoniente ? '💨 Poniente' : '⚓ Mar'}
+            </span>
+          </div>
+        </div>
+
+        {/* Chip 3: Deriva Litoral (Longshore Drift) */}
+        <div className="bg-slate-800/90 p-2 sm:p-2.5 rounded-xl border border-slate-700 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-700">
+              <Navigation size={15} className="text-cyan-400" />
+            </div>
+            <div className="truncate">
+              <span className="block text-[8.5px] font-black uppercase text-slate-400">Deriva Litoral</span>
+              <span className="text-xs sm:text-sm font-black text-white">
+                {drift.arrowIcon} {drift.velocityKts} <span className="text-[10px] font-normal text-slate-300">kt</span>
+              </span>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border block ${drift.badgeClass}`}>
+              {drift.nivel}
+            </span>
+            <span className={`text-[8px] font-extrabold ${drift.statusColor} block mt-0.5`}>
+              {drift.directionText}
             </span>
           </div>
         </div>
@@ -2071,7 +2179,7 @@ export default function App() {
 
       // 2. SATÉLITE MARINO
       try {
-        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,sea_level_height_msl&models=best_match&timezone=Europe%2FMadrid&past_days=14`);
+        marineJson = await fetchWithTimeout(`https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,sea_level_height_msl,ocean_current_velocity,ocean_current_direction&models=best_match&timezone=Europe%2FMadrid&past_days=14`);
         setRawMarineData(marineJson);
       } catch (e) {
          setErrorDetails({ general: `El satélite marino no responde: ${e.message}` });
@@ -2345,7 +2453,20 @@ export default function App() {
                 effectiveWaveHeight = waveHeight * scaleFactor;
             }
             
-            let driftInfo = { icon: "⏺️", color: "text-slate-400", short: "Nula" };
+            // HITO 41: Cálculo de Deriva Litoral Oblicua
+            const oceanCurrVel = marineJson?.hourly?.ocean_current_velocity?.[marineI];
+            const oceanCurrDir = marineJson?.hourly?.ocean_current_direction?.[marineI];
+            const longshoreDrift = calculateLongshoreDrift(effectiveWaveHeight, waveDir, windKnots, windDir, oceanCurrVel, oceanCurrDir, beach.facing);
+
+            let driftInfo = { 
+              icon: longshoreDrift.arrowIcon, 
+              color: longshoreDrift.statusColor, 
+              short: longshoreDrift.directionText,
+              velKts: longshoreDrift.velocityKts,
+              velKmh: longshoreDrift.velocityKmh,
+              nivel: longshoreDrift.nivel
+            };
+
             const isLevanteMar = waveDir !== undefined && waveDir !== null && waveDir >= 60 && waveDir <= 120;
             const isPedregalejo = selectedBeach === 'pedregalejo';
 
@@ -2353,21 +2474,9 @@ export default function App() {
               ? Number(cloudConfigAlertas['embudo_min_hs'] || cloudConfigAlertas['EMBUDO_MIN_HS']) : 0.30;
 
             if (isPedregalejo && isLevanteMar && effectiveWaveHeight >= dynEmbudoMinHs) {
-                driftInfo = { icon: "➡️", color: "text-red-600 font-bold bg-red-50 border-red-200", short: "Embudo: Fuengirola" };
+                driftInfo = { icon: "➡️", color: "text-red-600 font-bold bg-red-50 border-red-200", short: "Embudo: Fuengirola", velKts: longshoreDrift.velocityKts, velKmh: longshoreDrift.velocityKmh, nivel: "Fuerte" };
                 localRule = "Efecto Embudo: Alta resistencia";
                 ruleColor = "text-red-700 font-bold bg-red-100 border border-red-300 shadow-sm";
-            } else if (waveDir !== undefined && waveDir !== null && effectiveWaveHeight >= 0.2) {
-                let diff = waveDir - beach.facing;
-                while (diff > 180) diff -= 360;
-                while (diff < -180) diff += 360;
-
-                if (Math.abs(diff) < 85) { 
-                    if (diff > 15) {
-                        driftInfo = { icon: "⬅️", color: "text-indigo-600", short: "Nerja" };
-                    } else if (diff < -15) {
-                        driftInfo = { icon: "➡️", color: "text-indigo-600", short: "Fuengirola" };
-                    }
-                }
             }
             
             if (!localClimateDown && windDir > 45 && windDir < 135) {
