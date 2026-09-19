@@ -39,13 +39,13 @@ import {
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
-// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 41)
+// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 42)
 const APP_BUILD_INFO = {
-  version: "v9.4.41",
-  hito: "HITO_41",
-  nombreHito: "Módulo Deriva Litoral Oblicua + Ficha Náutica",
+  version: "v9.4.42",
+  hito: "HITO_42",
+  nombreHito: "Estrategia Rumbo Táctico + Ventana de Oro + Poniente Fuengirola",
   rama: "MEJORAS",
-  fechaBuild: "2026-09-18"
+  fechaBuild: "2026-09-19"
 };
 
 /**
@@ -3264,7 +3264,7 @@ export default function App() {
 
     if (!foundInMemory) {
       try {
-        const beach = BEACHES[adminPlaya];
+        const beach = BEACHES[adminPlaya] || BEACHES.misericordia;
         const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${beach.lat}&longitude=${beach.lon}&hourly=wave_height&models=best_match,ncep_gfswave016&timezone=Europe%2FMadrid`;
         const res = await fetch(marineUrl).then(r => r.json());
         const searchHour = (adminHoraNado || "").split(':')[0].trim().padStart(2, '0');
@@ -3343,11 +3343,11 @@ export default function App() {
           vientoReal: realW,
           olaSat: appH,
           olaReal: realH,
-          presionMSL: weatherData?.hourly?.pressure_msl?.[0] || '',
-          humidity: weatherData?.hourly?.relative_humidity_2m?.[0] || '',
-          dewPoint: weatherData?.hourly?.dew_point_2m?.[0] || '',
-          airTemp: weatherData?.hourly?.temperature_2m?.[0] || '',
-          cape: weatherData?.hourly?.cape?.[0] || '',
+          presionMSL: rawWeatherData?.hourly?.pressure_msl?.[0] || '',
+          humidity: rawWeatherData?.hourly?.relative_humidity_2m?.[0] || '',
+          dewPoint: rawWeatherData?.hourly?.dew_point_2m?.[0] || '',
+          airTemp: rawWeatherData?.hourly?.temperature_2m?.[0] || '',
+          cape: rawWeatherData?.hourly?.cape?.[0] || '',
           taroRisk: hourForecast?.localRule || '',
           notas: `Anomalía telemétrica registrada por Admin: ${adminNotas}`
         });
