@@ -126,14 +126,23 @@ const calculateLongshoreDrift = (swellH, swellDir, windSpeedKts, windDir, oceanC
   const wSpdKts = parseFloat(windSpeedKts) || 0;
   const wDir = parseFloat(windDir) !== undefined && !isNaN(parseFloat(windDir)) ? parseFloat(windDir) : facing;
 
-  // 1. Componente por Ola Oblicua (Longuet-Higgins ajustado con Hs de previsión sin factor)
-  const deltaRadWave = ((sDir - facing) * Math.PI) / 180;
-  const vOlaMs = 1.2 * Math.sqrt(g * Hs) * Math.sin(deltaRadWave) * Math.cos(deltaRadWave);
-  const vOlaKts = Math.abs(vOlaMs * 1.94384);
+  // 1. Componente por Ola Oblicua (Solo si la ola procede del mar: 25° a 295°)
+  let vOlaKts = 0;
+  let vOlaMs = 0;
+  const isOnshoreWave = (sDir >= 25 && sDir <= 295);
+  if (isOnshoreWave) {
+    const deltaRadWave = ((sDir - facing) * Math.PI) / 180;
+    vOlaMs = 1.2 * Math.sqrt(g * Hs) * Math.sin(deltaRadWave) * Math.cos(deltaRadWave);
+    vOlaKts = Math.abs(vOlaMs * 1.94384);
+  }
 
-  // 2. Componente por Arrastre Superficial de Viento (2.5% velocidad del viento)
-  const deltaRadWind = ((wDir - facing) * Math.PI) / 180;
-  const vWindKtsComponent = wSpdKts * 0.025 * Math.sin(deltaRadWind);
+  // 2. Componente por Arrastre Superficial de Viento (Solo si sopla de mar a tierra: 25° a 295°)
+  let vWindKtsComponent = 0;
+  const isOnshoreWind = (wDir >= 25 && wDir <= 295);
+  if (isOnshoreWind) {
+    const deltaRadWind = ((wDir - facing) * Math.PI) / 180;
+    vWindKtsComponent = wSpdKts * 0.025 * Math.sin(deltaRadWind);
+  }
 
   // 3. Componente por Corriente Marina Satelital (si existe)
   let vCurrKtsComponent = 0;
@@ -145,7 +154,8 @@ const calculateLongshoreDrift = (swellH, swellDir, windSpeedKts, windDir, oceanC
   }
 
   // Vector resultante lateral (positivo = empuje a Levante/Este, negativo = empuje a Poniente/Oeste)
-  const netLateralKts = (vOlaMs >= 0 ? vOlaKts : -vOlaKts) + vWindKtsComponent + vCurrKtsComponent;
+  const signedOlaKts = vOlaMs >= 0 ? vOlaKts : -vOlaKts;
+  const netLateralKts = signedOlaKts + vWindKtsComponent + vCurrKtsComponent;
   const absTotalKts = Math.abs(netLateralKts);
 
   let directionText = "Sin deriva definida";
@@ -154,7 +164,7 @@ const calculateLongshoreDrift = (swellH, swellDir, windSpeedKts, windDir, oceanC
     directionText = "Levante (El Rincón)";
     arrowIcon = "➡️";
   } else if (netLateralKts < -0.08) {
-    directionText = "Poniente (Guadalmar)";
+    directionText = "Poniente (Fuengirola)";
     arrowIcon = "⬅️";
   } else {
     directionText = "Nula / Despreciable";
@@ -179,6 +189,13 @@ const calculateLongshoreDrift = (swellH, swellDir, windSpeedKts, windDir, oceanC
     statusColor = "text-cyan-400";
   }
 
+  let tacticaNado = "Sin deriva apreciable. Rumbo libre en ambas direcciones.";
+  if (netLateralKts > 0.08) {
+    tacticaNado = "Empieza nadando a Poniente/Fuengirola (en contra) a la ida para volver a favor hacia El Rincón.";
+  } else if (netLateralKts < -0.08) {
+    tacticaNado = "Empieza nadando a Levante/El Rincón (en contra) a la ida para volver a favor hacia Fuengirola.";
+  }
+
   return {
     velocityKts: absTotalKts.toFixed(1),
     velocityKmh: (absTotalKts * 1.852).toFixed(1),
@@ -188,8 +205,52 @@ const calculateLongshoreDrift = (swellH, swellDir, windSpeedKts, windDir, oceanC
     nivel,
     badgeClass,
     statusColor,
-    vOlaKts: vOlaKts.toFixed(1)
+    vOlaKts: vOlaKts.toFixed(1),
+    tacticaNado
   };
+};
+
+/**
+ * HITO 42: Detector de la "Ventana de Oro" (La Mejor Hora del Día para Nadar)
+ */
+const findGoldenSwimWindow = (hourlyData) => {
+  if (!hourlyData || hourlyData.length < 2) return null;
+
+  let bestWindow = null;
+  let maxScoreAvg = -1;
+
+  for (let i = 0; i < hourlyData.length - 1; i++) {
+    const h1 = hourlyData[i];
+    const h2 = hourlyData[i + 1];
+
+    const h1HourNum = parseInt((h1.time || "00:00").split(':')[0], 10);
+    // Excluir horas nocturnas (07:00 a 21:00) y riesgo de tormentas
+    if (h1HourNum < 7 || h1HourNum > 21) continue;
+    if (h1.localRule?.includes('Tormenta') || h2.localRule?.includes('Tormenta')) continue;
+
+    const s1 = typeof h1.hourScore === 'number' ? h1.hourScore : 50;
+    const s2 = typeof h2.hourScore === 'number' ? h2.hourScore : 50;
+    const avgScore = (s1 + s2) / 2;
+
+    const w1 = parseFloat(h1.windS) || 0;
+    const w2 = parseFloat(h2.windS) || 0;
+    const avgWind = (w1 + w2) / 2;
+
+    if (avgScore > maxScoreAvg) {
+      maxScoreAvg = avgScore;
+      bestWindow = {
+        startTime: h1.time,
+        endTime: h2.time,
+        avgScore: Math.round(avgScore),
+        avgWind: avgWind.toFixed(1),
+        condition: h1.localRule || "Mar Estable",
+        waveH: h1.swellH || "0.20",
+        driftText: h1.drift?.short || "Sin deriva"
+      };
+    }
+  }
+
+  return bestWindow;
 };
 
 // Coordenadas reales de las playas y su orientación (grados respecto al Norte mirando al mar)
@@ -784,9 +845,19 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, 
             <span className={`text-[8px] font-extrabold ${drift.statusColor} block mt-0.5`}>
               {drift.directionText}
             </span>
-          </div>
         </div>
       </div>
+
+      {/* 2.1 BANNER DE ESTRATEGIA TÁCTICA DE RUMBO DE NADO (HITO 42) */}
+      {drift.tacticaNado && drift.nivel !== "Nula" && (
+        <div className="bg-indigo-950/90 border border-indigo-400/40 p-2.5 rounded-xl text-xs text-indigo-100 flex items-start gap-2 shadow-xs">
+          <span className="text-sm shrink-0">💡</span>
+          <div>
+            <span className="font-bold text-indigo-200 block text-[11px]">Estrategia Táctica de Nado (Ida ↔ Vuelta):</span>
+            <span className="text-[11px] text-slate-200">{drift.tacticaNado}</span>
+          </div>
+        </div>
+      )}
 
       {/* 3. VENTANA DEL MAPA + ROSA DE LOS VIENTOS + FLECHAS (MOSAICO CONTINUO SIN BORDES NEGROS) */}
       <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] min-h-[250px] sm:min-h-[280px] rounded-xl overflow-hidden border border-slate-700 shadow-inner bg-slate-950">
@@ -2464,7 +2535,8 @@ export default function App() {
               short: longshoreDrift.directionText,
               velKts: longshoreDrift.velocityKts,
               velKmh: longshoreDrift.velocityKmh,
-              nivel: longshoreDrift.nivel
+              nivel: longshoreDrift.nivel,
+              tactica: longshoreDrift.tacticaNado
             };
 
             const isLevanteMar = waveDir !== undefined && waveDir !== null && waveDir >= 60 && waveDir <= 120;
@@ -4025,14 +4097,37 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 3: Mejor y Peor Hora */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                {/* Tarjeta 3: Resumen del Día y Ventana de Oro */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="text-slate-500 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
                       <Clock size={16} className="text-indigo-500"/> Horas Clave
                     </h3>
                     <span className="text-[10px] text-slate-400 font-medium">Cálculo Propio</span>
                   </div>
+                  
+                  {/* BANNER VENTANA DE ORO (LA MEJOR HORA DEL DÍA PARA NADAR) */}
+                  {(() => {
+                    const goldenWin = findGoldenSwimWindow(currentDayData.hourly);
+                    if (!goldenWin) return null;
+                    return (
+                      <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/20 to-yellow-500/10 border border-amber-400/50 p-3 rounded-xl shadow-xs space-y-1 text-left">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 font-black text-xs text-amber-800">
+                            <span className="text-amber-500 text-sm">⭐</span>
+                            <span>VENTANA DE ORO PARA NADAR HOY</span>
+                          </div>
+                          <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                            Score: {goldenWin.avgScore}/100
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-slate-700 font-medium pt-0.5">
+                          <span>Franja: <strong>{goldenWin.startTime} - {goldenWin.endTime}</strong> ({goldenWin.condition})</span>
+                          <span className="text-[10px] font-bold text-amber-700">Viento: {goldenWin.avgWind} kt · Ola: {goldenWin.waveH}m</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   
                   <div className="flex justify-between items-center bg-emerald-50 p-3 rounded-xl border border-emerald-100">
                     <div className="flex items-center gap-2">
@@ -4339,8 +4434,13 @@ export default function App() {
                                     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${hour.ripColor}`}>
                                       Resaca: {hour.ripRisk}
                                     </span>
-                                    <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${hour.drift.color}`}>
-                                      <span>{hour.drift.icon}</span> <span>{hour.drift.short}</span>
+                                    <div className={`flex flex-col gap-0.5 px-1.5 py-1 rounded text-[10px] font-bold ${hour.drift.color}`}>
+                                      <div className="flex items-center gap-1">
+                                        <span>{hour.drift.icon}</span> <span>{hour.drift.short}</span> {hour.drift.velKts && <span className="font-semibold text-slate-500">({hour.drift.velKts} kt)</span>}
+                                      </div>
+                                      {hour.drift.tactica && (
+                                        <span className="text-[9px] font-normal text-slate-600 block mt-0.5 leading-tight">{hour.drift.tactica}</span>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
