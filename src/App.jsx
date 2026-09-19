@@ -845,6 +845,7 @@ function NauticalSpotCompass({ beachKey, hourlyData, selectedIdx, onSelectHour, 
             <span className={`text-[8px] font-extrabold ${drift.statusColor} block mt-0.5`}>
               {drift.directionText}
             </span>
+          </div>
         </div>
       </div>
 
