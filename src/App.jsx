@@ -1962,6 +1962,7 @@ export default function App() {
   const [latestBuoyWindSpeed, setLatestBuoyWindSpeed] = useState(null);
   const [latestBuoyWindDir, setLatestBuoyWindDir] = useState(null);
   const [latestBuoyDate, setLatestBuoyDate] = useState(null);
+  const [latestBuoySource, setLatestBuoySource] = useState(null);
   const [showPuertosIframe, setShowPuertosIframe] = useState(false);
   const [isPushModalOpen, setIsPushModalOpen] = useState(false);
 
