@@ -3,7 +3,7 @@ export default async function handler(req, res) {
   try {
     const GOOGLE_WEBHOOK_URL = process.env.GOOGLE_SCRIPT_WEBHOOK_URL || "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec";
     
-    // Estación Física Real de La Misericordia (Málaga): 1070084
+    // Código de Estación Real de La Misericordia: 1070084
     const portusRealUrl = "https://portus.puertos.es/portussvr/api/lastData/station/1070084?locale=es";
     
     const headers = {
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
 
     let buoyRealData = null;
 
-    // 1. Lectura directa Boya Real Málaga (Estación 1070084)
+    // 1. Intento lectura Boya Real Málaga (Estación 1070084)
     try {
       const response = await fetch(portusRealUrl, { 
         method: "POST", 
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
         }
       }
     } catch (e) {
-      console.warn("Error lectura 1070084:", e);
+      console.warn("Error en lectura directa Puertos 1070084:", e);
     }
 
     // 2. Si no responde la boya, consulta Open-Meteo Respaldo
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 3. Enviar a Google Sheets
+    // 3. Inyección en Google Sheets
     const sheetPayload = {
       origenDato: "Boya: " + (buoyRealData ? buoyRealData.fuente : "Sin Conexión"),
       playa: "misericordia",
