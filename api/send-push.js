@@ -3,14 +3,23 @@
 import webpush from 'web-push';
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BLrS1Zj7HbR_gN6sq9cWLgvcNOTpS5ECBGBQd65teg3VoZGRVnVvMNRvn_WRP0PsKgjKCa147lC6ZxBPskbimW4";
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "nysIpvSrPumo7Pu4OmOzEguQoCoFQh3nLZOt4UlMT5A";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:contacto@openwatertracker.es";
 
-webpush.setVapidDetails(
-  VAPID_SUBJECT,
-  VAPID_PUBLIC_KEY,
-  VAPID_PRIVATE_KEY
-);
+let vapidConfigured = false;
+function ensureVapidConfig() {
+  if (!vapidConfigured) {
+    if (!VAPID_PRIVATE_KEY) {
+      throw new Error('Falta la variable de entorno secreta VAPID_PRIVATE_KEY en Vercel (Project Settings > Environment Variables).');
+    }
+    webpush.setVapidDetails(
+      VAPID_SUBJECT,
+      VAPID_PUBLIC_KEY,
+      VAPID_PRIVATE_KEY
+    );
+    vapidConfigured = true;
+  }
+}
 
 export default async function handler(req, res) {
   // CORS headers
@@ -32,6 +41,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    ensureVapidConfig();
+
     const { subscriptions, payload } = req.body;
 
     if (!subscriptions || !Array.isArray(subscriptions) || subscriptions.length === 0) {
