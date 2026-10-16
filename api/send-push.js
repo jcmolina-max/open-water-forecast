@@ -46,8 +46,13 @@ export default async function handler(req, res) {
       url: payload?.url || '/'
     });
 
+    const pushOptions = {
+      TTL: 86400, // 24 horas
+      urgency: 'high' // Máxima prioridad para despertar pantalla en reposo
+    };
+
     const results = await Promise.allSettled(
-      subscriptions.map(sub => webpush.sendNotification(sub, notificationPayload))
+      subscriptions.map(sub => webpush.sendNotification(sub, notificationPayload, pushOptions))
     );
 
     const sent = results.filter(r => r.status === 'fulfilled').length;
