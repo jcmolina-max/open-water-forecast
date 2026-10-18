@@ -50,7 +50,7 @@ import { Analytics } from '@vercel/analytics/react';
 const APP_BUILD_INFO = {
   version: "v9.4.45",
   hito: "HITO_45",
-  nombreHito: "Telemetría Portus en Vivo (Boya 1514 + Dique 4505) en Pruebas",
+  nombreHito: "Telemetría Oficial Puertos & Propagación Térmica en Vivo",
   rama: "MEJORAS",
   fechaBuild: "2026-10-18"
 };
@@ -3731,6 +3731,9 @@ export default function App() {
           }
           if (json.ultima_boya_real) {
             setPortusRealData(json.ultima_boya_real);
+            if (json.ultima_boya_real.tempAgua) {
+              setLatestBuoyTemp(json.ultima_boya_real.tempAgua);
+            }
           }
         }
 
@@ -4646,22 +4649,23 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Tarjeta de Boya Real en Tiempo Real (Puertos del Estado) */}
-                <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-800 space-y-3.5 relative overflow-hidden">
-                  <div className="flex justify-between items-center border-b border-slate-800/80 pb-2.5">
-                    <h3 className="text-slate-200 font-extrabold flex items-center gap-2 uppercase tracking-wider text-xs">
-                      <Anchor size={16} className="text-cyan-400" />
-                      <span>Boya Real de Málaga</span>
+
+                {/* Tarjeta 1: TELEMETRÍA OFICIAL PUERTOS DEL ESTADO (Boya 1514 + Dique 4505) */}
+                <div className="bg-gradient-to-br from-slate-900 via-sky-950 to-slate-900 text-white p-5 rounded-2xl shadow-md border border-cyan-500/30 space-y-3.5 relative overflow-hidden">
+                  <div className="flex justify-between items-center border-b border-cyan-800/40 pb-2.5">
+                    <h3 className="text-cyan-200 font-extrabold flex items-center gap-2 uppercase tracking-wider text-xs">
+                      <Radio size={16} className="text-cyan-400 animate-pulse" />
+                      <span>Telemetría Oficial Puertos</span>
                     </h3>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setShowPuertosIframe(!showPuertosIframe)}
-                        className="text-[9px] font-extrabold text-cyan-300 hover:text-white bg-cyan-950/80 border border-cyan-800/60 px-2 py-0.5 rounded-md transition-all flex items-center gap-1 shadow-sm"
+                        className="text-[9px] font-extrabold text-cyan-300 hover:text-white bg-cyan-950/80 border border-cyan-700/60 px-2 py-0.5 rounded-md transition-all flex items-center gap-1 shadow-sm"
                       >
                         {showPuertosIframe ? '📊 Ver Ficha' : '🏛️ Widget Oficial'}
                       </button>
-                      <span className="text-[9px] font-black text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> EN VIVO
+                      <span className="text-[9px] font-black text-cyan-300 bg-cyan-950/80 border border-cyan-700/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> EN VIVO
                       </span>
                     </div>
                   </div>
@@ -4674,159 +4678,75 @@ export default function App() {
                         title="Puertos del Estado - La Misericordia"
                       ></iframe>
                     </div>
-                                    ) : (
+                  ) : (
                     <div className="grid grid-cols-2 gap-2.5 pt-0.5 text-left">
-                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hs)</span>
+                      <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hm0)</span>
                         <strong className="text-lg font-black text-cyan-300 block mt-0.5">
-                          {latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—'}
+                          {portusRealData && portusRealData.altura !== null && portusRealData.altura !== undefined && portusRealData.altura !== ''
+                            ? `${Number(portusRealData.altura).toFixed(2)}m`
+                            : (latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—')}
                         </strong>
                       </div>
 
-                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp)</span>
+                      <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp / Tm)</span>
                         <strong className="text-lg font-black text-indigo-300 block mt-0.5">
-                          {latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—'}
+                          {portusRealData && portusRealData.periodoPico
+                            ? `${portusRealData.periodoPico}s`
+                            : (latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—')}
                         </strong>
                       </div>
 
-                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                      <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
                         <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
                           {(() => {
-                            let activeDir = null;
-                            if (latestBuoyDir !== null && latestBuoyDir !== undefined) {
-                              activeDir = Number(latestBuoyDir);
-                            } else if (currentDayData && currentDayData.hourly && currentDayData.hourly.length > 0) {
-                              const nowH = new Date().getHours();
-                              const hourRec = currentDayData.hourly.find(h => parseInt((h.time || "").split(':')[0], 10) === nowH) || currentDayData.hourly[0];
-                              if (hourRec && hourRec.swellDir != null && !isNaN(Number(hourRec.swellDir))) {
-                                activeDir = Number(hourRec.swellDir);
-                              }
-                            }
-                            return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}°)` : '—';
+                            const dir = portusRealData && portusRealData.dirOleaje !== null && portusRealData.dirOleaje !== undefined && portusRealData.dirOleaje !== ''
+                              ? Number(portusRealData.dirOleaje)
+                              : (latestBuoyDir !== null && latestBuoyDir !== undefined ? Number(latestBuoyDir) : null);
+                            return dir !== null ? `${getWindDirection(dir)} (${Math.round(dir)}°)` : '—';
                           })()}
                         </strong>
                       </div>
 
-                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                      <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
                         <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
-                          {latestBuoyTemp ? `${latestBuoyTemp}°C` : '—'}
+                          {portusRealData && portusRealData.tempAgua !== null && portusRealData.tempAgua !== undefined && portusRealData.tempAgua !== ''
+                            ? `${portusRealData.tempAgua}°C`
+                            : (latestBuoyTemp ? `${latestBuoyTemp}°C` : '—')}
                         </strong>
                       </div>
 
-                      {/* 💨 Casilla de Viento en Boya (Fuerza + Dirección) */}
-                      <div className="col-span-2 bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60 flex items-center justify-between">
+                      {/* Viento en Dique de Levante Sur */}
+                      <div className="col-span-2 bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70 flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 shrink-0">
+                          <div className="p-1.5 rounded-lg bg-slate-900 border border-cyan-800/60 shrink-0">
                             <Wind size={14} className="text-cyan-400" />
                           </div>
                           <div className="truncate">
-                            <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Viento en Boya</span>
+                            <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Viento Dique Levante</span>
                             <strong className="text-xs font-black text-cyan-300 block truncate">
-                              {latestBuoyWindSpeed ? `${latestBuoyWindSpeed}` : '—'} {latestBuoyWindDir ? `· ${latestBuoyWindDir}` : ''}
+                              {portusRealData && portusRealData.vientoNudos !== null && portusRealData.vientoNudos !== undefined && portusRealData.vientoNudos !== ''
+                                ? `${portusRealData.vientoNudos} kts (${portusRealData.vientoMs || Math.round(portusRealData.vientoNudos / 1.944 * 10)/10} m/s)`
+                                : (latestBuoyWindSpeed || '—')}
+                              {portusRealData && portusRealData.dirViento
+                                ? ` · ${getWindDirection(Number(portusRealData.dirViento))} (${Math.round(Number(portusRealData.dirViento))}°)`
+                                : (latestBuoyWindDir ? ` · ${latestBuoyWindDir}` : '')}
                             </strong>
                           </div>
                         </div>
                         <span className="text-[8.5px] font-bold text-cyan-200 bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-800/60 shrink-0">
-                          💨 {latestBuoyWindDir || 'Telemetría'}
+                          Meteo 4505
                         </span>
                       </div>
                     </div>
                   )}
 
-                  <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
-                    <span>
-                      Origen: {showPuertosIframe 
-                        ? '📡 Puertos del Estado (Estación 2056 - Málaga)' 
-                        : (latestBuoySource || '✏️ Calibración Manual Admin')}
-                    </span>
-                    <span>Última lectura: {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'Sin reporte hoy'}</span>
-                  </div>
-                </div>
-
-                {/* Tarjeta 1.2: TELEMETRÍA OFICIAL PUERTOS DEL ESTADO (Boya 1514 + Dique 4505) */}
-                <div className="bg-gradient-to-br from-slate-900 via-sky-950 to-slate-900 text-white p-5 rounded-2xl shadow-md border border-cyan-500/30 space-y-3.5 relative overflow-hidden mt-3">
-                  <div className="flex justify-between items-center border-b border-cyan-800/40 pb-2.5">
-                    <h3 className="text-cyan-200 font-extrabold flex items-center gap-2 uppercase tracking-wider text-xs">
-                      <Radio size={16} className="text-cyan-400 animate-pulse" />
-                      <span>Telemetría Oficial Puertos</span>
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-black text-cyan-300 bg-cyan-950/80 border border-cyan-700/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
-                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> EN VIVO
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5 pt-0.5 text-left">
-                    <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hm0)</span>
-                      <strong className="text-lg font-black text-cyan-300 block mt-0.5">
-                        {portusRealData && portusRealData.altura !== null && portusRealData.altura !== undefined && portusRealData.altura !== ''
-                          ? `${Number(portusRealData.altura).toFixed(2)}m`
-                          : (latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—')}
-                      </strong>
-                    </div>
-
-                    <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp / Tm)</span>
-                      <strong className="text-lg font-black text-indigo-300 block mt-0.5">
-                        {portusRealData && portusRealData.periodoPico
-                          ? `${portusRealData.periodoPico}s`
-                          : (latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—')}
-                      </strong>
-                    </div>
-
-                    <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
-                      <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
-                        {(() => {
-                          const dir = portusRealData && portusRealData.dirOleaje !== null && portusRealData.dirOleaje !== undefined && portusRealData.dirOleaje !== ''
-                            ? Number(portusRealData.dirOleaje)
-                            : (latestBuoyDir !== null && latestBuoyDir !== undefined ? Number(latestBuoyDir) : null);
-                          return dir !== null ? `${getWindDirection(dir)} (${Math.round(dir)}°)` : '—';
-                        })()}
-                      </strong>
-                    </div>
-
-                    <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
-                      <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
-                        {portusRealData && portusRealData.tempAgua !== null && portusRealData.tempAgua !== undefined && portusRealData.tempAgua !== ''
-                          ? `${portusRealData.tempAgua}°C`
-                          : (latestBuoyTemp ? `${latestBuoyTemp}°C` : '—')}
-                      </strong>
-                    </div>
-
-                    {/* Viento en Dique de Levante Sur */}
-                    <div className="col-span-2 bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70 flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="p-1.5 rounded-lg bg-slate-900 border border-cyan-800/60 shrink-0">
-                          <Wind size={14} className="text-cyan-400" />
-                        </div>
-                        <div className="truncate">
-                          <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Viento Dique Levante</span>
-                          <strong className="text-xs font-black text-cyan-300 block truncate">
-                            {portusRealData && portusRealData.vientoNudos !== null && portusRealData.vientoNudos !== undefined && portusRealData.vientoNudos !== ''
-                              ? `${portusRealData.vientoNudos} kts (${portusRealData.vientoMs || Math.round(portusRealData.vientoNudos / 1.944 * 10)/10} m/s)`
-                              : (latestBuoyWindSpeed || '—')}
-                            {portusRealData && portusRealData.dirViento
-                              ? ` · ${getWindDirection(Number(portusRealData.dirViento))} (${Math.round(Number(portusRealData.dirViento))}°)`
-                              : (latestBuoyWindDir ? ` · ${latestBuoyWindDir}` : '')}
-                          </strong>
-                        </div>
-                      </div>
-                      <span className="text-[8.5px] font-bold text-cyan-200 bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-800/60 shrink-0">
-                        Meteo 4505
-                      </span>
-                    </div>
-                  </div>
-
                   <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-cyan-800/40">
                     <span className="truncate">
-                      Origen: 📡 Boya 1514 + Dique 4505
+                      Origen: {showPuertosIframe ? '📡 Puertos del Estado (Estación 2056 - Málaga)' : '📡 Boya 1514 + Dique 4505'}
                     </span>
                     <span className="shrink-0 font-medium text-slate-300">
                       Última lectura: {(() => {
@@ -4864,14 +4784,23 @@ export default function App() {
                       <span className="block text-[7.5px] text-blue-400 font-semibold truncate mt-0.5">Modelo previsto</span>
                     </div>
                     
-                    {/* Agua Boya Real (Sin icono de refresco falso) */}
+                    {/* Agua Boya Real (Telemetría Oficial Puertos del Estado) */}
                     <div className="bg-indigo-50/50 border border-indigo-100/70 rounded-xl p-2 text-left">
                       <span className="block text-[8px] font-bold text-indigo-600 uppercase tracking-wider truncate">⚓ Agua (Boya Real)</span>
                       <span className="text-sm sm:text-base font-black text-indigo-800 block mt-0.5">
-                        {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '— ºC'}
+                        {portusRealData && portusRealData.tempAgua !== null && portusRealData.tempAgua !== undefined && portusRealData.tempAgua !== ''
+                          ? `${portusRealData.tempAgua}ºC`
+                          : (latestBuoyTemp ? `${latestBuoyTemp}ºC` : '— ºC')}
                       </span>
                       <span className="block text-[7.5px] text-indigo-500/80 font-semibold truncate mt-0.5">
-                        {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate).split(',')[0]}` : 'Sin datos'}
+                        {(() => {
+                          if (portusRealData && (portusRealData.hora || portusRealData.fechaHora)) {
+                            const h = String(portusRealData.hora || portusRealData.fechaHora);
+                            const timePart = h.includes('T') ? h.split('T')[1].substring(0, 5) : (h.includes(':') ? h.substring(0, 5) : h);
+                            return `Hoy, ${timePart}h`;
+                          }
+                          return latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate).split(',')[0]}` : 'Sin datos';
+                        })()}
                       </span>
                     </div>
 
@@ -4941,9 +4870,19 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* HITO 43: Cálculos de Asistencia Térmica Náutica (Neopreno + Termoclina) */}
+                {/* HITO 43 / HITO 45: Cálculos de Asistencia Térmica Náutica (Neopreno + Termoclina Oficial) */}
                 {(() => {
-                  const activeWaterTemp = currentDayData?.temps?.water || latestBuoyTemp || 19;
+                  const portusTempNum = portusRealData && portusRealData.tempAgua !== null && portusRealData.tempAgua !== undefined && portusRealData.tempAgua !== ''
+                    ? parseFloat(String(portusRealData.tempAgua).replace(',', '.'))
+                    : null;
+                  const buoyTempNum = latestBuoyTemp !== null && latestBuoyTemp !== undefined && latestBuoyTemp !== ''
+                    ? parseFloat(String(latestBuoyTemp).replace(',', '.'))
+                    : null;
+                  const activeWaterTemp = (portusTempNum !== null && !isNaN(portusTempNum))
+                    ? portusTempNum
+                    : ((buoyTempNum !== null && !isNaN(buoyTempNum))
+                        ? buoyTempNum
+                        : (parseFloat(currentDayData?.temps?.water) || 19));
                   const neopreneRec = getNeopreneRecommendation(activeWaterTemp);
                   const activeAirTemp = currentDayData?.hourly?.[0]?.airTemp || 22;
                   const activeWindKts = currentDayData?.hourly?.[0]?.windS || 5;
@@ -5045,7 +4984,7 @@ export default function App() {
                             <h3 className="text-amber-400 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
                               <Thermometer size={16} className="text-amber-400"/> Neopreno & Equipamiento
                             </h3>
-                            <span className="text-[10px] text-slate-400 font-medium">Tº Agua: {activeWaterTemp}°C</span>
+                            <span className="text-[10px] text-slate-400 font-medium">Tº Agua: {typeof activeWaterTemp === 'number' ? activeWaterTemp.toFixed(1) : activeWaterTemp}°C</span>
                           </div>
 
                           <div className={`p-3 rounded-xl border ${neopreneRec.colorClass}`}>
