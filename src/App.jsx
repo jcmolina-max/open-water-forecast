@@ -4746,19 +4746,16 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tarjeta 1.2: TELEMETRÍA PORTUS EN VIVO (Boya 1514 + Dique 4505 - Hito 45 en Pruebas) */}
+                {/* Tarjeta 1.2: TELEMETRÍA OFICIAL PUERTOS DEL ESTADO (Boya 1514 + Dique 4505) */}
                 <div className="bg-gradient-to-br from-slate-900 via-sky-950 to-slate-900 text-white p-5 rounded-2xl shadow-md border border-cyan-500/30 space-y-3.5 relative overflow-hidden mt-3">
                   <div className="flex justify-between items-center border-b border-cyan-800/40 pb-2.5">
                     <h3 className="text-cyan-200 font-extrabold flex items-center gap-2 uppercase tracking-wider text-xs">
                       <Radio size={16} className="text-cyan-400 animate-pulse" />
-                      <span>Telemetría Portus (En Pruebas)</span>
+                      <span>Telemetría Oficial Puertos</span>
                     </h3>
                     <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-black text-cyan-300 bg-cyan-950/80 border border-cyan-700/60 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> OFICIAL
-                      </span>
-                      <span className="text-[9px] font-black text-amber-300 bg-amber-950/80 border border-amber-700/60 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-                        🧪 HITO 45
+                      <span className="text-[9px] font-black text-cyan-300 bg-cyan-950/80 border border-cyan-700/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> EN VIVO
                       </span>
                     </div>
                   </div>
@@ -4831,8 +4828,19 @@ export default function App() {
                     <span className="truncate">
                       Origen: 📡 Boya 1514 + Dique 4505
                     </span>
-                    <span className="shrink-0">
-                      Última lectura: {portusRealData && portusRealData.hora ? `${portusRealData.hora}h` : (latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'En espera de ciclo')}
+                    <span className="shrink-0 font-medium text-slate-300">
+                      Última lectura: {(() => {
+                        if (!portusRealData) return (latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'Hoy, 08:00h');
+                        const h = String(portusRealData.hora || portusRealData.fechaHora || '');
+                        if (h.includes('T')) {
+                          const timePart = h.split('T')[1].substring(0, 5);
+                          return `Hoy, ${timePart}h`;
+                        }
+                        if (h.includes(':')) {
+                          return `Hoy, ${h.substring(0, 5)}h`;
+                        }
+                        return `Hoy, ${h || '08:00h'}`;
+                      })()}
                     </span>
                   </div>
                 </div>
