@@ -41,17 +41,18 @@ import {
   BellOff,
   ShieldCheck,
   CheckCircle2,
-  Send
+  Send,
+  Radio
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
-// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 44 - Web Push)
+// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 45 - Telemetría Portus En Pruebas)
 const APP_BUILD_INFO = {
-  version: "v9.4.44",
-  hito: "HITO_44",
-  nombreHito: "Fase 3: Notificaciones Web Push a 72h (VAPID 100% Anónimo)",
+  version: "v9.4.45",
+  hito: "HITO_45",
+  nombreHito: "Telemetría Portus en Vivo (Boya 1514 + Dique 4505) en Pruebas",
   rama: "MEJORAS",
-  fechaBuild: "2026-10-11"
+  fechaBuild: "2026-10-18"
 };
 
 /**
@@ -1585,7 +1586,7 @@ function urlBase64ToUint8Array(base64String) {
 function PushNotificationModal({ 
   isOpen, 
   onClose, 
-  vapidPublicKey = "BLrS1Zj7HbR_gN6sq9cWLgvcNOTpS5ECBGBQd65teg3VoZGRVnVvMNRvn_WRP0PsKgjKCa147lC6ZxBPskbimW4",
+  vapidPublicKey = "BBd2zgCtf2M_SnXfMy4WC6QScpQEt1R2317LqJiAWQbc19LBSIXcSsxLgRoZiNwz2ZNTw0JedEFnxuPRTVBWKh0",
   webhookUrl = "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec",
   currentBeach = "misericordia"
 }) {
@@ -1716,27 +1717,42 @@ function PushNotificationModal({
     }
   };
 
-  const handleSendTestNotification = async () => {
+  const handleSendTestNotification = async (delaySeconds = 0) => {
     setTestLoading(true);
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      if (reg.showNotification) {
-        reg.showNotification('🌊 OpenWater Tracker Málaga', {
-          body: profile === 'nadador'
-            ? '✨ ¡Alerta Mar Balsa a 72h! Ola 0.18m y viento suave en Misericordia. Ventana de Oro: 08:30 a 11:00.'
-            : '🏄 ¡Swell de Levante a 72h! Marejada de 0.85m con periodo Tp 5.8s en la bahía.',
-          icon: '/icon-192.png',
-          badge: '/badge-72.png',
-          vibrate: [200, 100, 200],
-          data: { url: '/' }
-        });
-        setStatusMessage({ type: 'success', text: '¡Notificación de prueba enviada a tu pantalla!' });
-      }
-    } catch (e) {
-      setStatusMessage({ type: 'error', text: 'Error en prueba: ' + e.message });
-    } finally {
-      setTestLoading(false);
+    if (delaySeconds > 0) {
+      setStatusMessage({ 
+        type: 'info', 
+        text: `⏳ ¡Bloquea tu móvil o apaga la pantalla ahora! La notificación saltará en ${delaySeconds} segundos.` 
+      });
     }
+
+    setTimeout(async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        if (reg.showNotification) {
+          reg.showNotification('🌊 OpenWater Tracker Málaga', {
+            body: profile === 'nadador'
+              ? '✨ ¡Alerta Mar Balsa a 72h! Ola 0.18m y viento suave en Misericordia. Ventana de Oro: 08:30 a 11:00.'
+              : '🏄 ¡Swell de Levante a 72h! Marejada de 0.85m con periodo Tp 5.8s en la bahía.',
+            icon: '/icon-192.png',
+            badge: '/badge-72.png',
+            vibrate: [300, 100, 300, 100, 300],
+            tag: 'openwater-alerta-72h',
+            renotify: true,
+            requireInteraction: true,
+            data: { url: '/' }
+          });
+          setStatusMessage({ 
+            type: 'success', 
+            text: delaySeconds > 0 ? '¡Alerta enviada mientras el móvil estaba en reposo!' : '¡Notificación de prueba enviada a tu pantalla!' 
+          });
+        }
+      } catch (e) {
+        setStatusMessage({ type: 'error', text: 'Error en prueba: ' + e.message });
+      } finally {
+        setTestLoading(false);
+      }
+    }, delaySeconds * 1000);
   };
 
   if (!isOpen) return null;
@@ -1881,24 +1897,35 @@ function PushNotificationModal({
                 )}
               </button>
             ) : (
-              <div className="flex-1 flex flex-col sm:flex-row gap-2">
-                <button
-                  type="button"
-                  onClick={handleSendTestNotification}
-                  disabled={testLoading}
-                  className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
-                >
-                  {testLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                  <span>Probar Notificación Ahora</span>
-                </button>
+              <div className="flex-1 flex flex-col gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSendTestNotification(0)}
+                    disabled={testLoading}
+                    className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
+                  >
+                    {testLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                    <span>Probar Ahora</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSendTestNotification(5)}
+                    disabled={testLoading}
+                    className="flex-1 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
+                    title="Pulsa aquí y bloquea tu móvil inmediatamente para probar en reposo"
+                  >
+                    <span>⏱️ Probar en 5s (Bloquea móvil)</span>
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={handleUnsubscribe}
-                  disabled={loading}
-                  className="py-2.5 px-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors border border-slate-200"
+                  disabled={loading || testLoading}
+                  className="w-full py-2 px-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-500 rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors border border-slate-200"
                 >
                   <BellOff size={14} />
-                  <span>Desactivar</span>
+                  <span>Desactivar Alertas en este dispositivo</span>
                 </button>
               </div>
             )}
@@ -1965,6 +1992,7 @@ export default function App() {
   const [latestBuoySource, setLatestBuoySource] = useState(null);
   const [showPuertosIframe, setShowPuertosIframe] = useState(false);
   const [isPushModalOpen, setIsPushModalOpen] = useState(false);
+  const [portusRealData, setPortusRealData] = useState(null);
 
   // REGISTRO DE SERVICE WORKER PARA NOTIFICACIONES WEB PUSH (Hito 44)
   useEffect(() => {
@@ -3701,6 +3729,9 @@ export default function App() {
           if (vCount !== undefined && vCount !== null) {
             setTotalVisits(Number(vCount));
           }
+          if (json.ultima_boya_real) {
+            setPortusRealData(json.ultima_boya_real);
+          }
         }
 
         // Cargar Configuración Dinámica de Google Sheets (Data-Driven con Tolerancia 100% a Fallos)
@@ -4712,6 +4743,97 @@ export default function App() {
                         : (latestBuoySource || '✏️ Calibración Manual Admin')}
                     </span>
                     <span>Última lectura: {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'Sin reporte hoy'}</span>
+                  </div>
+                </div>
+
+                {/* Tarjeta 1.2: TELEMETRÍA PORTUS EN VIVO (Boya 1514 + Dique 4505 - Hito 45 en Pruebas) */}
+                <div className="bg-gradient-to-br from-slate-900 via-sky-950 to-slate-900 text-white p-5 rounded-2xl shadow-md border border-cyan-500/30 space-y-3.5 relative overflow-hidden mt-3">
+                  <div className="flex justify-between items-center border-b border-cyan-800/40 pb-2.5">
+                    <h3 className="text-cyan-200 font-extrabold flex items-center gap-2 uppercase tracking-wider text-xs">
+                      <Radio size={16} className="text-cyan-400 animate-pulse" />
+                      <span>Telemetría Portus (En Pruebas)</span>
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-black text-cyan-300 bg-cyan-950/80 border border-cyan-700/60 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> OFICIAL
+                      </span>
+                      <span className="text-[9px] font-black text-amber-300 bg-amber-950/80 border border-amber-700/60 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                        🧪 HITO 45
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 pt-0.5 text-left">
+                    <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hm0)</span>
+                      <strong className="text-lg font-black text-cyan-300 block mt-0.5">
+                        {portusRealData && portusRealData.altura !== null && portusRealData.altura !== undefined && portusRealData.altura !== ''
+                          ? `${Number(portusRealData.altura).toFixed(2)}m`
+                          : (latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—')}
+                      </strong>
+                    </div>
+
+                    <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp / Tm)</span>
+                      <strong className="text-lg font-black text-indigo-300 block mt-0.5">
+                        {portusRealData && portusRealData.periodoPico
+                          ? `${portusRealData.periodoPico}s`
+                          : (latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—')}
+                      </strong>
+                    </div>
+
+                    <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
+                      <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
+                        {(() => {
+                          const dir = portusRealData && portusRealData.dirOleaje !== null && portusRealData.dirOleaje !== undefined && portusRealData.dirOleaje !== ''
+                            ? Number(portusRealData.dirOleaje)
+                            : (latestBuoyDir !== null && latestBuoyDir !== undefined ? Number(latestBuoyDir) : null);
+                          return dir !== null ? `${getWindDirection(dir)} (${Math.round(dir)}°)` : '—';
+                        })()}
+                      </strong>
+                    </div>
+
+                    <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
+                      <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
+                        {portusRealData && portusRealData.tempAgua !== null && portusRealData.tempAgua !== undefined && portusRealData.tempAgua !== ''
+                          ? `${portusRealData.tempAgua}°C`
+                          : (latestBuoyTemp ? `${latestBuoyTemp}°C` : '—')}
+                      </strong>
+                    </div>
+
+                    {/* Viento en Dique de Levante Sur */}
+                    <div className="col-span-2 bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70 flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="p-1.5 rounded-lg bg-slate-900 border border-cyan-800/60 shrink-0">
+                          <Wind size={14} className="text-cyan-400" />
+                        </div>
+                        <div className="truncate">
+                          <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Viento Dique Levante</span>
+                          <strong className="text-xs font-black text-cyan-300 block truncate">
+                            {portusRealData && portusRealData.vientoNudos !== null && portusRealData.vientoNudos !== undefined && portusRealData.vientoNudos !== ''
+                              ? `${portusRealData.vientoNudos} kts (${portusRealData.vientoMs || Math.round(portusRealData.vientoNudos / 1.944 * 10)/10} m/s)`
+                              : (latestBuoyWindSpeed || '—')}
+                            {portusRealData && portusRealData.dirViento
+                              ? ` · ${getWindDirection(Number(portusRealData.dirViento))} (${Math.round(Number(portusRealData.dirViento))}°)`
+                              : (latestBuoyWindDir ? ` · ${latestBuoyWindDir}` : '')}
+                          </strong>
+                        </div>
+                      </div>
+                      <span className="text-[8.5px] font-bold text-cyan-200 bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-800/60 shrink-0">
+                        Meteo 4505
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-cyan-800/40">
+                    <span className="truncate">
+                      Origen: 📡 Boya 1514 + Dique 4505
+                    </span>
+                    <span className="shrink-0">
+                      Última lectura: {portusRealData && portusRealData.hora ? `${portusRealData.hora}h` : (latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'En espera de ciclo')}
+                    </span>
                   </div>
                 </div>
 
