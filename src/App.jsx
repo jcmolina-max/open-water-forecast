@@ -41,17 +41,18 @@ import {
   BellOff,
   ShieldCheck,
   CheckCircle2,
-  Send
+  Send,
+  Radio
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
-// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 44 - Web Push)
+// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 45 - Telemetría Portus En Pruebas)
 const APP_BUILD_INFO = {
-  version: "v9.4.44",
-  hito: "HITO_44",
-  nombreHito: "Fase 3: Notificaciones Web Push a 72h (VAPID 100% Anónimo)",
+  version: "v9.4.46",
+  hito: "HITO_46",
+  nombreHito: "Auditoría Cuadrilátero y Calibración de Sectores",
   rama: "MEJORAS",
-  fechaBuild: "2026-10-11"
+  fechaBuild: "2026-10-18"
 };
 
 /**
@@ -1585,7 +1586,7 @@ function urlBase64ToUint8Array(base64String) {
 function PushNotificationModal({ 
   isOpen, 
   onClose, 
-  vapidPublicKey = "BLrS1Zj7HbR_gN6sq9cWLgvcNOTpS5ECBGBQd65teg3VoZGRVnVvMNRvn_WRP0PsKgjKCa147lC6ZxBPskbimW4",
+  vapidPublicKey = "BBd2zgCtf2M_SnXfMy4WC6QScpQEt1R2317LqJiAWQbc19LBSIXcSsxLgRoZiNwz2ZNTw0JedEFnxuPRTVBWKh0",
   webhookUrl = "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec",
   currentBeach = "misericordia"
 }) {
@@ -1716,27 +1717,42 @@ function PushNotificationModal({
     }
   };
 
-  const handleSendTestNotification = async () => {
+  const handleSendTestNotification = async (delaySeconds = 0) => {
     setTestLoading(true);
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      if (reg.showNotification) {
-        reg.showNotification('🌊 OpenWater Tracker Málaga', {
-          body: profile === 'nadador'
-            ? '✨ ¡Alerta Mar Balsa a 72h! Ola 0.18m y viento suave en Misericordia. Ventana de Oro: 08:30 a 11:00.'
-            : '🏄 ¡Swell de Levante a 72h! Marejada de 0.85m con periodo Tp 5.8s en la bahía.',
-          icon: '/icon-192.png',
-          badge: '/badge-72.png',
-          vibrate: [200, 100, 200],
-          data: { url: '/' }
-        });
-        setStatusMessage({ type: 'success', text: '¡Notificación de prueba enviada a tu pantalla!' });
-      }
-    } catch (e) {
-      setStatusMessage({ type: 'error', text: 'Error en prueba: ' + e.message });
-    } finally {
-      setTestLoading(false);
+    if (delaySeconds > 0) {
+      setStatusMessage({ 
+        type: 'info', 
+        text: `⏳ ¡Bloquea tu móvil o apaga la pantalla ahora! La notificación saltará en ${delaySeconds} segundos.` 
+      });
     }
+
+    setTimeout(async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        if (reg.showNotification) {
+          reg.showNotification('🌊 OpenWater Tracker Málaga', {
+            body: profile === 'nadador'
+              ? '✨ ¡Alerta Mar Balsa a 72h! Ola 0.18m y viento suave en Misericordia. Ventana de Oro: 08:30 a 11:00.'
+              : '🏄 ¡Swell de Levante a 72h! Marejada de 0.85m con periodo Tp 5.8s en la bahía.',
+            icon: '/icon-192.png',
+            badge: '/badge-72.png',
+            vibrate: [300, 100, 300, 100, 300],
+            tag: 'openwater-alerta-72h',
+            renotify: true,
+            requireInteraction: true,
+            data: { url: '/' }
+          });
+          setStatusMessage({ 
+            type: 'success', 
+            text: delaySeconds > 0 ? '¡Alerta enviada mientras el móvil estaba en reposo!' : '¡Notificación de prueba enviada a tu pantalla!' 
+          });
+        }
+      } catch (e) {
+        setStatusMessage({ type: 'error', text: 'Error en prueba: ' + e.message });
+      } finally {
+        setTestLoading(false);
+      }
+    }, delaySeconds * 1000);
   };
 
   if (!isOpen) return null;
@@ -1881,24 +1897,35 @@ function PushNotificationModal({
                 )}
               </button>
             ) : (
-              <div className="flex-1 flex flex-col sm:flex-row gap-2">
-                <button
-                  type="button"
-                  onClick={handleSendTestNotification}
-                  disabled={testLoading}
-                  className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
-                >
-                  {testLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                  <span>Probar Notificación Ahora</span>
-                </button>
+              <div className="flex-1 flex flex-col gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSendTestNotification(0)}
+                    disabled={testLoading}
+                    className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
+                  >
+                    {testLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                    <span>Probar Ahora</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSendTestNotification(5)}
+                    disabled={testLoading}
+                    className="flex-1 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
+                    title="Pulsa aquí y bloquea tu móvil inmediatamente para probar en reposo"
+                  >
+                    <span>⏱️ Probar en 5s (Bloquea móvil)</span>
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={handleUnsubscribe}
-                  disabled={loading}
-                  className="py-2.5 px-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors border border-slate-200"
+                  disabled={loading || testLoading}
+                  className="w-full py-2 px-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-500 rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors border border-slate-200"
                 >
                   <BellOff size={14} />
-                  <span>Desactivar</span>
+                  <span>Desactivar Alertas en este dispositivo</span>
                 </button>
               </div>
             )}
@@ -1965,6 +1992,7 @@ export default function App() {
   const [latestBuoySource, setLatestBuoySource] = useState(null);
   const [showPuertosIframe, setShowPuertosIframe] = useState(false);
   const [isPushModalOpen, setIsPushModalOpen] = useState(false);
+  const [portusRealData, setPortusRealData] = useState(null);
 
   // REGISTRO DE SERVICE WORKER PARA NOTIFICACIONES WEB PUSH (Hito 44)
   useEffect(() => {
@@ -3701,6 +3729,12 @@ export default function App() {
           if (vCount !== undefined && vCount !== null) {
             setTotalVisits(Number(vCount));
           }
+          if (json.ultima_boya_real) {
+            setPortusRealData(json.ultima_boya_real);
+            if (json.ultima_boya_real.tempAgua) {
+              setLatestBuoyTemp(json.ultima_boya_real.tempAgua);
+            }
+          }
         }
 
         // Cargar Configuración Dinámica de Google Sheets (Data-Driven con Tolerancia 100% a Fallos)
@@ -4615,22 +4649,23 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Tarjeta de Boya Real en Tiempo Real (Puertos del Estado) */}
-                <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-800 space-y-3.5 relative overflow-hidden">
-                  <div className="flex justify-between items-center border-b border-slate-800/80 pb-2.5">
-                    <h3 className="text-slate-200 font-extrabold flex items-center gap-2 uppercase tracking-wider text-xs">
-                      <Anchor size={16} className="text-cyan-400" />
-                      <span>Boya Real de Málaga</span>
+
+                {/* Tarjeta 1: TELEMETRÍA OFICIAL PUERTOS DEL ESTADO (Boya 1514 + Dique 4505) */}
+                <div className="bg-gradient-to-br from-slate-900 via-sky-950 to-slate-900 text-white p-5 rounded-2xl shadow-md border border-cyan-500/30 space-y-3.5 relative overflow-hidden">
+                  <div className="flex justify-between items-center border-b border-cyan-800/40 pb-2.5">
+                    <h3 className="text-cyan-200 font-extrabold flex items-center gap-2 uppercase tracking-wider text-xs">
+                      <Radio size={16} className="text-cyan-400 animate-pulse" />
+                      <span>Telemetría Oficial Puertos</span>
                     </h3>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setShowPuertosIframe(!showPuertosIframe)}
-                        className="text-[9px] font-extrabold text-cyan-300 hover:text-white bg-cyan-950/80 border border-cyan-800/60 px-2 py-0.5 rounded-md transition-all flex items-center gap-1 shadow-sm"
+                        className="text-[9px] font-extrabold text-cyan-300 hover:text-white bg-cyan-950/80 border border-cyan-700/60 px-2 py-0.5 rounded-md transition-all flex items-center gap-1 shadow-sm"
                       >
                         {showPuertosIframe ? '📊 Ver Ficha' : '🏛️ Widget Oficial'}
                       </button>
-                      <span className="text-[9px] font-black text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> EN VIVO
+                      <span className="text-[9px] font-black text-cyan-300 bg-cyan-950/80 border border-cyan-700/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> EN VIVO
                       </span>
                     </div>
                   </div>
@@ -4643,75 +4678,90 @@ export default function App() {
                         title="Puertos del Estado - La Misericordia"
                       ></iframe>
                     </div>
-                                    ) : (
+                  ) : (
                     <div className="grid grid-cols-2 gap-2.5 pt-0.5 text-left">
-                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hs)</span>
+                      <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hm0)</span>
                         <strong className="text-lg font-black text-cyan-300 block mt-0.5">
-                          {latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—'}
+                          {portusRealData && portusRealData.altura !== null && portusRealData.altura !== undefined && portusRealData.altura !== ''
+                            ? `${Number(portusRealData.altura).toFixed(2)}m`
+                            : (latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—')}
                         </strong>
                       </div>
 
-                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp)</span>
+                      <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp / Tm)</span>
                         <strong className="text-lg font-black text-indigo-300 block mt-0.5">
-                          {latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—'}
+                          {portusRealData && portusRealData.periodoPico
+                            ? `${portusRealData.periodoPico}s`
+                            : (latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—')}
                         </strong>
                       </div>
 
-                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                      <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
                         <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
                           {(() => {
-                            let activeDir = null;
-                            if (latestBuoyDir !== null && latestBuoyDir !== undefined) {
-                              activeDir = Number(latestBuoyDir);
-                            } else if (currentDayData && currentDayData.hourly && currentDayData.hourly.length > 0) {
-                              const nowH = new Date().getHours();
-                              const hourRec = currentDayData.hourly.find(h => parseInt((h.time || "").split(':')[0], 10) === nowH) || currentDayData.hourly[0];
-                              if (hourRec && hourRec.swellDir != null && !isNaN(Number(hourRec.swellDir))) {
-                                activeDir = Number(hourRec.swellDir);
-                              }
-                            }
-                            return activeDir !== null ? `${getWindDirection(activeDir)} (${Math.round(activeDir)}°)` : '—';
+                            const dir = portusRealData && portusRealData.dirOleaje !== null && portusRealData.dirOleaje !== undefined && portusRealData.dirOleaje !== ''
+                              ? Number(portusRealData.dirOleaje)
+                              : (latestBuoyDir !== null && latestBuoyDir !== undefined ? Number(latestBuoyDir) : null);
+                            return dir !== null ? `${getWindDirection(dir)} (${Math.round(dir)}°)` : '—';
                           })()}
                         </strong>
                       </div>
 
-                      <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60">
+                      <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
                         <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
-                          {latestBuoyTemp ? `${latestBuoyTemp}°C` : '—'}
+                          {portusRealData && portusRealData.tempAgua !== null && portusRealData.tempAgua !== undefined && portusRealData.tempAgua !== ''
+                            ? `${portusRealData.tempAgua}°C`
+                            : (latestBuoyTemp ? `${latestBuoyTemp}°C` : '—')}
                         </strong>
                       </div>
 
-                      {/* 💨 Casilla de Viento en Boya (Fuerza + Dirección) */}
-                      <div className="col-span-2 bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60 flex items-center justify-between">
+                      {/* Viento en Dique de Levante Sur */}
+                      <div className="col-span-2 bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70 flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 shrink-0">
+                          <div className="p-1.5 rounded-lg bg-slate-900 border border-cyan-800/60 shrink-0">
                             <Wind size={14} className="text-cyan-400" />
                           </div>
                           <div className="truncate">
-                            <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Viento en Boya</span>
+                            <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Viento Dique Levante</span>
                             <strong className="text-xs font-black text-cyan-300 block truncate">
-                              {latestBuoyWindSpeed ? `${latestBuoyWindSpeed}` : '—'} {latestBuoyWindDir ? `· ${latestBuoyWindDir}` : ''}
+                              {portusRealData && portusRealData.vientoNudos !== null && portusRealData.vientoNudos !== undefined && portusRealData.vientoNudos !== ''
+                                ? `${portusRealData.vientoNudos} kts (${portusRealData.vientoMs || Math.round(portusRealData.vientoNudos / 1.944 * 10)/10} m/s)`
+                                : (latestBuoyWindSpeed || '—')}
+                              {portusRealData && portusRealData.dirViento
+                                ? ` · ${getWindDirection(Number(portusRealData.dirViento))} (${Math.round(Number(portusRealData.dirViento))}°)`
+                                : (latestBuoyWindDir ? ` · ${latestBuoyWindDir}` : '')}
                             </strong>
                           </div>
                         </div>
                         <span className="text-[8.5px] font-bold text-cyan-200 bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-800/60 shrink-0">
-                          💨 {latestBuoyWindDir || 'Telemetría'}
+                          Meteo 4505
                         </span>
                       </div>
                     </div>
                   )}
 
-                  <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
-                    <span>
-                      Origen: {showPuertosIframe 
-                        ? '📡 Puertos del Estado (Estación 2056 - Málaga)' 
-                        : (latestBuoySource || '✏️ Calibración Manual Admin')}
+                  <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-cyan-800/40">
+                    <span className="truncate">
+                      Origen: {showPuertosIframe ? '📡 Puertos del Estado (Estación 2056 - Málaga)' : '📡 Boya 1514 + Dique 4505'}
                     </span>
-                    <span>Última lectura: {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'Sin reporte hoy'}</span>
+                    <span className="shrink-0 font-medium text-slate-300">
+                      Última lectura: {(() => {
+                        if (!portusRealData) return (latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'Hoy, 08:00h');
+                        const h = String(portusRealData.hora || portusRealData.fechaHora || '');
+                        if (h.includes('T')) {
+                          const timePart = h.split('T')[1].substring(0, 5);
+                          return `Hoy, ${timePart}h`;
+                        }
+                        if (h.includes(':')) {
+                          return `Hoy, ${h.substring(0, 5)}h`;
+                        }
+                        return `Hoy, ${h || '08:00h'}`;
+                      })()}
+                    </span>
                   </div>
                 </div>
 
@@ -4734,14 +4784,23 @@ export default function App() {
                       <span className="block text-[7.5px] text-blue-400 font-semibold truncate mt-0.5">Modelo previsto</span>
                     </div>
                     
-                    {/* Agua Boya Real (Sin icono de refresco falso) */}
+                    {/* Agua Boya Real (Telemetría Oficial Puertos del Estado) */}
                     <div className="bg-indigo-50/50 border border-indigo-100/70 rounded-xl p-2 text-left">
                       <span className="block text-[8px] font-bold text-indigo-600 uppercase tracking-wider truncate">⚓ Agua (Boya Real)</span>
                       <span className="text-sm sm:text-base font-black text-indigo-800 block mt-0.5">
-                        {latestBuoyTemp ? `${latestBuoyTemp}ºC` : '— ºC'}
+                        {portusRealData && portusRealData.tempAgua !== null && portusRealData.tempAgua !== undefined && portusRealData.tempAgua !== ''
+                          ? `${portusRealData.tempAgua}ºC`
+                          : (latestBuoyTemp ? `${latestBuoyTemp}ºC` : '— ºC')}
                       </span>
                       <span className="block text-[7.5px] text-indigo-500/80 font-semibold truncate mt-0.5">
-                        {latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate).split(',')[0]}` : 'Sin datos'}
+                        {(() => {
+                          if (portusRealData && (portusRealData.hora || portusRealData.fechaHora)) {
+                            const h = String(portusRealData.hora || portusRealData.fechaHora);
+                            const timePart = h.includes('T') ? h.split('T')[1].substring(0, 5) : (h.includes(':') ? h.substring(0, 5) : h);
+                            return `Hoy, ${timePart}h`;
+                          }
+                          return latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate).split(',')[0]}` : 'Sin datos';
+                        })()}
                       </span>
                     </div>
 
@@ -4811,9 +4870,19 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* HITO 43: Cálculos de Asistencia Térmica Náutica (Neopreno + Termoclina) */}
+                {/* HITO 43 / HITO 45: Cálculos de Asistencia Térmica Náutica (Neopreno + Termoclina Oficial) */}
                 {(() => {
-                  const activeWaterTemp = currentDayData?.temps?.water || latestBuoyTemp || 19;
+                  const portusTempNum = portusRealData && portusRealData.tempAgua !== null && portusRealData.tempAgua !== undefined && portusRealData.tempAgua !== ''
+                    ? parseFloat(String(portusRealData.tempAgua).replace(',', '.'))
+                    : null;
+                  const buoyTempNum = latestBuoyTemp !== null && latestBuoyTemp !== undefined && latestBuoyTemp !== ''
+                    ? parseFloat(String(latestBuoyTemp).replace(',', '.'))
+                    : null;
+                  const activeWaterTemp = (portusTempNum !== null && !isNaN(portusTempNum))
+                    ? portusTempNum
+                    : ((buoyTempNum !== null && !isNaN(buoyTempNum))
+                        ? buoyTempNum
+                        : (parseFloat(currentDayData?.temps?.water) || 19));
                   const neopreneRec = getNeopreneRecommendation(activeWaterTemp);
                   const activeAirTemp = currentDayData?.hourly?.[0]?.airTemp || 22;
                   const activeWindKts = currentDayData?.hourly?.[0]?.windS || 5;
@@ -4915,7 +4984,7 @@ export default function App() {
                             <h3 className="text-amber-400 font-bold flex items-center gap-2 uppercase tracking-wide text-xs">
                               <Thermometer size={16} className="text-amber-400"/> Neopreno & Equipamiento
                             </h3>
-                            <span className="text-[10px] text-slate-400 font-medium">Tº Agua: {activeWaterTemp}°C</span>
+                            <span className="text-[10px] text-slate-400 font-medium">Tº Agua: {typeof activeWaterTemp === 'number' ? activeWaterTemp.toFixed(1) : activeWaterTemp}°C</span>
                           </div>
 
                           <div className={`p-3 rounded-xl border ${neopreneRec.colorClass}`}>
@@ -7215,15 +7284,30 @@ export default function App() {
                                    });
                                    const totalLogsCount = validSectorLogs.length;
 
-                                  // Helper para obtener la previsión del satélite bruto registrada a la hora del nado
-                                  function getLogSatHeight(l) {
-                                    const satH = parseFloat((l.modelEcmwfOlas || l.appOlas || "").toString().replace(",", "."));
-                                    if (!isNaN(satH) && satH > 0) return satH;
-                                    const buoyInfo = getBuoyReadingForLog(l);
-                                    const bH = parseFloat((buoyInfo.height || "").toString().replace(",", "."));
-                                    if (!isNaN(bH) && bH > 0) return bH;
-                                    return 0.36;
-                                  }
+                                   // Helper Cuadrilátero: Previsión del satélite bruto (H_sat) registrada a la hora del nado
+                                   function getLogSatHeight(l) {
+                                     // 1. Modelo numérico satelital bruto registrado (ECMWF / Open-Meteo)
+                                     const rawModel = parseFloat((l.modelEcmwfOlas || "").toString().replace(",", "."));
+                                     if (!isNaN(rawModel) && rawModel > 0) return rawModel;
+
+                                     // 2. Previsión telemétrica directa de satélite
+                                     const telemSat = parseFloat((l.prevOlaSat || "").toString().replace(",", "."));
+                                     if (!isNaN(telemSat) && telemSat > 0) return telemSat;
+
+                                     // 3. Reversión matemática si solo se guardó appOlas (que ya venía multiplicada por el factor anterior)
+                                     const appH = parseFloat((l.appOlas || "").toString().replace(",", "."));
+                                     if (!isNaN(appH) && appH > 0) {
+                                       const fBase = (sec.defaultFactor && sec.defaultFactor > 0) ? sec.defaultFactor : 0.50;
+                                       return appH / fBase;
+                                     }
+
+                                     // 4. Altura de boya real como referencia física en altamar
+                                     const buoyInfo = getBuoyReadingForLog(l);
+                                     const bH = parseFloat((buoyInfo.height || l.boyaAltura || "").toString().replace(",", "."));
+                                     if (!isNaN(bH) && bH > 0) return bH;
+
+                                     return 0.35;
+                                   }
 
                                   // A) CALCULO HISTÓRICO GLOBAL (Sugerencia progresiva desde el Nado #1, con filtro ±1.5σ si hay >=5 nados)
                                   let suggestedGlobalFactor = null;
@@ -7288,6 +7372,14 @@ export default function App() {
                                   const isCloudOverridden = cloudFactorVal !== null;
                                   const isLocalOverridden = adminManualScaleFactors && adminManualScaleFactors[storageKey] !== undefined && adminManualScaleFactors[storageKey] !== null;
 
+                                  // Cuadrilátero: Factor propuesto óptimo, estado de verificación y desvío vs activo
+                                  const cuadrilateroProposedFactor = suggestedGlobalFactor !== null 
+                                    ? suggestedGlobalFactor 
+                                    : (suggestedRecentFactor !== null ? suggestedRecentFactor : null);
+
+                                  const isVerificado = totalLogsCount >= 3;
+                                  const isEnObservacion = totalLogsCount >= 1 && totalLogsCount < 3;
+
                                   const activeFactor = isCloudOverridden 
                                     ? cloudFactorVal 
                                     : (isLocalOverridden ? adminManualScaleFactors[storageKey] : sec.defaultFactor);
@@ -7295,6 +7387,13 @@ export default function App() {
                                   const activeBadgeLabel = isCloudOverridden 
                                     ? '🔒 (Google Sheets)' 
                                     : (isLocalOverridden ? '🔒 (Aprobado Admin)' : '(Default Fábrica)');
+
+                                  let devVsActiveText = null;
+                                  let devVsActiveNum = 0;
+                                  if (cuadrilateroProposedFactor !== null && Number(activeFactor) > 0) {
+                                    devVsActiveNum = ((cuadrilateroProposedFactor - Number(activeFactor)) / Number(activeFactor)) * 100;
+                                    devVsActiveText = `${devVsActiveNum >= 0 ? '+' : ''}${Math.round(devVsActiveNum)}%`;
+                                  }
 
                                   return (
                                     <div key={sec.key} className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm space-y-2.5">
@@ -7318,53 +7417,71 @@ export default function App() {
                                         </strong>
                                       </div>
 
-                                      {/* SECCIÓN COMPARATIVA DE SUGERENCIAS DUALES CON FILTRO ANTI-RUIDO */}
-                                      <div className="bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-100/70 space-y-2">
-                                        <div className="text-[10px] font-black uppercase text-indigo-800 tracking-wider flex justify-between items-center">
-                                          <span>📊 Comparativa Algoritmo (Progresivo desde 1er Nado)</span>
-                                        </div>
-
-                                        {/* SUGERENCIA RECIENTE PROGRESIVA */}
-                                        <div className="flex justify-between items-center text-xs pt-1">
-                                          <div className="flex items-center gap-1.5">
-                                            <span className="text-emerald-700 font-bold">⚡ Reciente ({countRecent >= 5 ? 'Consolidado' : 'Post-Ajuste'}):</span>
-                                            <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${countRecent >= 5 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                                              {countRecent}/5 nados
+                                      {/* BLOQUE CUADRILÁTERO: FACTOR PROPUESTO, ESTADO Y DESVÍO */}
+                                      <div className={`p-2.5 rounded-xl border space-y-1.5 transition-all ${
+                                        isVerificado 
+                                          ? 'bg-emerald-50/80 border-emerald-200 shadow-2xs' 
+                                          : (isEnObservacion ? 'bg-amber-50/70 border-amber-200' : 'bg-slate-50 border-slate-200')
+                                      }`}>
+                                        <div className="flex justify-between items-center text-xs">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                                              🎯 Factor Propuesto:
                                             </span>
+                                            {isVerificado ? (
+                                              <span className="text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow-2xs">
+                                                🟢 Verificado ({totalLogsCount} nados)
+                                              </span>
+                                            ) : isEnObservacion ? (
+                                              <span className="text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                                                🟡 En Observación ({totalLogsCount} nado{totalLogsCount > 1 ? 's' : ''})
+                                              </span>
+                                            ) : (
+                                              <span className="text-[9px] font-semibold text-slate-400 italic">
+                                                ⚪ Sin nados (Fábrica)
+                                              </span>
+                                            )}
                                           </div>
-                                          {suggestedRecentFactor !== null ? (
-                                            <strong className="text-emerald-700 font-black">{suggestedRecentFactor.toFixed(2)}x</strong>
-                                          ) : (
-                                            <span className="text-[10px] text-slate-400 italic">Esperando 1er nado</span>
-                                          )}
-                                        </div>
 
-                                        {/* SUGERENCIA HISTÓRICA GLOBAL PROGRESIVA */}
-                                        <div className="flex justify-between items-center text-xs pt-1 border-t border-indigo-100/60">
-                                          <div className="flex items-center gap-1.5">
-                                            <span className="text-blue-700 font-bold">📜 Histórica Global ({cleanGlobalCount} válidos):</span>
-                                          </div>
-                                          {suggestedGlobalFactor !== null ? (
-                                            <div className="flex items-center gap-2">
-                                              <strong className="text-blue-700 font-black">{suggestedGlobalFactor.toFixed(2)}x</strong>
-                                              {devPercentText && (
-                                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${parseFloat(devPercentText) >= 0 ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
-                                                  Desvío: {devPercentText}
+                                          {cuadrilateroProposedFactor !== null ? (
+                                            <div className="flex items-center gap-1.5">
+                                              <strong className="text-sm font-black text-slate-900">
+                                                {cuadrilateroProposedFactor.toFixed(2)}x
+                                              </strong>
+                                              {devVsActiveText && (
+                                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+                                                  devVsActiveNum > 0 ? 'bg-amber-100 text-amber-900 border border-amber-200' : (devVsActiveNum < 0 ? 'bg-sky-100 text-sky-900 border border-sky-200' : 'bg-slate-100 text-slate-700')
+                                                }`}>
+                                                  Desvío: {devVsActiveText}
                                                 </span>
                                               )}
                                             </div>
                                           ) : (
-                                            <span className="text-[10px] text-slate-400 italic">Esperando 1er nado</span>
+                                            <span className="text-xs text-slate-400 font-bold">—</span>
                                           )}
+                                        </div>
+
+                                        {/* Desglose Algorítmico: Reciente vs Histórico Global */}
+                                        <div className="grid grid-cols-2 gap-1.5 pt-1 text-[11px] text-slate-600 border-t border-slate-200/60">
+                                          <div className="flex justify-between items-center bg-white/80 px-2 py-1 rounded-lg border border-slate-100">
+                                            <span className="text-[9px] font-bold text-slate-500">⚡ Reciente ({countRecent}/5):</span>
+                                            <strong className="text-[11px] font-black text-slate-800">{suggestedRecentFactor !== null ? `${suggestedRecentFactor.toFixed(2)}x` : '—'}</strong>
+                                          </div>
+                                          <div className="flex justify-between items-center bg-white/80 px-2 py-1 rounded-lg border border-slate-100">
+                                            <span className="text-[9px] font-bold text-slate-500">📜 Histórico ({cleanGlobalCount} vál.):</span>
+                                            <strong className="text-[11px] font-black text-slate-800">{suggestedGlobalFactor !== null ? `${suggestedGlobalFactor.toFixed(2)}x` : '—'}</strong>
+                                          </div>
                                         </div>
                                       </div>
 
-                                      {/* BOTONES DE ACCION PERMANENTES (4 ACTIVOS EN GRID 2x2) */}
-                                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                      {/* BOTONES DE ACCIÓN: APROBAR PROPUESTO + CALIBRACIÓN MANUAL + RESET */}
+                                      <div className="space-y-1.5 pt-1">
+                                        {/* 1. Botón Principal de Aprobación de Toda la App */}
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            const fixedVal = parseFloat((suggestedRecentFactor !== null ? suggestedRecentFactor : Number(activeFactor)).toFixed(2));
+                                            const targetVal = cuadrilateroProposedFactor !== null ? cuadrilateroProposedFactor : Number(activeFactor);
+                                            const fixedVal = parseFloat(targetVal.toFixed(2));
                                             const nowTs = Date.now();
                                             const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
                                             const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
@@ -7374,89 +7491,75 @@ export default function App() {
                                             localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
                                             saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
                                             setDataRefreshKey(k => k + 1);
-                                            setFactorFeedbackMsg(`🟢 ¡Aprobado Factor (${fixedVal}x) para ${bName}! Sincronizado.`);
+                                            setFactorFeedbackMsg(`🟢 ¡Factor Propuesto (${fixedVal}x) Aprobado y Aplicado para ${bName}! Sincronizado.`);
                                             setTimeout(() => setFactorFeedbackMsg(null), 4000);
                                           }}
-                                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm text-center flex items-center justify-center gap-1 cursor-pointer"
+                                          className={`w-full py-2 px-3 rounded-xl text-xs font-black transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer ${
+                                            isVerificado
+                                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200 active:scale-[0.99]'
+                                              : 'bg-emerald-700/85 hover:bg-emerald-700 text-white'
+                                          }`}
                                         >
-                                          {suggestedRecentFactor !== null 
-                                            ? (countRecent >= 5 ? `🟢 Aprobar Consolidado (${suggestedRecentFactor.toFixed(2)}x)` : `⚡ Aprobar Reciente (${suggestedRecentFactor.toFixed(2)}x)`)
-                                            : `🟢 Aprobar (${Number(activeFactor).toFixed(2)}x)`}
+                                          <span>✅ Aprobar y Aplicar a Toda la App ({cuadrilateroProposedFactor !== null ? `${cuadrilateroProposedFactor.toFixed(2)}x` : `${Number(activeFactor).toFixed(2)}x`})</span>
+                                          {devVsActiveText && <span className="opacity-90 font-medium">({devVsActiveText})</span>}
                                         </button>
 
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const fixedVal = parseFloat((suggestedGlobalFactor !== null ? suggestedGlobalFactor : Number(activeFactor)).toFixed(2));
-                                            const nowTs = Date.now();
-                                            const updated = { ...adminManualScaleFactors, [storageKey]: fixedVal };
-                                            const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
-                                            setAdminManualScaleFactors(updated);
-                                            setAdminFactorApprovalTimes(updatedTimes);
-                                            localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                            localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                            saveFactorChangeToCloud(bKey, sec.key, fixedVal, nowTs, bName);
-                                            setDataRefreshKey(k => k + 1);
-                                            setFactorFeedbackMsg(`🔵 ¡Aprobada Sugerencia Global (${fixedVal}x) para ${bName}! Sincronizado.`);
-                                            setTimeout(() => setFactorFeedbackMsg(null), 4000);
-                                          }}
-                                          className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm text-center flex items-center justify-center gap-1 cursor-pointer"
-                                        >
-                                          {suggestedGlobalFactor !== null 
-                                            ? `🔵 Aprobar Global (${suggestedGlobalFactor.toFixed(2)}x)`
-                                            : `🔵 Aprobar Global (${Number(activeFactor).toFixed(2)}x)`}
-                                        </button>
-
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const nowTs = Date.now();
-                                            const factoryVal = sec.defaultFactor;
-                                            const updated = { ...adminManualScaleFactors };
-                                            delete updated[storageKey];
-                                            const updatedTimes = { ...adminFactorApprovalTimes };
-                                            delete updatedTimes[storageKey];
-                                            setAdminManualScaleFactors(updated);
-                                            setAdminFactorApprovalTimes(updatedTimes);
-                                            localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                            localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                            setDataRefreshKey(k => k + 1);
-                                            setFactorFeedbackMsg(`🔄 ¡Reset a Fábrica (${sec.defaultFactor.toFixed(2)}x) para ${bName}! Sincronizado.`);
-                                            setTimeout(() => setFactorFeedbackMsg(null), 4000);
-                                          }}
-                                          className="bg-rose-50 text-rose-700 hover:bg-rose-100 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold border border-rose-200 transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
-                                        >
-                                          🔄 Reset ({sec.defaultFactor.toFixed(2)}x)
-                                        </button>
-
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const current = activeFactor;
-                                            const input = prompt(`✏️ Introduce el factor manual exacto para ${bName} (${sec.title}):`, current.toString());
-                                            if (input !== null && input.trim() !== "") {
-                                              const parsed = parseFloat(input.replace(",", "."));
-                                              if (!isNaN(parsed) && parsed > 0 && parsed <= 3.0) {
-                                                const nowTs = Date.now();
-                                                const updated = { ...adminManualScaleFactors, [storageKey]: parsed };
-                                                const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
-                                                setAdminManualScaleFactors(updated);
-                                                setAdminFactorApprovalTimes(updatedTimes);
-                                                localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
-                                                localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
-                                                saveFactorChangeToCloud(bKey, sec.key, parsed, nowTs, bName);
-                                                setDataRefreshKey(k => k + 1);
-                                                setFactorFeedbackMsg(`✏️ ¡Factor Manual fijado en ${parsed}x para ${bName}!`);
-                                                setTimeout(() => setFactorFeedbackMsg(null), 4000);
-                                              } else {
-                                                alert("Por favor, introduce un número válido entre 0.1 y 3.0");
+                                        {/* 2. Fila Secundaria: Calibración Manual Personalizada y Reset */}
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                          {/* BOTÓN CALIBRACIÓN MANUAL: SIEMPRE DISPONIBLE */}
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const current = activeFactor;
+                                              const promptText = `✏️ CALIBRACIÓN MANUAL PERSONALIZADA\n\nPlaya: ${bName}\nSector: ${sec.title}\nFactor Activo: ${Number(current).toFixed(2)}x\nFactor Propuesto: ${cuadrilateroProposedFactor !== null ? cuadrilateroProposedFactor.toFixed(2) + 'x' : '—'}\n\nIntroduce el factor que deseas forzar (0.1 a 3.0):`;
+                                              const input = prompt(promptText, current.toString());
+                                              if (input !== null && input.trim() !== "") {
+                                                const parsed = parseFloat(input.replace(",", "."));
+                                                if (!isNaN(parsed) && parsed > 0 && parsed <= 3.0) {
+                                                  const nowTs = Date.now();
+                                                  const updated = { ...adminManualScaleFactors, [storageKey]: parsed };
+                                                  const updatedTimes = { ...adminFactorApprovalTimes, [storageKey]: nowTs };
+                                                  setAdminManualScaleFactors(updated);
+                                                  setAdminFactorApprovalTimes(updatedTimes);
+                                                  localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                                  localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                                  saveFactorChangeToCloud(bKey, sec.key, parsed, nowTs, bName);
+                                                  setDataRefreshKey(k => k + 1);
+                                                  setFactorFeedbackMsg(`✏️ ¡Factor Manual fijado en ${parsed}x para ${bName}! Sincronizado.`);
+                                                  setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                                } else {
+                                                  alert("Por favor, introduce un número válido entre 0.1 y 3.0");
+                                                }
                                               }
-                                            }
-                                          }}
-                                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
-                                        >
-                                          ✏️ Manual
-                                        </button>
+                                            }}
+                                            className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
+                                            title="Fija libremente cualquier factor manual si no te cuadra ni el activo ni el propuesto"
+                                          >
+                                            ✏️ Calibración Manual
+                                          </button>
+
+                                          {/* BOTÓN RESET A FÁBRICA */}
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const nowTs = Date.now();
+                                              const updated = { ...adminManualScaleFactors };
+                                              delete updated[storageKey];
+                                              const updatedTimes = { ...adminFactorApprovalTimes };
+                                              delete updatedTimes[storageKey];
+                                              setAdminManualScaleFactors(updated);
+                                              setAdminFactorApprovalTimes(updatedTimes);
+                                              localStorage.setItem('openwater_admin_scale_factors', JSON.stringify(updated));
+                                              localStorage.setItem('openwater_admin_approval_times', JSON.stringify(updatedTimes));
+                                              setDataRefreshKey(k => k + 1);
+                                              setFactorFeedbackMsg(`🔄 ¡Reset a Fábrica (${sec.defaultFactor.toFixed(2)}x) para ${bName}! Sincronizado.`);
+                                              setTimeout(() => setFactorFeedbackMsg(null), 4000);
+                                            }}
+                                            className="bg-rose-50 text-rose-700 hover:bg-rose-100 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold border border-rose-200 transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
+                                          >
+                                            🔄 Reset ({sec.defaultFactor.toFixed(2)}x)
+                                          </button>
+                                        </div>
                                       </div>
 
                                       {expandedSectorAudit && expandedSectorAudit[storageKey] && (
