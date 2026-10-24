@@ -1986,6 +1986,7 @@ export default function App() {
   const [adminPin, setAdminPin] = useState('');
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
   const [calibrationHistory, setCalibrationHistory] = useState([]);
+  const [boyaRealHourlyHistory, setBoyaRealHourlyHistory] = useState([]);
   const [isCalHistoryLoading, setIsCalHistoryLoading] = useState(false);
 
   const [latestBuoyHeight, setLatestBuoyHeight] = useState(null);
@@ -3653,6 +3654,9 @@ export default function App() {
             if (json.ultima_boya_real.tempAgua) {
               setLatestBuoyTemp(json.ultima_boya_real.tempAgua);
             }
+          }
+          if (json.boya_real_horaria && Array.isArray(json.boya_real_horaria)) {
+            setBoyaRealHourlyHistory(json.boya_real_horaria);
           }
         }
 
@@ -7680,20 +7684,54 @@ export default function App() {
                                 let bWind = null;
 
                                 if (isPast) {
-                                  const matchedLog = relevantLogs.find(l => {
-                                    const lTs = parseLogTimestamp(l);
-                                    return Math.abs(lTs - slotTs) <= 45 * 60 * 1000;
+                                  // 1. Prioridad: Telemetría horaria oficial de REGISTRO_BOYA_REAL (Hito 45/47)
+                                  const matchedHourly = boyaRealHourlyHistory.find(b => {
+                                    if (b.iso) {
+                                      const bTs = new Date(b.iso).getTime();
+                                      if (!isNaN(bTs) && Math.abs(bTs - slotTs) <= 45 * 60 * 1000) return true;
+                                    }
+                                    if (b.fechaHora) {
+                                      const cleanFh = String(b.fechaHora).trim().replace(' ', 'T');
+                                      const bTs = new Date(cleanFh.length === 16 ? `${cleanFh}:00` : cleanFh).getTime();
+                                      if (!isNaN(bTs) && Math.abs(bTs - slotTs) <= 45 * 60 * 1000) return true;
+                                    }
+                                    if (b.fecha && b.hora) {
+                                      const cleanH = cleanHourString(b.hora);
+                                      const bTs = new Date(`${b.fecha}T${cleanH}:00`).getTime();
+                                      if (!isNaN(bTs) && Math.abs(bTs - slotTs) <= 45 * 60 * 1000) return true;
+                                    }
+                                    return false;
                                   });
 
-                                  if (matchedLog) {
-                                    const buoyInfo = getBuoyReadingForLog(matchedLog);
-                                    bWave = parseBoyaNum(buoyInfo.height || matchedLog.boyaAltura, 0.01, 2.5);
-                                    bTemp = parseBoyaNum(matchedLog.boyaTemp || latestBuoyTemp, 10, 35);
-                                    bWind = parseBoyaNum(matchedLog.boyaVientoKnots || matchedLog.boyaViento, 0, 60);
-                                  } else if (Math.abs(slotTs - nowTs) <= 60 * 60 * 1000 && latestBuoyHeight) {
-                                    bWave = parseBoyaNum(latestBuoyHeight, 0.01, 2.5);
-                                    bTemp = parseBoyaNum(latestBuoyTemp, 10, 35);
-                                    bWind = parseBoyaNum(latestBuoyWindSpeed, 0, 60);
+                                  if (matchedHourly) {
+                                    if (matchedHourly.altura !== null && !isNaN(matchedHourly.altura)) {
+                                      bWave = parseBoyaNum(matchedHourly.altura, 0.01, 2.5);
+                                    }
+                                    if (matchedHourly.tempAgua !== null && !isNaN(matchedHourly.tempAgua)) {
+                                      bTemp = parseBoyaNum(matchedHourly.tempAgua, 10, 35);
+                                    }
+                                    if (matchedHourly.vientoKnots !== null && !isNaN(matchedHourly.vientoKnots)) {
+                                      bWind = parseBoyaNum(matchedHourly.vientoKnots, 0, 60);
+                                    }
+                                  }
+
+                                  // 2. Respaldo: Registros manuales de calibración de Admin o lectura en vivo de Ahora
+                                  if (bWave === null) {
+                                    const matchedLog = relevantLogs.find(l => {
+                                      const lTs = parseLogTimestamp(l);
+                                      return Math.abs(lTs - slotTs) <= 45 * 60 * 1000;
+                                    });
+
+                                    if (matchedLog) {
+                                      const buoyInfo = getBuoyReadingForLog(matchedLog);
+                                      bWave = parseBoyaNum(buoyInfo.height || matchedLog.boyaAltura, 0.01, 2.5);
+                                      if (bTemp === null) bTemp = parseBoyaNum(matchedLog.boyaTemp || latestBuoyTemp, 10, 35);
+                                      if (bWind === null) bWind = parseBoyaNum(matchedLog.boyaVientoKnots || matchedLog.boyaViento, 0, 60);
+                                    } else if (Math.abs(slotTs - nowTs) <= 60 * 60 * 1000 && latestBuoyHeight) {
+                                      bWave = parseBoyaNum(latestBuoyHeight, 0.01, 2.5);
+                                      if (bTemp === null) bTemp = parseBoyaNum(latestBuoyTemp, 10, 35);
+                                      if (bWind === null) bWind = parseBoyaNum(latestBuoyWindSpeed, 0, 60);
+                                    }
                                   }
                                 }
 
@@ -7906,7 +7944,14 @@ export default function App() {
                           const v = chartMetric === 'waves' ? p.buoyWave : chartMetric === 'temp' ? p.buoyTemp : p.buoyWind;
                           return (v !== null && p.timestamp <= nowTs + 30 * 60 * 1000) ? { x: getX(i), y: getY(v), val: v, idx: i } : null;
                         }).filter(Boolean);
-                        const buoyPath = buoyCoords.reduce((acc, c, i) => i === 0 ? `M ${c.x} ${c.y}` : `${acc} L ${c.x} ${c.y}`, '');
+                        const buoyPath = buoyCoords.reduce((acc, c, i) => {
+                          if (i === 0) return `M ${c.x} ${c.y}`;
+                          const prev = buoyCoords[i - 1];
+                          if (c.idx - prev.idx > 4) {
+                            return `${acc} M ${c.x} ${c.y}`;
+                          }
+                          return `${acc} L ${c.x} ${c.y}`;
+                        }, '');
 
                         // 4. Nadadores
                         const swimmerCoords = chartPoints.map((p, i) => {
