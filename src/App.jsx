@@ -4350,7 +4350,20 @@ export default function App() {
     }
 
     const derivaSuffix = swimmerSentidoDeriva === 'poniente' ? ' | Deriva: Poniente (Torremolinos)' : swimmerSentidoDeriva === 'levante' ? ' | Deriva: Levante (Puerto)' : '';
-    const sesgoSuffix = swimmerBiasChip === 'over' ? ' | Sesgo: Sobredimensionada' : swimmerBiasChip === 'under' ? ' | Sesgo: Subdimensionada' : swimmerBiasChip === 'accurate' ? ' | Sesgo: Clavada' : '';
+    let sesgoAutomatico = '';
+    if (!swimmerIsOnlyMessage && swimmerRealOlas) {
+      const swimmerObsWave = swimmerScaleToMeters(swimmerRealOlas) || 0.45;
+      const swimmerAppWave = swimmerForecast ? swimmerForecast.swellH : (hourForecast ? hourForecast.swellH : 0.25);
+      const waveDiff = Math.abs(swimmerObsWave - swimmerAppWave);
+      if (waveDiff <= 0.10) {
+        sesgoAutomatico = ` | Sesgo: Clavada (Δ ${waveDiff.toFixed(2)}m)`;
+      } else if (swimmerAppWave > swimmerObsWave) {
+        sesgoAutomatico = ` | Sesgo: Sobredimensionada (Δ ${waveDiff.toFixed(2)}m)`;
+      } else {
+        sesgoAutomatico = ` | Sesgo: Subdimensionada (Δ ${waveDiff.toFixed(2)}m)`;
+      }
+    }
+    const sesgoSuffix = swimmerBiasChip === 'over' ? ' | Sesgo: Sobredimensionada' : swimmerBiasChip === 'under' ? ' | Sesgo: Subdimensionada' : swimmerBiasChip === 'accurate' ? ' | Sesgo: Clavada' : sesgoAutomatico;
 
     const slotId = generateCanonicalSlotId(swimmerPlaya, swimmerFechaNado, swimmerHoraNado);
     const payload = {
@@ -10288,12 +10301,12 @@ export default function App() {
                 </div>
 
                 {!swimmerIsOnlyMessage && (
-                  <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-xs">
-                    <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Evaluación de la playa</span>
+                  <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 animate-in fade-in duration-200">
+                    <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Observación Real en Orilla (1 al 5)</span>
 
                     {/* Panel Cabecera de Previsión de la Sesión de Nado */}
                     {swimmerForecast && (
-                      <div className="p-2.5 rounded-xl bg-gradient-to-r from-blue-900/90 via-indigo-900/90 to-slate-900 text-white shadow-sm border border-blue-700/40">
+                      <div className="p-2.5 rounded-xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-sm border border-indigo-700/40 mb-2.5">
                         <div className="flex items-center justify-between text-[10px] font-bold text-cyan-300 pb-1.5 border-b border-white/10">
                           <span className="flex items-center gap-1">
                             🔮 <span>Previsión app para las {swimmerHoraNado}</span>
@@ -10326,253 +10339,243 @@ export default function App() {
                       </div>
                     )}
                   
-                  {/* Olas */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-slate-700">🌊 Ola en la Orilla:</span>
-                      <div className="flex gap-1">
-                        {[1,2,3,4,5].map(v => (
-                          <button 
-                            type="button" key={v}
-                            onClick={() => setSwimmerRealOlas(v)}
-                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}
-                          >
-                            {v}
-                          </button>
-                        ))}
+                    {/* Olas */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-slate-700">Olas:</span>
+                        <div className="flex gap-1.5">
+                          {[1,2,3,4,5].map(v => (
+                            <button 
+                              type="button" key={v}
+                              onClick={() => setSwimmerRealOlas(v)}
+                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealOlas === v ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                            >
+                              {v}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                    {swimmerRealOlas && (
-                      <div className="text-[9px] text-right font-bold text-blue-600 italic">
-                        {swimmerRealOlas === 1 && "1/5 (0.05m) • Plato: Mar balsa, nadas sin turbulencia alguna"}
-                        {swimmerRealOlas === 2 && "2/5 (0.20m) • Rizado suave: Mar rizado, no interrumpe la respiración"}
-                        {swimmerRealOlas === 3 && "3/5 (0.45m) • Marejada / Incómodo: Salpica al respirar, girar cabeza"}
-                        {swimmerRealOlas === 4 && "4/5 (0.80m) • Fuerte / Oleaje: Dificultad para orientarse, picado"}
-                        {swimmerRealOlas === 5 && "5/5 (1.20m) • Muy Duro / Rompiente: Impide nadar con normalidad"}
-                      </div>
-                    )}
+                      {swimmerRealOlas && (
+                        <div className="text-[10px] text-right font-bold text-blue-600 italic">
+                          {swimmerRealOlas === 1 && "1/5 (0.05m) • Plato: Mar balsa, nadas sin turbulencia alguna"}
+                          {swimmerRealOlas === 2 && "2/5 (0.20m) • Rizado suave: Mar rizado, no interrumpe la respiración"}
+                          {swimmerRealOlas === 3 && "3/5 (0.45m) • Marejada / Incómodo: Salpica al respirar, girar cabeza"}
+                          {swimmerRealOlas === 4 && "4/5 (0.80m) • Fuerte / Oleaje: Dificultad para orientarse, picado"}
+                          {swimmerRealOlas === 5 && "5/5 (1.20m) • Muy Duro / Rompiente: Impide nadar con normalidad"}
+                        </div>
+                      )}
 
-                    {/* Previsión Contextual + Micro-chips de Sesgo Rápido (Hito 47) */}
-                    <div className="mt-2 p-2 rounded-xl bg-blue-50/70 border border-blue-200/60 flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between text-[10px] font-bold text-blue-900">
-                        <span className="flex items-center gap-1">
-                          💡 <span>La app preveía para esa hora:</span>
-                        </span>
-                        <span className="font-black text-blue-700 bg-white px-2 py-0.5 rounded-full border border-blue-200 shadow-2xs">
-                          {swimmerForecast ? `${swimmerForecast.swellH.toFixed(2)} m` : '0.25 m'}
-                        </span>
+                      {/* Semáforo de Desvío en Vivo */}
+                      {(() => {
+                        const swimmerObsWave = swimmerScaleToMeters(swimmerRealOlas) || 0.45;
+                        const swimmerAppWave = swimmerForecast ? swimmerForecast.swellH : 0.25;
+                        const waveDiff = Math.abs(swimmerObsWave - swimmerAppWave);
+                        const waveDiffPct = swimmerObsWave > 0 ? (waveDiff / swimmerObsWave) * 100 : 0;
+                        return (
+                          <div className="mt-2 p-2 rounded-xl border flex flex-col gap-1 transition-all bg-white border-slate-200/90 shadow-2xs">
+                            <div className="flex items-center justify-between text-[10px] font-black">
+                              <span className="text-slate-600">📊 Previsión app ({swimmerAppWave.toFixed(2)}m):</span>
+                              {waveDiff <= 0.10 ? (
+                                <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                  🟢 Muy precisa (Δ {waveDiff.toFixed(2)}m)
+                                </span>
+                              ) : waveDiff <= 0.20 ? (
+                                <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                  🟡 Desvío moderado (Δ {waveDiff.toFixed(2)}m)
+                                </span>
+                              ) : (
+                                <span className="text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                  🟠 Discrepancia notable (Δ {waveDiff.toFixed(2)}m • {waveDiffPct.toFixed(0)}%)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Resaca */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-slate-700">Resaca:</span>
+                        <div className="flex gap-1.5">
+                          {[1,2,3,4,5].map(v => (
+                            <button 
+                              type="button" key={v}
+                              onClick={() => setSwimmerRealResaca(v)}
+                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                            >
+                              {v}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pt-1 border-t border-blue-200/50">
-                        <span className="text-[9px] font-bold text-slate-500">¿Cómo la viste respecto a la previsión?</span>
-                        <div className="flex items-center gap-1">
+                      {swimmerRealResaca && (
+                        <div className="text-[10px] text-right font-bold text-red-500 italic">
+                          {swimmerRealResaca === 1 && "1/5 = Sin resaca"}
+                          {swimmerRealResaca === 2 && "2/5 = Resaca leve"}
+                          {swimmerRealResaca === 3 && "3/5 = Resaca moderada"}
+                          {swimmerRealResaca === 4 && "4/5 = Resaca fuerte"}
+                          {swimmerRealResaca === 5 && "5/5 = Resaca extrema"}
+                        </div>
+                      )}
+
+                      {/* Previsión Contextual de Resaca */}
+                      {swimmerForecast && (
+                        <div className="mt-1.5 p-2 rounded-xl bg-rose-50/70 border border-rose-200/60 flex items-center justify-between text-[10px]">
+                          <span className="flex items-center gap-1 font-bold text-rose-900">
+                            💡 <span>Previsión app:</span>
+                            <span className="font-black text-rose-700 bg-white px-2 py-0.5 rounded-full border border-rose-200 shadow-2xs">
+                              {swimmerForecast.ripRisk} ({swimmerForecast.predictedResacaNum}/5)
+                            </span>
+                          </span>
+                          {swimmerRealResaca && (
+                            <span className="text-[9px] font-bold">
+                              {swimmerRealResaca === swimmerForecast.predictedResacaNum ? (
+                                <span className="text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
+                                  🎯 Coincide con previsión
+                                </span>
+                              ) : swimmerRealResaca > swimmerForecast.predictedResacaNum ? (
+                                <span className="text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-full border border-rose-300">
+                                  ⚠️ Mayor resaca (+{swimmerRealResaca - swimmerForecast.predictedResacaNum})
+                                </span>
+                              ) : (
+                                <span className="text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full border border-blue-300">
+                                  📉 Menor resaca (-{swimmerForecast.predictedResacaNum - swimmerRealResaca})
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Corriente */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-slate-700">Corriente (Deriva):</span>
+                        <div className="flex gap-1.5">
+                          {[1,2,3,4,5].map(v => (
+                            <button 
+                              type="button" key={v}
+                              onClick={() => setSwimmerRealCorriente(v)}
+                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                            >
+                              {v}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {swimmerRealCorriente && (
+                        <div className="text-[10px] text-right font-bold text-indigo-600 italic">
+                          {swimmerRealCorriente === 1 && "1/5 = Sin deriva / corriente"}
+                          {swimmerRealCorriente === 2 && "2/5 = Deriva leve"}
+                          {swimmerRealCorriente === 3 && "3/5 = Deriva moderada"}
+                          {swimmerRealCorriente === 4 && "4/5 = Deriva fuerte"}
+                          {swimmerRealCorriente === 5 && "5/5 = Deriva extrema"}
+                        </div>
+                      )}
+
+                      {/* Previsión Contextual de Deriva */}
+                      {swimmerForecast && swimmerForecast.drift && (
+                        <div className="mt-1.5 p-2 rounded-xl bg-indigo-50/70 border border-indigo-200/60 flex items-center justify-between text-[10px]">
+                          <span className="flex items-center gap-1 font-bold text-indigo-900">
+                            💡 <span>Previsión app:</span>
+                            <span className="font-black text-indigo-700 bg-white px-2 py-0.5 rounded-full border border-indigo-200 shadow-2xs">
+                              {swimmerForecast.drift.icon} {swimmerForecast.driftType === 'poniente' ? 'Poniente' : swimmerForecast.driftType === 'levante' ? 'Levante' : 'Sin Deriva'} {swimmerForecast.drift.velKts ? `(${swimmerForecast.drift.velKts} kt • ${swimmerForecast.drift.nivel})` : ''}
+                            </span>
+                          </span>
+                          {swimmerRealCorriente && (
+                            <span className="text-[9px] font-bold">
+                              {swimmerRealCorriente === swimmerForecast.predictedCorrienteNum ? (
+                                <span className="text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
+                                  🎯 Nivel coincide
+                                </span>
+                              ) : swimmerRealCorriente > swimmerForecast.predictedCorrienteNum ? (
+                                <span className="text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-full border border-indigo-300">
+                                  📈 Mayor corriente
+                                </span>
+                              ) : (
+                                <span className="text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                                  📉 Menor corriente
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Sentido de la Corriente Swimmer */}
+                      <div className="mt-2 pt-2 border-t border-slate-200/60">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[9.5px] font-black text-slate-600 uppercase">🧭 Sentido del arrastre / deriva:</span>
+                          <span className="text-[9px] font-extrabold text-indigo-700">
+                            {swimmerSentidoDeriva === 'poniente' && '⬅️ Hacia Poniente (Torremolinos)'}
+                            {swimmerSentidoDeriva === 'levante' && '➡️ Hacia Levante (Málaga/Puerto)'}
+                            {swimmerSentidoDeriva === 'none' && '⚪ Sin deriva lateral'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5">
                           <button
                             type="button"
-                            onClick={() => setSwimmerBiasChip(swimmerBiasChip === 'over' ? null : 'over')}
-                            className={`px-2 py-0.5 rounded-lg text-[9px] font-black transition-all border cursor-pointer ${swimmerBiasChip === 'over' ? 'bg-amber-600 text-white border-amber-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-amber-50 border-slate-200'}`}
-                            title="La app daba más ola de la que realmente había"
+                            onClick={() => setSwimmerSentidoDeriva(swimmerSentidoDeriva === 'poniente' ? 'none' : 'poniente')}
+                            className={`py-2 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer relative flex flex-col items-center justify-center gap-0.5 ${
+                              swimmerSentidoDeriva === 'poniente'
+                                ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-400/50'
+                                : swimmerForecast?.driftType === 'poniente'
+                                ? 'bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100 border-indigo-300 ring-1 ring-indigo-400'
+                                : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'
+                            }`}
                           >
-                            📈 Sobredimensionada
+                            <span>⬅️ Poniente</span>
+                            {swimmerForecast?.driftType === 'poniente' && (
+                              <span className="text-[7.5px] font-black bg-indigo-200/90 text-indigo-900 px-1 py-0.2 rounded-full border border-indigo-300">
+                                ⚡ Previsto
+                              </span>
+                            )}
                           </button>
                           <button
                             type="button"
-                            onClick={() => setSwimmerBiasChip(swimmerBiasChip === 'accurate' ? null : 'accurate')}
-                            className={`px-2 py-0.5 rounded-lg text-[9px] font-black transition-all border cursor-pointer ${swimmerBiasChip === 'accurate' ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-emerald-50 border-slate-200'}`}
-                            title="La altura coincidía exactamente con lo previsto"
+                            onClick={() => setSwimmerSentidoDeriva('none')}
+                            className={`py-2 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer relative flex flex-col items-center justify-center gap-0.5 ${
+                              swimmerSentidoDeriva === 'none'
+                                ? 'bg-slate-700 text-white border-slate-800 shadow-xs ring-2 ring-slate-400/50'
+                                : swimmerForecast?.driftType === 'none'
+                                ? 'bg-slate-100 text-slate-800 hover:bg-slate-200 border-slate-300 ring-1 ring-slate-400'
+                                : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'
+                            }`}
                           >
-                            🎯 Clavada
+                            <span>⚪ Sin Deriva</span>
+                            {swimmerForecast?.driftType === 'none' && (
+                              <span className="text-[7.5px] font-black bg-slate-200 text-slate-800 px-1 py-0.2 rounded-full border border-slate-300">
+                                ⚡ Previsto
+                              </span>
+                            )}
                           </button>
                           <button
                             type="button"
-                            onClick={() => setSwimmerBiasChip(swimmerBiasChip === 'under' ? null : 'under')}
-                            className={`px-2 py-0.5 rounded-lg text-[9px] font-black transition-all border cursor-pointer ${swimmerBiasChip === 'under' ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'}`}
-                            title="Había más ola de la que marcaba la app"
+                            onClick={() => setSwimmerSentidoDeriva(swimmerSentidoDeriva === 'levante' ? 'none' : 'levante')}
+                            className={`py-2 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer relative flex flex-col items-center justify-center gap-0.5 ${
+                              swimmerSentidoDeriva === 'levante'
+                                ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-400/50'
+                                : swimmerForecast?.driftType === 'levante'
+                                ? 'bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100 border-indigo-300 ring-1 ring-indigo-400'
+                                : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'
+                            }`}
                           >
-                            📉 Subdimensionada
+                            <span>➡️ Levante</span>
+                            {swimmerForecast?.driftType === 'levante' && (
+                              <span className="text-[7.5px] font-black bg-indigo-200/90 text-indigo-900 px-1 py-0.2 rounded-full border border-indigo-300">
+                                ⚡ Previsto
+                              </span>
+                            )}
                           </button>
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Resaca */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-slate-700">🔄 Resaca (Arrastre):</span>
-                      <div className="flex gap-1">
-                        {[1,2,3,4,5].map(v => (
-                          <button 
-                            type="button" key={v}
-                            onClick={() => setSwimmerRealResaca(v)}
-                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealResaca === v ? 'bg-red-500 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}
-                          >
-                            {v}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {swimmerRealResaca && (
-                      <div className="text-[9px] text-right font-bold text-red-500 italic">
-                        {swimmerRealResaca === 1 && "1/5 = Sin arrastre"}
-                        {swimmerRealResaca === 2 && "2/5 = Arrastre leve"}
-                        {swimmerRealResaca === 3 && "3/5 = Arrastre moderado"}
-                        {swimmerRealResaca === 4 && "4/5 = Arrastre fuerte"}
-                        {swimmerRealResaca === 5 && "5/5 = Arrastre extremo"}
-                      </div>
-                    )}
-
-                    {/* Previsión Contextual de Resaca */}
-                    {swimmerForecast && (
-                      <div className="mt-1.5 p-2 rounded-xl bg-rose-50/70 border border-rose-200/60 flex items-center justify-between text-[10px]">
-                        <span className="flex items-center gap-1 font-bold text-rose-900">
-                          💡 <span>Previsión app:</span>
-                          <span className="font-black text-rose-700 bg-white px-2 py-0.5 rounded-full border border-rose-200 shadow-2xs">
-                            {swimmerForecast.ripRisk} ({swimmerForecast.predictedResacaNum}/5)
-                          </span>
-                        </span>
-                        {swimmerRealResaca && (
-                          <span className="text-[9px] font-bold">
-                            {swimmerRealResaca === swimmerForecast.predictedResacaNum ? (
-                              <span className="text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
-                                🎯 Coincide con la previsión
-                              </span>
-                            ) : swimmerRealResaca > swimmerForecast.predictedResacaNum ? (
-                              <span className="text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-full border border-rose-300">
-                                ⚠️ Mayor resaca (+{swimmerRealResaca - swimmerForecast.predictedResacaNum})
-                              </span>
-                            ) : (
-                              <span className="text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full border border-blue-300">
-                                📉 Menor resaca (-{swimmerForecast.predictedResacaNum - swimmerRealResaca})
-                              </span>
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Corriente */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-slate-700">🧭 Deriva (Corriente):</span>
-                      <div className="flex gap-1">
-                        {[1,2,3,4,5].map(v => (
-                          <button 
-                            type="button" key={v}
-                            onClick={() => setSwimmerRealCorriente(v)}
-                            className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${swimmerRealCorriente === v ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}
-                          >
-                            {v}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {swimmerRealCorriente && (
-                      <div className="text-[9px] text-right font-bold text-indigo-600 italic">
-                        {swimmerRealCorriente === 1 && "1/5 = Sin corriente"}
-                        {swimmerRealCorriente === 2 && "2/5 = Corriente leve"}
-                        {swimmerRealCorriente === 3 && "3/5 = Corriente moderada"}
-                        {swimmerRealCorriente === 4 && "4/5 = Corriente fuerte"}
-                        {swimmerRealCorriente === 5 && "5/5 = Corriente extrema"}
-                      </div>
-                    )}
-
-                    {/* Previsión Contextual de Deriva */}
-                    {swimmerForecast && swimmerForecast.drift && (
-                      <div className="mt-1.5 p-2 rounded-xl bg-indigo-50/70 border border-indigo-200/60 flex items-center justify-between text-[10px]">
-                        <span className="flex items-center gap-1 font-bold text-indigo-900">
-                          💡 <span>Previsión app:</span>
-                          <span className="font-black text-indigo-700 bg-white px-2 py-0.5 rounded-full border border-indigo-200 shadow-2xs">
-                            {swimmerForecast.drift.icon} {swimmerForecast.driftType === 'poniente' ? 'Poniente' : swimmerForecast.driftType === 'levante' ? 'Levante' : 'Sin Deriva'} {swimmerForecast.drift.velKts ? `(${swimmerForecast.drift.velKts} kt • ${swimmerForecast.drift.nivel})` : ''}
-                          </span>
-                        </span>
-                        {swimmerRealCorriente && (
-                          <span className="text-[9px] font-bold">
-                            {swimmerRealCorriente === swimmerForecast.predictedCorrienteNum ? (
-                              <span className="text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
-                                🎯 Nivel coincide
-                              </span>
-                            ) : swimmerRealCorriente > swimmerForecast.predictedCorrienteNum ? (
-                              <span className="text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-full border border-indigo-300">
-                                📈 Mayor corriente
-                              </span>
-                            ) : (
-                              <span className="text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                                📉 Menor corriente
-                              </span>
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Sentido de la Corriente Swimmer (Hito 47) */}
-                    <div className="mt-2 pt-2 border-t border-slate-200/60">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[9.5px] font-black text-slate-600 uppercase">🧭 Sentido del arrastre / deriva:</span>
-                        <span className="text-[9px] font-extrabold text-indigo-700">
-                          {swimmerSentidoDeriva === 'poniente' && '⬅️ Hacia Poniente (Torremolinos)'}
-                          {swimmerSentidoDeriva === 'levante' && '➡️ Hacia Levante (Málaga/Puerto)'}
-                          {swimmerSentidoDeriva === 'none' && '⚪ Sin deriva lateral'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setSwimmerSentidoDeriva(swimmerSentidoDeriva === 'poniente' ? 'none' : 'poniente')}
-                          className={`py-2 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer relative flex flex-col items-center justify-center gap-0.5 ${
-                            swimmerSentidoDeriva === 'poniente'
-                              ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-400/50'
-                              : swimmerForecast?.driftType === 'poniente'
-                              ? 'bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100 border-indigo-300 ring-1 ring-indigo-400'
-                              : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'
-                          }`}
-                        >
-                          <span>⬅️ Poniente</span>
-                          {swimmerForecast?.driftType === 'poniente' && (
-                            <span className="text-[7.5px] font-black bg-indigo-200/90 text-indigo-900 px-1 py-0.2 rounded-full border border-indigo-300">
-                              ⚡ Previsto
-                            </span>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSwimmerSentidoDeriva('none')}
-                          className={`py-2 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer relative flex flex-col items-center justify-center gap-0.5 ${
-                            swimmerSentidoDeriva === 'none'
-                              ? 'bg-slate-700 text-white border-slate-800 shadow-xs ring-2 ring-slate-400/50'
-                              : swimmerForecast?.driftType === 'none'
-                              ? 'bg-slate-100 text-slate-800 hover:bg-slate-200 border-slate-300 ring-1 ring-slate-400'
-                              : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'
-                          }`}
-                        >
-                          <span>⚪ Sin Deriva</span>
-                          {swimmerForecast?.driftType === 'none' && (
-                            <span className="text-[7.5px] font-black bg-slate-200 text-slate-800 px-1 py-0.2 rounded-full border border-slate-300">
-                              ⚡ Previsto
-                            </span>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSwimmerSentidoDeriva(swimmerSentidoDeriva === 'levante' ? 'none' : 'levante')}
-                          className={`py-2 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer relative flex flex-col items-center justify-center gap-0.5 ${
-                            swimmerSentidoDeriva === 'levante'
-                              ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-400/50'
-                              : swimmerForecast?.driftType === 'levante'
-                              ? 'bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100 border-indigo-300 ring-1 ring-indigo-400'
-                              : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'
-                          }`}
-                        >
-                          <span>➡️ Levante</span>
-                          {swimmerForecast?.driftType === 'levante' && (
-                            <span className="text-[7.5px] font-black bg-indigo-200/90 text-indigo-900 px-1 py-0.2 rounded-full border border-indigo-300">
-                              ⚡ Previsto
-                            </span>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
 
                   {/* Medusas */}
                   <div className="flex justify-between items-center pt-1 border-t border-slate-200/50">
