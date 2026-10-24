@@ -1602,6 +1602,45 @@ function getForecastForSlot(beachKey, dateStr, hourStr, beachData, comparisonFor
       const factorRatio = (beachKey === 'malagueta' || beachKey === 'pedregalejo') ? 0.70 : (beachKey === 'los_alamos' || beachKey === 'bajondillo') ? 1.05 : 0.90;
       ourWave = parseFloat((rawSat * factorRatio).toFixed(2));
     }
+
+    // Determinar sentido y nivel de deriva previsto
+    let predictedDriftType = 'none';
+    let driftObj = hourItem.drift || null;
+    if (driftObj) {
+      const dTxt = String(driftObj.short || driftObj.directionText || '').toLowerCase();
+      const netKts = typeof driftObj.netLateralKts === 'number' ? driftObj.netLateralKts : 0;
+      if (dTxt.includes('poniente') || netKts < -0.08) {
+        predictedDriftType = 'poniente';
+      } else if (dTxt.includes('levante') || netKts > 0.08) {
+        predictedDriftType = 'levante';
+      }
+    } else {
+      driftObj = {
+        icon: '⚪',
+        short: 'Sin Deriva Lateral',
+        directionText: 'Nula / Despreciable',
+        velKts: '0.0',
+        nivel: 'Nula',
+        tactica: 'Sin deriva apreciable.'
+      };
+    }
+
+    // Convertir riesgo de resaca a escala aproximada 1-5
+    const ripRiskText = hourItem.ripRisk || 'Nulo';
+    let predictedResacaNum = 1;
+    if (ripRiskText === 'Alta') predictedResacaNum = 4;
+    else if (ripRiskText === 'Media') predictedResacaNum = 3;
+    else if (ripRiskText === 'Baja') predictedResacaNum = 2;
+    else predictedResacaNum = 1;
+
+    // Convertir deriva a escala aproximada 1-5
+    let predictedCorrienteNum = 1;
+    const absKts = parseFloat(driftObj.velKts || 0) || 0;
+    if (absKts >= 1.0) predictedCorrienteNum = 4;
+    else if (absKts >= 0.6) predictedCorrienteNum = 3;
+    else if (absKts >= 0.25) predictedCorrienteNum = 2;
+    else predictedCorrienteNum = 1;
+
     return {
       swellH: ourWave,
       rawSwellH: rawSat,
@@ -1609,6 +1648,14 @@ function getForecastForSlot(beachKey, dateStr, hourStr, beachData, comparisonFor
       windDir: hourItem.windDir || 110,
       hourScore: hourItem.hourScore || 7.5,
       waveEnergy: hourItem.waveEnergy || 'Baja',
+      ripRisk: ripRiskText,
+      ripColor: hourItem.ripColor || 'text-slate-600',
+      predictedResacaNum: predictedResacaNum,
+      drift: driftObj,
+      driftType: predictedDriftType,
+      predictedCorrienteNum: predictedCorrienteNum,
+      period: hourItem.period || '4.5',
+      swellDir: hourItem.swellDir || 110,
       presionMSL: hourItem.presionMSL || '',
       humidity: hourItem.humidity || '',
       dewPoint: hourItem.dewPoint || '',
@@ -1629,6 +1676,21 @@ function getForecastForSlot(beachKey, dateStr, hourStr, beachData, comparisonFor
         windDir: 110,
         hourScore: 7.0,
         waveEnergy: 'Baja',
+        ripRisk: 'Baja',
+        ripColor: 'text-blue-600',
+        predictedResacaNum: 2,
+        drift: {
+          icon: '⚪',
+          short: 'Sin Deriva Definida',
+          directionText: 'Nula / Despreciable',
+          velKts: '0.0',
+          nivel: 'Nula',
+          tactica: 'Sin deriva apreciable.'
+        },
+        driftType: 'none',
+        predictedCorrienteNum: 1,
+        period: '4.5',
+        swellDir: 110,
         presionMSL: '',
         humidity: '',
         dewPoint: '',
@@ -6828,6 +6890,41 @@ export default function App() {
                       {adminReportMode === 'full' && (
                         <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 animate-in fade-in duration-200">
                           <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">Observación Real en Orilla (1 al 5)</span>
+
+                          {/* Panel Cabecera de Previsión de la Sesión de Nado (Admin) */}
+                          {adminForecast && (
+                            <div className="p-2.5 rounded-xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-sm border border-indigo-700/40 mb-2.5">
+                              <div className="flex items-center justify-between text-[10px] font-bold text-cyan-300 pb-1.5 border-b border-white/10">
+                                <span className="flex items-center gap-1">
+                                  🔮 <span>Previsión app para las {adminHoraNado}</span>
+                                </span>
+                                <span className="text-[9px] font-normal text-slate-300">
+                                  {adminPlaya === 'misericordia' ? 'La Misericordia' : adminPlaya === 'malagueta' ? 'La Malagueta' : adminPlaya === 'pedregalejo' ? 'Pedregalejo' : adminPlaya === 'los_alamos' ? 'Los Álamos' : adminPlaya === 'bajondillo' ? 'El Bajondillo' : adminPlaya}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-1.5 pt-2 text-center">
+                                <div className="bg-white/10 p-1.5 rounded-lg backdrop-blur-xs">
+                                  <span className="text-[8px] font-bold text-cyan-200 block uppercase">Ola prevista</span>
+                                  <strong className="text-xs font-black text-white block mt-0.5">{adminForecast.swellH.toFixed(2)}m</strong>
+                                  <span className="text-[7.5px] text-cyan-300/80 block truncate">{adminForecast.waveEnergy || 'Baja'}</span>
+                                </div>
+                                <div className="bg-white/10 p-1.5 rounded-lg backdrop-blur-xs">
+                                  <span className="text-[8px] font-bold text-rose-200 block uppercase">Resaca</span>
+                                  <strong className="text-xs font-black text-rose-300 block mt-0.5">{adminForecast.ripRisk}</strong>
+                                  <span className="text-[7.5px] text-slate-300 block truncate">{adminForecast.predictedResacaNum}/5 aprox.</span>
+                                </div>
+                                <div className="bg-white/10 p-1.5 rounded-lg backdrop-blur-xs">
+                                  <span className="text-[8px] font-bold text-indigo-200 block uppercase">Deriva lateral</span>
+                                  <strong className="text-xs font-black text-indigo-200 block mt-0.5 truncate">
+                                    {adminForecast.drift?.icon} {adminForecast.driftType === 'poniente' ? 'Poniente' : adminForecast.driftType === 'levante' ? 'Levante' : 'Sin Deriva'}
+                                  </strong>
+                                  <span className="text-[7.5px] text-indigo-300/80 block truncate">
+                                    {adminForecast.drift?.velKts ? `${adminForecast.drift.velKts} kt` : 'Nula'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                           
                           <div className="space-y-1">
                             <div className="flex justify-between items-center text-xs">
@@ -6915,6 +7012,35 @@ export default function App() {
                                 {adminRealResaca === 5 && "5/5 = Resaca extrema"}
                               </div>
                             )}
+
+                            {/* Previsión Contextual de Resaca (Admin) */}
+                            {adminForecast && (
+                              <div className="mt-1.5 p-2 rounded-xl bg-rose-50/70 border border-rose-200/60 flex items-center justify-between text-[10px]">
+                                <span className="flex items-center gap-1 font-bold text-rose-900">
+                                  💡 <span>Previsión app:</span>
+                                  <span className="font-black text-rose-700 bg-white px-2 py-0.5 rounded-full border border-rose-200 shadow-2xs">
+                                    {adminForecast.ripRisk} ({adminForecast.predictedResacaNum}/5)
+                                  </span>
+                                </span>
+                                {adminRealResaca && (
+                                  <span className="text-[9px] font-bold">
+                                    {adminRealResaca === adminForecast.predictedResacaNum ? (
+                                      <span className="text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
+                                        🎯 Coincide con previsión
+                                      </span>
+                                    ) : adminRealResaca > adminForecast.predictedResacaNum ? (
+                                      <span className="text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-full border border-rose-300">
+                                        ⚠️ Mayor resaca (+{adminRealResaca - adminForecast.predictedResacaNum})
+                                      </span>
+                                    ) : (
+                                      <span className="text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full border border-blue-300">
+                                        📉 Menor resaca (-{adminForecast.predictedResacaNum - adminRealResaca})
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           <div className="space-y-1">
@@ -6942,6 +7068,35 @@ export default function App() {
                               </div>
                             )}
 
+                            {/* Previsión Contextual de Deriva (Admin) */}
+                            {adminForecast && adminForecast.drift && (
+                              <div className="mt-1.5 p-2 rounded-xl bg-indigo-50/70 border border-indigo-200/60 flex items-center justify-between text-[10px]">
+                                <span className="flex items-center gap-1 font-bold text-indigo-900">
+                                  💡 <span>Previsión app:</span>
+                                  <span className="font-black text-indigo-700 bg-white px-2 py-0.5 rounded-full border border-indigo-200 shadow-2xs">
+                                    {adminForecast.drift.icon} {adminForecast.driftType === 'poniente' ? 'Poniente' : adminForecast.driftType === 'levante' ? 'Levante' : 'Sin Deriva'} {adminForecast.drift.velKts ? `(${adminForecast.drift.velKts} kt • ${adminForecast.drift.nivel})` : ''}
+                                  </span>
+                                </span>
+                                {adminRealCorriente && (
+                                  <span className="text-[9px] font-bold">
+                                    {adminRealCorriente === adminForecast.predictedCorrienteNum ? (
+                                      <span className="text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
+                                        🎯 Nivel coincide
+                                      </span>
+                                    ) : adminRealCorriente > adminForecast.predictedCorrienteNum ? (
+                                      <span className="text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-full border border-indigo-300">
+                                        📈 Mayor corriente
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                                        📉 Menor corriente
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
                             {/* Sentido de la Corriente Admin (Hito 47) */}
                             <div className="mt-2 pt-2 border-t border-slate-200/60">
                               <div className="flex items-center justify-between mb-1.5">
@@ -6952,27 +7107,60 @@ export default function App() {
                                   {adminSentidoDeriva === 'none' && '⚪ Sin deriva lateral'}
                                 </span>
                               </div>
-                              <div className="grid grid-cols-3 gap-1">
+                              <div className="grid grid-cols-3 gap-1.5">
                                 <button
                                   type="button"
                                   onClick={() => setAdminSentidoDeriva(adminSentidoDeriva === 'poniente' ? 'none' : 'poniente')}
-                                  className={`py-1.5 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer ${adminSentidoDeriva === 'poniente' ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'}`}
+                                  className={`py-2 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer relative flex flex-col items-center justify-center gap-0.5 ${
+                                    adminSentidoDeriva === 'poniente'
+                                      ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-400/50'
+                                      : adminForecast?.driftType === 'poniente'
+                                      ? 'bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100 border-indigo-300 ring-1 ring-indigo-400'
+                                      : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'
+                                  }`}
                                 >
-                                  ⬅️ Poniente
+                                  <span>⬅️ Poniente</span>
+                                  {adminForecast?.driftType === 'poniente' && (
+                                    <span className="text-[7.5px] font-black bg-indigo-200/90 text-indigo-900 px-1 py-0.2 rounded-full border border-indigo-300">
+                                      ⚡ Previsto
+                                    </span>
+                                  )}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setAdminSentidoDeriva('none')}
-                                  className={`py-1.5 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer ${adminSentidoDeriva === 'none' ? 'bg-slate-700 text-white border-slate-800 shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'}`}
+                                  className={`py-2 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer relative flex flex-col items-center justify-center gap-0.5 ${
+                                    adminSentidoDeriva === 'none'
+                                      ? 'bg-slate-700 text-white border-slate-800 shadow-xs ring-2 ring-slate-400/50'
+                                      : adminForecast?.driftType === 'none'
+                                      ? 'bg-slate-100 text-slate-800 hover:bg-slate-200 border-slate-300 ring-1 ring-slate-400'
+                                      : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'
+                                  }`}
                                 >
-                                  ⚪ Sin Deriva
+                                  <span>⚪ Sin Deriva</span>
+                                  {adminForecast?.driftType === 'none' && (
+                                    <span className="text-[7.5px] font-black bg-slate-200 text-slate-800 px-1 py-0.2 rounded-full border border-slate-300">
+                                      ⚡ Previsto
+                                    </span>
+                                  )}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setAdminSentidoDeriva(adminSentidoDeriva === 'levante' ? 'none' : 'levante')}
-                                  className={`py-1.5 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer ${adminSentidoDeriva === 'levante' ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'}`}
+                                  className={`py-2 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer relative flex flex-col items-center justify-center gap-0.5 ${
+                                    adminSentidoDeriva === 'levante'
+                                      ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-400/50'
+                                      : adminForecast?.driftType === 'levante'
+                                      ? 'bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100 border-indigo-300 ring-1 ring-indigo-400'
+                                      : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'
+                                  }`}
                                 >
-                                  ➡️ Levante
+                                  <span>➡️ Levante</span>
+                                  {adminForecast?.driftType === 'levante' && (
+                                    <span className="text-[7.5px] font-black bg-indigo-200/90 text-indigo-900 px-1 py-0.2 rounded-full border border-indigo-300">
+                                      ⚡ Previsto
+                                    </span>
+                                  )}
                                 </button>
                               </div>
                             </div>
@@ -10102,6 +10290,41 @@ export default function App() {
                 {!swimmerIsOnlyMessage && (
                   <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-xs">
                     <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Evaluación de la playa</span>
+
+                    {/* Panel Cabecera de Previsión de la Sesión de Nado */}
+                    {swimmerForecast && (
+                      <div className="p-2.5 rounded-xl bg-gradient-to-r from-blue-900/90 via-indigo-900/90 to-slate-900 text-white shadow-sm border border-blue-700/40">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-cyan-300 pb-1.5 border-b border-white/10">
+                          <span className="flex items-center gap-1">
+                            🔮 <span>Previsión app para las {swimmerHoraNado}</span>
+                          </span>
+                          <span className="text-[9px] font-normal text-slate-300">
+                            {swimmerPlaya === 'misericordia' ? 'La Misericordia' : swimmerPlaya === 'malagueta' ? 'La Malagueta' : swimmerPlaya === 'pedregalejo' ? 'Pedregalejo' : swimmerPlaya === 'los_alamos' ? 'Los Álamos' : swimmerPlaya === 'bajondillo' ? 'El Bajondillo' : swimmerPlaya}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5 pt-2 text-center">
+                          <div className="bg-white/10 p-1.5 rounded-lg backdrop-blur-xs">
+                            <span className="text-[8px] font-bold text-cyan-200 block uppercase">Ola prevista</span>
+                            <strong className="text-xs font-black text-white block mt-0.5">{swimmerForecast.swellH.toFixed(2)}m</strong>
+                            <span className="text-[7.5px] text-cyan-300/80 block truncate">{swimmerForecast.waveEnergy || 'Baja'}</span>
+                          </div>
+                          <div className="bg-white/10 p-1.5 rounded-lg backdrop-blur-xs">
+                            <span className="text-[8px] font-bold text-rose-200 block uppercase">Resaca</span>
+                            <strong className="text-xs font-black text-rose-300 block mt-0.5">{swimmerForecast.ripRisk}</strong>
+                            <span className="text-[7.5px] text-slate-300 block truncate">{swimmerForecast.predictedResacaNum}/5 aprox.</span>
+                          </div>
+                          <div className="bg-white/10 p-1.5 rounded-lg backdrop-blur-xs">
+                            <span className="text-[8px] font-bold text-indigo-200 block uppercase">Deriva lateral</span>
+                            <strong className="text-xs font-black text-indigo-200 block mt-0.5 truncate">
+                              {swimmerForecast.drift?.icon} {swimmerForecast.driftType === 'poniente' ? 'Poniente' : swimmerForecast.driftType === 'levante' ? 'Levante' : 'Sin Deriva'}
+                            </strong>
+                            <span className="text-[7.5px] text-indigo-300/80 block truncate">
+                              {swimmerForecast.drift?.velKts ? `${swimmerForecast.drift.velKts} kt` : 'Nula'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   
                   {/* Olas */}
                   <div className="space-y-1">
@@ -10196,6 +10419,35 @@ export default function App() {
                         {swimmerRealResaca === 5 && "5/5 = Arrastre extremo"}
                       </div>
                     )}
+
+                    {/* Previsión Contextual de Resaca */}
+                    {swimmerForecast && (
+                      <div className="mt-1.5 p-2 rounded-xl bg-rose-50/70 border border-rose-200/60 flex items-center justify-between text-[10px]">
+                        <span className="flex items-center gap-1 font-bold text-rose-900">
+                          💡 <span>Previsión app:</span>
+                          <span className="font-black text-rose-700 bg-white px-2 py-0.5 rounded-full border border-rose-200 shadow-2xs">
+                            {swimmerForecast.ripRisk} ({swimmerForecast.predictedResacaNum}/5)
+                          </span>
+                        </span>
+                        {swimmerRealResaca && (
+                          <span className="text-[9px] font-bold">
+                            {swimmerRealResaca === swimmerForecast.predictedResacaNum ? (
+                              <span className="text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
+                                🎯 Coincide con la previsión
+                              </span>
+                            ) : swimmerRealResaca > swimmerForecast.predictedResacaNum ? (
+                              <span className="text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-full border border-rose-300">
+                                ⚠️ Mayor resaca (+{swimmerRealResaca - swimmerForecast.predictedResacaNum})
+                              </span>
+                            ) : (
+                              <span className="text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full border border-blue-300">
+                                📉 Menor resaca (-{swimmerForecast.predictedResacaNum - swimmerRealResaca})
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Corriente */}
@@ -10224,6 +10476,35 @@ export default function App() {
                       </div>
                     )}
 
+                    {/* Previsión Contextual de Deriva */}
+                    {swimmerForecast && swimmerForecast.drift && (
+                      <div className="mt-1.5 p-2 rounded-xl bg-indigo-50/70 border border-indigo-200/60 flex items-center justify-between text-[10px]">
+                        <span className="flex items-center gap-1 font-bold text-indigo-900">
+                          💡 <span>Previsión app:</span>
+                          <span className="font-black text-indigo-700 bg-white px-2 py-0.5 rounded-full border border-indigo-200 shadow-2xs">
+                            {swimmerForecast.drift.icon} {swimmerForecast.driftType === 'poniente' ? 'Poniente' : swimmerForecast.driftType === 'levante' ? 'Levante' : 'Sin Deriva'} {swimmerForecast.drift.velKts ? `(${swimmerForecast.drift.velKts} kt • ${swimmerForecast.drift.nivel})` : ''}
+                          </span>
+                        </span>
+                        {swimmerRealCorriente && (
+                          <span className="text-[9px] font-bold">
+                            {swimmerRealCorriente === swimmerForecast.predictedCorrienteNum ? (
+                              <span className="text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
+                                🎯 Nivel coincide
+                              </span>
+                            ) : swimmerRealCorriente > swimmerForecast.predictedCorrienteNum ? (
+                              <span className="text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-full border border-indigo-300">
+                                📈 Mayor corriente
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                                📉 Menor corriente
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {/* Sentido de la Corriente Swimmer (Hito 47) */}
                     <div className="mt-2 pt-2 border-t border-slate-200/60">
                       <div className="flex items-center justify-between mb-1.5">
@@ -10234,27 +10515,60 @@ export default function App() {
                           {swimmerSentidoDeriva === 'none' && '⚪ Sin deriva lateral'}
                         </span>
                       </div>
-                      <div className="grid grid-cols-3 gap-1">
+                      <div className="grid grid-cols-3 gap-1.5">
                         <button
                           type="button"
                           onClick={() => setSwimmerSentidoDeriva(swimmerSentidoDeriva === 'poniente' ? 'none' : 'poniente')}
-                          className={`py-1.5 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer ${swimmerSentidoDeriva === 'poniente' ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'}`}
+                          className={`py-2 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer relative flex flex-col items-center justify-center gap-0.5 ${
+                            swimmerSentidoDeriva === 'poniente'
+                              ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-400/50'
+                              : swimmerForecast?.driftType === 'poniente'
+                              ? 'bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100 border-indigo-300 ring-1 ring-indigo-400'
+                              : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'
+                          }`}
                         >
-                          ⬅️ Poniente
+                          <span>⬅️ Poniente</span>
+                          {swimmerForecast?.driftType === 'poniente' && (
+                            <span className="text-[7.5px] font-black bg-indigo-200/90 text-indigo-900 px-1 py-0.2 rounded-full border border-indigo-300">
+                              ⚡ Previsto
+                            </span>
+                          )}
                         </button>
                         <button
                           type="button"
                           onClick={() => setSwimmerSentidoDeriva('none')}
-                          className={`py-1.5 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer ${swimmerSentidoDeriva === 'none' ? 'bg-slate-700 text-white border-slate-800 shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'}`}
+                          className={`py-2 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer relative flex flex-col items-center justify-center gap-0.5 ${
+                            swimmerSentidoDeriva === 'none'
+                              ? 'bg-slate-700 text-white border-slate-800 shadow-xs ring-2 ring-slate-400/50'
+                              : swimmerForecast?.driftType === 'none'
+                              ? 'bg-slate-100 text-slate-800 hover:bg-slate-200 border-slate-300 ring-1 ring-slate-400'
+                              : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'
+                          }`}
                         >
-                          ⚪ Sin Deriva
+                          <span>⚪ Sin Deriva</span>
+                          {swimmerForecast?.driftType === 'none' && (
+                            <span className="text-[7.5px] font-black bg-slate-200 text-slate-800 px-1 py-0.2 rounded-full border border-slate-300">
+                              ⚡ Previsto
+                            </span>
+                          )}
                         </button>
                         <button
                           type="button"
                           onClick={() => setSwimmerSentidoDeriva(swimmerSentidoDeriva === 'levante' ? 'none' : 'levante')}
-                          className={`py-1.5 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer ${swimmerSentidoDeriva === 'levante' ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'}`}
+                          className={`py-2 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer relative flex flex-col items-center justify-center gap-0.5 ${
+                            swimmerSentidoDeriva === 'levante'
+                              ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-400/50'
+                              : swimmerForecast?.driftType === 'levante'
+                              ? 'bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100 border-indigo-300 ring-1 ring-indigo-400'
+                              : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'
+                          }`}
                         >
-                          ➡️ Levante
+                          <span>➡️ Levante</span>
+                          {swimmerForecast?.driftType === 'levante' && (
+                            <span className="text-[7.5px] font-black bg-indigo-200/90 text-indigo-900 px-1 py-0.2 rounded-full border border-indigo-300">
+                              ⚡ Previsto
+                            </span>
+                          )}
                         </button>
                       </div>
                     </div>
