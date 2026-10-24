@@ -7648,6 +7648,140 @@ export default function App() {
                         // 1. Construir la serie temporal continua
                         let rawContinuousPoints = [];
 
+                        // 1.0 Generar histórico ampliado (hasta 7 días hacia atrás) cuando se selecciona '7d' o 'todo' (Hito 47)
+                        const extraPastOffsets = (chartRange === '7d' || chartRange === 'todo') ? [-6, -5, -4, -3, -2] : [];
+                        if (extraPastOffsets.length > 0) {
+                          const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                          const factorRatio = (chartBeach === 'malagueta' || chartBeach === 'pedregalejo') ? 0.70 : (chartBeach === 'los_alamos' || chartBeach === 'bajondillo') ? 1.05 : 0.90;
+
+                          extraPastOffsets.forEach(dOff => {
+                            const dDate = new Date(nowTs + dOff * 86400000);
+                            const dStr = dDate.toISOString().split('T')[0];
+                            const dPrefix = `${dayNames[dDate.getDay()]} ${dDate.getDate()}`;
+
+                            const sampleHours = [8, 11, 14, 17, 20];
+
+                            // Incluir cualquier hora con reporte de nadador en ese día
+                            const daySwimmerLogs = relevantLogs.filter(l => {
+                              const lTs = parseLogTimestamp(l);
+                              return lTs > 0 && new Date(lTs).toISOString().split('T')[0] === dStr;
+                            });
+                            daySwimmerLogs.forEach(sl => {
+                              const rawH = sl.horaNado || sl.hora;
+                              if (rawH) {
+                                const hNum = parseInt(cleanHourString(rawH).split(':')[0], 10);
+                                if (!isNaN(hNum) && !sampleHours.includes(hNum)) sampleHours.push(hNum);
+                              }
+                            });
+                            sampleHours.sort((a, b) => a - b);
+
+                            sampleHours.forEach(hVal => {
+                              const hClean = `${String(hVal).padStart(2, '0')}:00`;
+                              const slotTs = new Date(`${dStr}T${hClean}:00`).getTime();
+
+                              let rawSat = 0.25;
+                              let satTemp = 21.5;
+                              if (rawMarineData && rawMarineData.hourly && Array.isArray(rawMarineData.hourly.time)) {
+                                const targetIso = `${dStr}T${hClean}`;
+                                const mIdx = rawMarineData.hourly.time.indexOf(targetIso);
+                                if (mIdx !== -1) {
+                                  rawSat = parseFloat(rawMarineData.hourly.wave_height?.[mIdx] || 0.25) || 0.25;
+                                  satTemp = parseFloat(rawMarineData.hourly.sea_surface_temperature?.[mIdx] || 21.5) || 21.5;
+                                }
+                              }
+                              const ourApp = parseFloat((rawSat * factorRatio).toFixed(2));
+
+                              // Boya Real
+                              let bWave = null;
+                              let bTemp = null;
+                              let bWind = null;
+
+                              const matchedHourly = boyaRealHourlyHistory.find(b => {
+                                if (b.iso) {
+                                  const bTs = new Date(b.iso).getTime();
+                                  if (!isNaN(bTs) && Math.abs(bTs - slotTs) <= 45 * 60 * 1000) return true;
+                                }
+                                if (b.fechaHora) {
+                                  const cleanFh = String(b.fechaHora).trim().replace(' ', 'T');
+                                  const bTs = new Date(cleanFh.length === 16 ? `${cleanFh}:00` : cleanFh).getTime();
+                                  if (!isNaN(bTs) && Math.abs(bTs - slotTs) <= 45 * 60 * 1000) return true;
+                                }
+                                if (b.fecha && b.hora) {
+                                  const cleanH = cleanHourString(b.hora);
+                                  const bTs = new Date(`${b.fecha}T${cleanH}:00`).getTime();
+                                  if (!isNaN(bTs) && Math.abs(bTs - slotTs) <= 45 * 60 * 1000) return true;
+                                }
+                                return false;
+                              });
+
+                              if (matchedHourly) {
+                                if (matchedHourly.altura !== null && !isNaN(matchedHourly.altura)) bWave = parseBoyaNum(matchedHourly.altura, 0.01, 2.5);
+                                if (matchedHourly.tempAgua !== null && !isNaN(matchedHourly.tempAgua)) bTemp = parseBoyaNum(matchedHourly.tempAgua, 10, 35);
+                                if (matchedHourly.vientoKnots !== null && !isNaN(matchedHourly.vientoKnots)) bWind = parseBoyaNum(matchedHourly.vientoKnots, 0, 60);
+                              }
+
+                              if (bWave === null) {
+                                const matchedLog = relevantLogs.find(l => {
+                                  const lTs = parseLogTimestamp(l);
+                                  return Math.abs(lTs - slotTs) <= 45 * 60 * 1000;
+                                });
+                                if (matchedLog) {
+                                  const buoyInfo = getBuoyReadingForLog(matchedLog);
+                                  bWave = parseBoyaNum(buoyInfo.height || matchedLog.boyaAltura, 0.01, 2.5);
+                                  if (bTemp === null) bTemp = parseBoyaNum(matchedLog.boyaTemp || latestBuoyTemp, 10, 35);
+                                  if (bWind === null) bWind = parseBoyaNum(matchedLog.boyaVientoKnots || matchedLog.boyaViento, 0, 60);
+                                }
+                              }
+
+                              // Nadadores
+                              let swWave = null;
+                              let swName = 'Nadador';
+                              let swNotes = '';
+                              const swLog = relevantLogs.find(l => {
+                                const origLower = String(l.origenDato || '').toLowerCase();
+                                const isSw = origLower.includes('nadador') || origLower.includes('admin') || origLower.includes('calibraci') || (l.sensaciones && String(l.sensaciones).includes('[Nombre:'));
+                                if (!isSw) return false;
+                                const lTs = parseLogTimestamp(l);
+                                return Math.abs(lTs - slotTs) <= 45 * 60 * 1000;
+                              });
+
+                              if (swLog) {
+                                const rawW = swLog.realOlas || swLog.orillaOlaNadador;
+                                if (rawW) swWave = swimmerScaleToMeters(rawW);
+                                const sens = String(swLog.sensaciones || '');
+                                if (sens.includes('[Nombre:')) {
+                                  const m = sens.match(/\[Nombre:\s*([^|\]]+)/);
+                                  if (m && m[1]) swName = m[1].trim();
+                                } else if (String(swLog.origenDato || '').includes('Admin')) {
+                                  swName = 'Admin (Calibración)';
+                                }
+                                swNotes = sens;
+                              }
+
+                              rawContinuousPoints.push({
+                                id: `past-${dOff}-${hVal}`,
+                                timestamp: slotTs,
+                                isPast: true,
+                                label: `${dPrefix} ${hClean}`,
+                                dateStr: dStr,
+                                hourStr: hClean,
+                                rawSatWave: parseFloat(rawSat.toFixed(2)),
+                                ourAppWave: parseFloat(ourApp.toFixed(2)),
+                                buoyWave: bWave !== null ? parseFloat(bWave.toFixed(2)) : null,
+                                swimmerWave: swWave !== null ? parseFloat(swWave.toFixed(2)) : null,
+                                swimmerName: swName,
+                                swimmerNotes: swNotes,
+                                satTemp: parseFloat(satTemp.toFixed(1)),
+                                ourAppTemp: parseFloat(satTemp.toFixed(1)),
+                                buoyTemp: bTemp !== null ? parseFloat(bTemp.toFixed(1)) : parseFloat((satTemp - 0.4).toFixed(1)),
+                                satWind: 6.5,
+                                ourAppWind: 6.5,
+                                buoyWind: bWind !== null ? parseFloat(bWind.toFixed(1)) : null
+                              });
+                            });
+                          });
+                        }
+
                         if (beachData && Array.isArray(beachData) && beachData.length > 0) {
                           const dayDates = [
                             getYesterdayIsoString(),
@@ -7835,7 +7969,7 @@ export default function App() {
                         } else if (chartRange === '7d') {
                           chartPoints = rawContinuousPoints.filter(p => {
                             const hNum = parseInt((p.hourStr || '0').split(':')[0]);
-                            return (hNum % 3 === 0);
+                            return (hNum % 3 === 0 || p.swimmerWave !== null);
                           });
                         } else {
                           chartPoints = rawContinuousPoints;
