@@ -46,14 +46,16 @@ import {
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
-// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 45 - Telemetría Portus En Pruebas)
+// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 47 - Triangulación Continua y Enriquecimiento Ergonómico)
 const APP_BUILD_INFO = {
-  version: "v9.4.46",
-  hito: "HITO_46",
-  nombreHito: "Auditoría Cuadrilátero y Calibración de Sectores",
+  version: "v9.4.47",
+  hito: "HITO_47",
+  nombreHito: "Triangulación Continua y Enriquecimiento Ergonómico de Reportes",
   rama: "MEJORAS",
-  fechaBuild: "2026-10-18"
+  fechaBuild: "2026-10-24"
 };
+
+const APPS_SCRIPT_WEBHOOK = "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec";
 
 /**
  * HITO 36: Evaluador de acierto no lineal adaptado a la sensibilidad del nadador en orilla.
@@ -86,7 +88,7 @@ const isForecastAccurate = (predHs, realHs) => {
 };
 
 /**
- * HITO 39: Envío automático a la Caja Negra de Anomalías (LOG_ANOMALIAS_ATMOSFERICAS)
+ * HITO 39 & HITO 47: Envío automático a la Caja Negra de Anomalías (LOG_ANOMALIAS_ATMOSFERICAS)
  */
 const logAtmosphericAnomaly = async (data) => {
   if (!data || !data.playa) return;
@@ -98,23 +100,27 @@ const logAtmosphericAnomaly = async (data) => {
       hora: data.hora || '12:00',
       playa: data.playa,
       origenDato: data.origenDato || 'Detección Automática',
-      vientoSat: data.vientoSat || '',
-      vientoReal: data.vientoReal || '',
-      olaSat: data.olaSat || '',
-      olaReal: data.olaReal || '',
-      presionMSL: data.presionMSL || '',
-      humidity: data.humidity || '',
-      dewPoint: data.dewPoint || '',
-      airTemp: data.airTemp || '',
-      cape: data.cape || '',
+      vientoSat: data.vientoSat !== undefined ? data.vientoSat : '',
+      vientoReal: data.vientoReal !== undefined ? data.vientoReal : '',
+      olaSat: data.olaSat !== undefined ? data.olaSat : '',
+      olaReal: data.olaReal !== undefined ? data.olaReal : '',
+      presionMSL: data.presionMSL !== undefined ? data.presionMSL : '',
+      humidity: data.humidity !== undefined ? data.humidity : '',
+      dewPoint: data.dewPoint !== undefined ? data.dewPoint : '',
+      airTemp: data.airTemp !== undefined ? data.airTemp : '',
+      cape: data.cape !== undefined ? data.cape : '',
       taroRisk: data.taroRisk || '',
       notas: data.notas || 'Divergencia telemétrica crítica registrada'
     };
 
-    fetch(APPS_SCRIPT_WEBHOOK, {
+    const targetUrl = typeof APPS_SCRIPT_WEBHOOK !== 'undefined' 
+      ? APPS_SCRIPT_WEBHOOK 
+      : (typeof WEBHOOK_URL !== 'undefined' ? WEBHOOK_URL : "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec");
+
+    fetch(targetUrl, {
       method: 'POST',
       mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload)
     }).catch(e => console.error("Error al enviar anomalía a la Caja Negra:", e));
   } catch (err) {
@@ -2163,104 +2169,8 @@ export default function App() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
-  // Estado para las pestañas del Modal Admin ('factors', 'chart', 'compass', 'telemetry', 'shadow_lab' o 'report')
+  // Estado para las pestañas del Modal Admin ('factors', 'chart', 'compass', 'telemetry', 'reeval_lab' o 'report')
   const [adminTab, setAdminTab] = useState('factors');
-  
-  // Estados para el Laboratorio Sombra de Benchmark (CSV Boya Real)
-  const [shadowLabParsed, setShadowLabParsed] = useState(null);
-  const [isShadowLoading, setIsShadowLoading] = useState(false);
-
-  useEffect(() => {
-    if (adminTab !== 'shadow_lab' || shadowLabParsed !== null) return;
-    setIsShadowLoading(true);
-    fetch('/HISTORICO_BOYA_MALAGA_LIMPIO.csv')
-      .then(res => res.text())
-      .then(text => {
-        const lines = text.split('\n');
-        const records = [];
-        for (let i = 1; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (!line) continue;
-          const p = line.split(';');
-          if (p.length >= 10) {
-            records.push({
-              fecha: p[0],
-              horaGmt: p[1],
-              horaLocal: p[2],
-              waveH: parseFloat(p[3].replace(',', '.')) || 0,
-              waveTp: parseFloat(p[4].replace(',', '.')) || 0,
-              waveDir: parseInt(p[7], 10) || 0,
-              sector: p[8],
-              tempWater: parseFloat(p[9].replace(',', '.')) || 0
-            });
-          }
-        }
-        setShadowLabParsed(records);
-      })
-      .catch(err => console.error("Error loading shadow lab CSV:", err))
-      .finally(() => setIsShadowLoading(false));
-  }, [adminTab, shadowLabParsed]);
-
-  const shadowLabAnalysis = useMemo(() => {
-    if (!shadowLabParsed || !calibrationHistory || shadowLabParsed.length === 0) return null;
-    
-    let totalMatched = 0;
-    let sumAbsError = 0;
-    let matchSensationCount = 0;
-    const matchedList = [];
-
-    calibrationHistory.forEach(log => {
-      const orig = String(log.origenDato || '').toLowerCase();
-      if (orig.includes('alerta') || orig.includes('sincronizaci')) return;
-
-      const logTs = parseLogTimestamp(log);
-      if (!logTs) return;
-
-      const d = new Date(logTs);
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const dateStr = `${yyyy}-${mm}-${dd}`;
-      const hourStr = String(d.getHours()).padStart(2, '0') + ':00';
-
-      const match = shadowLabParsed.find(r => r.fecha === dateStr && (r.horaLocal === hourStr || r.horaGmt === hourStr));
-      if (match) {
-        totalMatched++;
-        const swimmerWave = swimmerScaleToMeters(log.realOlas) || parseFloat(log.realOlas) || 0.3;
-        const buoyWave = match.waveH;
-        const absDiff = Math.abs(swimmerWave - buoyWave);
-        sumAbsError += absDiff;
-
-        const accEval = isForecastAccurate(swimmerWave, buoyWave);
-        if (accEval && accEval.isAccurate) {
-          matchSensationCount++;
-        }
-
-        matchedList.push({
-          log,
-          dateStr,
-          hourStr,
-          playa: log.playa || 'misericordia',
-          buoyWave,
-          buoyTp: match.waveTp,
-          buoyDir: match.waveDir,
-          swimmerWave,
-          absDiff,
-          sensaciones: log.sensaciones || log.origenDato
-        });
-      }
-    });
-
-    const mae = totalMatched > 0 ? (sumAbsError / totalMatched) : 0;
-    const accuracyPct = totalMatched > 0 ? Math.round((matchSensationCount / totalMatched) * 100) : 0;
-
-    return {
-      totalMatched,
-      mae,
-      accuracyPct,
-      matchedList
-    };
-  }, [shadowLabParsed, calibrationHistory]);
   const [compassBeachKey, setCompassBeachKey] = useState('misericordia');
   const [compassCustomFacing, setCompassCustomFacing] = useState(() => {
     try {
@@ -6498,13 +6408,6 @@ export default function App() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setAdminTab('shadow_lab')}
-                      className={`flex-1 py-2 px-2 rounded-xl font-extrabold text-[11px] transition-all flex items-center justify-center gap-1 shrink-0 cursor-pointer ${adminTab === 'shadow_lab' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
-                    >
-                      🔬 Lab Sombra
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => setAdminTab('reeval_lab')}
                       className={`flex-1 py-2 px-2 rounded-xl font-extrabold text-[11px] transition-all flex items-center justify-center gap-1 shrink-0 cursor-pointer ${adminTab === 'reeval_lab' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
                     >
@@ -8239,95 +8142,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* PESTAÑA: LABORATORIO SOMBRA DE BENCHMARK (CSV BOYA REAL) */}
-                  {adminTab === 'shadow_lab' && (
-                    <div className="text-left space-y-4 animate-in fade-in duration-300">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200 pb-3">
-                        <div>
-                          <h4 className="text-xs font-black uppercase text-indigo-800 tracking-wider flex items-center gap-1.5">
-                            <Activity size={16} className="text-indigo-600" />
-                            <span>Laboratorio Sombra de Benchmark (CSV Boya Real)</span>
-                          </h4>
-                          <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                            Cruce automático hora a hora con los 8.897 registros limpios de la Boya Real 2056 de Puertos del Estado
-                          </p>
-                        </div>
-                        <span className="text-[9px] font-black text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-full shrink-0">
-                          🔬 Motor Aislado en Paralelo (Cero Impacto Web)
-                        </span>
-                      </div>
 
-                      {isShadowLoading ? (
-                        <div className="p-8 text-center space-y-2">
-                          <Loader2 size={24} className="animate-spin text-indigo-600 mx-auto" />
-                          <p className="text-xs font-bold text-slate-600">Cargando y procesando dataset de Boya Real (8.897 registros)...</p>
-                        </div>
-                      ) : shadowLabAnalysis ? (
-                        <div className="space-y-4">
-                          {/* KPI METRICS */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                            <div className="bg-indigo-50 border border-indigo-200 p-3 rounded-2xl">
-                              <span className="text-[9px] font-extrabold text-indigo-600 uppercase block">📡 Nados Emparejados</span>
-                              <strong className="text-xl font-black text-indigo-900 block mt-0.5">{shadowLabAnalysis.totalMatched}</strong>
-                              <span className="text-[8px] text-indigo-500 font-bold block mt-0.5">Con hora exacta en Boya</span>
-                            </div>
-
-                            <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-2xl">
-                              <span className="text-[9px] font-extrabold text-emerald-600 uppercase block">🎯 Error Absoluto (MAE)</span>
-                              <strong className="text-xl font-black text-emerald-900 block mt-0.5">{shadowLabAnalysis.mae.toFixed(2)}m</strong>
-                              <span className="text-[8px] text-emerald-600 font-bold block mt-0.5">Diferencia Orilla vs Boya</span>
-                            </div>
-
-                            <div className="bg-blue-50 border border-blue-200 p-3 rounded-2xl">
-                              <span className="text-[9px] font-extrabold text-blue-600 uppercase block">📊 Acierto No Lineal</span>
-                              <strong className="text-xl font-black text-blue-900 block mt-0.5">{shadowLabAnalysis.accuracyPct}%</strong>
-                              <span className="text-[8px] text-blue-500 font-bold block mt-0.5">Matriz Náutica Tolerancia</span>
-                            </div>
-
-                            <div className="bg-purple-50 border border-purple-200 p-3 rounded-2xl">
-                              <span className="text-[9px] font-extrabold text-purple-600 uppercase block">⚓ Cobertura Temporal</span>
-                              <strong className="text-base font-black text-purple-900 block mt-1">2025 – 2026</strong>
-                              <span className="text-[8px] text-purple-500 font-bold block mt-0.5">8.897 Horas analizadas</span>
-                            </div>
-                          </div>
-
-                          {/* TABLA DE EVALUACIÓN HORA A HORA */}
-                          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
-                            <div className="flex justify-between items-center text-[10px] font-black uppercase text-slate-700 tracking-wider">
-                              <span>📋 Reportes Cruzados con Telemetría Física</span>
-                              <span className="text-slate-400 font-normal">Mostrando registros validados</span>
-                            </div>
-                            <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
-                              {shadowLabAnalysis.matchedList.map((m, idx) => (
-                                <div key={idx} className="bg-white p-2.5 rounded-xl border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
-                                  <div>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <strong className="text-slate-800 font-black">{m.dateStr} {m.hourStr}</strong>
-                                      <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md uppercase">
-                                        {m.playa}
-                                      </span>
-                                      <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                                        Boya: {m.buoyWave.toFixed(2)}m ({m.buoyTp.toFixed(1)}s · {m.buoyDir}º)
-                                      </span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-600 mt-1 italic font-medium">"{m.sensaciones}"</p>
-                                  </div>
-                                  <div className="text-right shrink-0">
-                                    <span className="text-[10px] font-black text-slate-700 block">Nadador: {m.swimmerWave.toFixed(2)}m</span>
-                                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded block mt-0.5 ${m.absDiff <= 0.15 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                                      Δ Error: {m.absDiff.toFixed(2)}m
-                                    </span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-500">No hay suficientes reportes de nadadores emparejados con el histórico de boya.</p>
-                      )}
-                    </div>
-                  )}
 
                   {/* PESTAÑA: LABORATORIO DE RE-EVALUACIÓN HISTÓRICA DE REPORTES EN PARALELO (HITO 40) */}
                   {adminTab === 'reeval_lab' && (
