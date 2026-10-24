@@ -1568,6 +1568,81 @@ function swimmerScaleToMeters(v) {
 };
 
 /**
+ * HITO 47: Consulta reactiva del pronóstico de la app para una playa, fecha y hora específicas
+ */
+function getForecastForSlot(beachKey, dateStr, hourStr, beachData, comparisonForecast, selectedBeach) {
+  if (!hourStr) return null;
+  const cleanH = cleanHourString(hourStr);
+  const hourPrefix = cleanH.split(':')[0].padStart(2, '0');
+  
+  let targetDay = null;
+  if (beachData && Array.isArray(beachData) && beachData.length > 0) {
+    const todayStr = getIsoDateString();
+    const yesterdayStr = getYesterdayIsoString();
+    if (dateStr === yesterdayStr) {
+      targetDay = beachData[0];
+    } else if (dateStr === todayStr) {
+      targetDay = beachData[1];
+    } else if (beachData[2] && dateStr === new Date(Date.now() + 86400000).toISOString().split('T')[0]) {
+      targetDay = beachData[2];
+    } else {
+      targetDay = beachData[1] || beachData[0];
+    }
+  }
+
+  let hourItem = null;
+  if (targetDay && Array.isArray(targetDay.hourly)) {
+    hourItem = targetDay.hourly.find(h => (h.time || '').startsWith(hourPrefix));
+  }
+
+  if (hourItem) {
+    const rawSat = parseFloat(hourItem.rawSwellH || hourItem.swellH || 0.25) || 0.25;
+    let ourWave = parseFloat(hourItem.swellH || 0.20) || 0.20;
+    if (beachKey && selectedBeach && beachKey !== selectedBeach) {
+      const factorRatio = (beachKey === 'malagueta' || beachKey === 'pedregalejo') ? 0.70 : (beachKey === 'los_alamos' || beachKey === 'bajondillo') ? 1.05 : 0.90;
+      ourWave = parseFloat((rawSat * factorRatio).toFixed(2));
+    }
+    return {
+      swellH: ourWave,
+      rawSwellH: rawSat,
+      windS: parseFloat(hourItem.windS || 6.5) || 6.5,
+      windDir: hourItem.windDir || 110,
+      hourScore: hourItem.hourScore || 7.5,
+      waveEnergy: hourItem.waveEnergy || 'Baja',
+      presionMSL: hourItem.presionMSL || '',
+      humidity: hourItem.humidity || '',
+      dewPoint: hourItem.dewPoint || '',
+      airTemp: hourItem.airTemp || '',
+      cape: hourItem.cape || '',
+      localRule: hourItem.localRule || ''
+    };
+  }
+
+  if (comparisonForecast && Array.isArray(comparisonForecast)) {
+    const matchedHour = comparisonForecast.find(h => (h.time || '').startsWith(hourPrefix));
+    if (matchedHour) {
+      const wVal = parseFloat(matchedHour.waveEcmwf || matchedHour.waveGfs || 0.25) || 0.25;
+      return {
+        swellH: wVal,
+        rawSwellH: wVal,
+        windS: 6.5,
+        windDir: 110,
+        hourScore: 7.0,
+        waveEnergy: 'Baja',
+        presionMSL: '',
+        humidity: '',
+        dewPoint: '',
+        airTemp: '',
+        cape: '',
+        localRule: ''
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
  * Convierte clave VAPID Base64URL a Uint8Array estándar requerido por pushManager
  */
 function urlBase64ToUint8Array(base64String) {
@@ -2132,6 +2207,8 @@ export default function App() {
   const [adminBoyaTemp, setAdminBoyaTemp] = useState('');
   const [showAdminPortusWidget, setShowAdminPortusWidget] = useState(false);
   const [adminVientoMs, setAdminVientoMs] = useState('');
+  const [adminSentidoDeriva, setAdminSentidoDeriva] = useState('none'); // 'poniente' | 'none' | 'levante' (Hito 47)
+  const [adminAutoLoadStatus, setAdminAutoLoadStatus] = useState(null); // { type, text } (Hito 47)
 
   // Estados para el reporte público de nadadores (Comunidad)
   const [isSwimmerModalOpen, setIsSwimmerModalOpen] = useState(false);
@@ -2141,6 +2218,8 @@ export default function App() {
   const [swimmerRealOlas, setSwimmerRealOlas] = useState(3);
   const [swimmerRealResaca, setSwimmerRealResaca] = useState(1);
   const [swimmerRealCorriente, setSwimmerRealCorriente] = useState(1);
+  const [swimmerSentidoDeriva, setSwimmerSentidoDeriva] = useState('none'); // 'poniente' | 'none' | 'levante' (Hito 47)
+  const [swimmerBiasChip, setSwimmerBiasChip] = useState(null); // 'over' | 'accurate' | 'under' | null (Hito 47)
   const [swimmerSensaciones, setSwimmerSensaciones] = useState('');
   const [isSendingSwimmerReport, setIsSendingSwimmerReport] = useState(false);
   const [swimmerReportStatus, setSwimmerReportStatus] = useState(null);
@@ -2154,6 +2233,10 @@ export default function App() {
   const [adminWavePropDir, setAdminWavePropDir] = useState('');
   const [adminAlertSeverity, setAdminAlertSeverity] = useState('warning'); // 'warning' | 'danger' | 'info'
   const [visibleReportsCount, setVisibleReportsCount] = useState(3);
+
+  // Pronóstico contextual reactivo para los formularios de reporte (Hito 47)
+  const swimmerForecast = useMemo(() => getForecastForSlot(swimmerPlaya, swimmerFechaNado, swimmerHoraNado, beachData, comparisonForecast, selectedBeach), [swimmerPlaya, swimmerFechaNado, swimmerHoraNado, beachData, comparisonForecast, selectedBeach]);
+  const adminForecast = useMemo(() => getForecastForSlot(adminPlaya, adminFechaNado, adminHoraNado, beachData, comparisonForecast, selectedBeach), [adminPlaya, adminFechaNado, adminHoraNado, beachData, comparisonForecast, selectedBeach]);
 
   // Previsiones detalladas (comparador)
   const [comparisonForecast, setComparisonForecast] = useState(null);
@@ -3841,6 +3924,110 @@ export default function App() {
     }
   };
 
+  /**
+   * HITO 47: Carga asistida inteligente en 1 clic de los datos oficiales de Boya Real Portus
+   */
+  const handleAdminAutoFillBuoy = () => {
+    setAdminAutoLoadStatus(null);
+    const cleanH = cleanHourString(adminHoraNado);
+    const targetTs = new Date(`${adminFechaNado}T${cleanH}:00`).getTime();
+    
+    // 1. Buscar en historial horario de boya real (lectura más cercana en ±90 min)
+    let matched = null;
+    let minDiff = Infinity;
+    
+    if (Array.isArray(boyaRealHourlyHistory) && boyaRealHourlyHistory.length > 0) {
+      for (const b of boyaRealHourlyHistory) {
+        let bTs = 0;
+        if (b.iso) {
+          bTs = new Date(b.iso).getTime();
+        } else if (b.fechaHora) {
+          const cleanFh = String(b.fechaHora).trim().replace(' ', 'T');
+          bTs = new Date(cleanFh.length === 16 ? `${cleanFh}:00` : cleanFh).getTime();
+        } else if (b.fecha && b.hora) {
+          const hClean = cleanHourString(b.hora);
+          bTs = new Date(`${b.fecha}T${hClean}:00`).getTime();
+        }
+        if (!isNaN(bTs) && bTs > 0) {
+          const diff = Math.abs(bTs - targetTs);
+          if (diff < minDiff && diff <= 90 * 60 * 1000) {
+            minDiff = diff;
+            matched = b;
+          }
+        }
+      }
+    }
+
+    if (matched) {
+      if (matched.altura !== null && matched.altura !== undefined && !isNaN(matched.altura)) {
+        setAdminBoyaAltura(Number(matched.altura).toFixed(2));
+      }
+      if (matched.tempAgua !== null && matched.tempAgua !== undefined && !isNaN(matched.tempAgua)) {
+        setAdminBoyaTemp(Number(matched.tempAgua).toFixed(1));
+      }
+      if (matched.dirOla !== null && matched.dirOla !== undefined && !isNaN(matched.dirOla)) {
+        setAdminBoyaDireccion(String(Math.round(matched.dirOla)));
+        setAdminWavePropDir(String(((Math.round(matched.dirOla) + 180) % 360)));
+      }
+      if (matched.periodo !== null && matched.periodo !== undefined && !isNaN(matched.periodo)) {
+        setAdminBoyaPeriodo(Number(matched.periodo).toFixed(1));
+      } else if (portusRealData && (portusRealData.periodoPico || portusRealData.periodoMedio)) {
+        setAdminBoyaPeriodo(String(portusRealData.periodoPico || portusRealData.periodoMedio));
+      }
+      if (matched.vientoKnots !== null && matched.vientoKnots !== undefined && !isNaN(matched.vientoKnots)) {
+        const kts = Number(matched.vientoKnots).toFixed(1);
+        const ms = (matched.vientoKnots / 1.94384).toFixed(1);
+        setAdminRealVientoFza(`${kts} kts (${ms} m/s)`);
+        setAdminVientoMs(ms);
+      }
+      if (matched.dirViento !== null && matched.dirViento !== undefined && !isNaN(matched.dirViento)) {
+        const card = getWindDirection(matched.dirViento).replace(/[^A-Z]/g, '').trim();
+        setAdminRealVientoDir(card || `${Math.round(matched.dirViento)}º`);
+      }
+
+      setAdminAutoLoadStatus({
+        type: 'success',
+        text: `⚡ Datos cargados de Boya (${matched.hora || cleanH}): Hs ${matched.altura ? Number(matched.altura).toFixed(2) + 'm' : '—'}, ${matched.tempAgua ? Number(matched.tempAgua).toFixed(1) + 'ºC' : '—'}, ${matched.vientoKnots ? Number(matched.vientoKnots).toFixed(1) + ' kt' : '—'}`
+      });
+    } else if (portusRealData || latestBuoyHeight) {
+      // Fallback a última telemetría viva disponible de Boya
+      if (portusRealData && portusRealData.altura) setAdminBoyaAltura(String(portusRealData.altura));
+      else if (latestBuoyHeight) setAdminBoyaAltura(String(latestBuoyHeight));
+
+      if (portusRealData && portusRealData.tempAgua) setAdminBoyaTemp(String(portusRealData.tempAgua));
+      else if (latestBuoyTemp) setAdminBoyaTemp(String(latestBuoyTemp));
+
+      if (portusRealData && (portusRealData.periodoPico || portusRealData.periodoMedio)) setAdminBoyaPeriodo(String(portusRealData.periodoPico || portusRealData.periodoMedio));
+      else if (latestBuoyPeriod) setAdminBoyaPeriodo(String(latestBuoyPeriod));
+
+      if (portusRealData && portusRealData.dirOleaje) {
+        setAdminBoyaDireccion(String(portusRealData.dirOleaje));
+        setAdminWavePropDir(String(((Number(portusRealData.dirOleaje) + 180) % 360)));
+      } else if (latestBuoyDir) {
+        setAdminBoyaDireccion(String(latestBuoyDir));
+      }
+
+      if (portusRealData && portusRealData.vientoNudos) {
+        setAdminRealVientoFza(`${portusRealData.vientoNudos} kts`);
+        if (portusRealData.vientoMs) setAdminVientoMs(String(portusRealData.vientoMs));
+      }
+      if (portusRealData && portusRealData.dirViento) {
+        const card = getWindDirection(portusRealData.dirViento).replace(/[^A-Z]/g, '').trim();
+        setAdminRealVientoDir(card || `${portusRealData.dirViento}º`);
+      }
+
+      setAdminAutoLoadStatus({
+        type: 'info',
+        text: `⚡ Cargada última telemetría en vivo disponible de Boya (Hs: ${adminBoyaAltura || latestBuoyHeight || '—'}m)`
+      });
+    } else {
+      setAdminAutoLoadStatus({
+        type: 'error',
+        text: `⚠️ No se encontraron lecturas horarias oficiales para esa fecha y hora (${adminFechaNado} ${cleanH}).`
+      });
+    }
+  };
+
   async function handleSendReport(e) {
     e.preventDefault();
     setIsSendingReport(true);
@@ -3906,7 +4093,9 @@ export default function App() {
       realCorriente: (isAlertMode || isBuoyOnlyMode) ? "" : adminRealCorriente,
       realVientoFza: adminRealVientoFza,
       realVientoDir: adminRealVientoDir,
-      sensaciones: adminSensaciones,
+      sensaciones: adminSensaciones 
+        ? `${adminSensaciones}${adminSentidoDeriva === 'poniente' ? ' | Deriva: Poniente (Torremolinos)' : adminSentidoDeriva === 'levante' ? ' | Deriva: Levante (Puerto)' : ''}`
+        : (adminSentidoDeriva === 'poniente' ? 'Deriva: Poniente (Torremolinos)' : adminSentidoDeriva === 'levante' ? 'Deriva: Levante (Puerto)' : ''),
       origenDato: originLabel,
       appScore: hourForecast ? hourForecast.hourScore : "",
       appOlas: hourForecast ? hourForecast.swellH : "",
@@ -3991,6 +4180,8 @@ export default function App() {
       setAdminBoyaTemp('');
       setAdminVientoMs('');
       setAdminWavePropDir('');
+      setAdminSentidoDeriva('none');
+      setAdminAutoLoadStatus(null);
       
       // Esperar 2.5 segundos para dar tiempo a que Google Sheets inserte la fila antes de refrescar el historial
       setTimeout(() => {
@@ -4048,6 +4239,9 @@ export default function App() {
       }
     }
 
+    const derivaSuffix = swimmerSentidoDeriva === 'poniente' ? ' | Deriva: Poniente (Torremolinos)' : swimmerSentidoDeriva === 'levante' ? ' | Deriva: Levante (Puerto)' : '';
+    const sesgoSuffix = swimmerBiasChip === 'over' ? ' | Sesgo: Sobredimensionada' : swimmerBiasChip === 'under' ? ' | Sesgo: Subdimensionada' : swimmerBiasChip === 'accurate' ? ' | Sesgo: Clavada' : '';
+
     const slotId = generateCanonicalSlotId(swimmerPlaya, swimmerFechaNado, swimmerHoraNado);
     const payload = {
       idRegistro: slotId,
@@ -4063,14 +4257,14 @@ export default function App() {
       realVientoDir: "",
       sensaciones: swimmerIsOnlyMessage 
         ? `[Nombre: ${swimmerName.trim() || 'Anónimo'} | Medusas: - | Agua: -] ${swimmerSensaciones}`
-        : `[Nombre: ${swimmerName.trim() || 'Anónimo'} | Medusas: ${swimmerMedusas} | Agua: ${swimmerAgua}] ${swimmerSensaciones}`,
+        : `[Nombre: ${swimmerName.trim() || 'Anónimo'} | Medusas: ${swimmerMedusas} | Agua: ${swimmerAgua}${derivaSuffix}${sesgoSuffix}] ${swimmerSensaciones}`,
       origenDato: swimmerIsOnlyMessage ? "Nadador: Mensaje" : "Nadador: Reporte",
       appScore: hourForecast ? hourForecast.hourScore : "",
       appOlas: hourForecast ? hourForecast.swellH : "",
       appEnergia: hourForecast ? hourForecast.waveEnergy : "",
       appVientoNudos: hourForecast ? hourForecast.windS : "",
       appVientoDir: hourForecast ? hourForecast.windDir : "",
-      notasCalibracion: swimmerIsOnlyMessage ? "Mensaje libre de nadador" : "Reporte público de nadador",
+      notasCalibracion: swimmerIsOnlyMessage ? "Mensaje libre de nadador" : `Reporte público de nadador${derivaSuffix}${sesgoSuffix}`,
       boyaAltura: latestBuoyHeight || ecmwfVal || (hourForecast ? hourForecast.swellH : ""), 
       boyaPeriodo: latestBuoyPeriod || "",
       boyaDireccion: latestBuoyDir || (hourForecast && hourForecast.swellDir ? hourForecast.swellDir : "110"),
@@ -4092,6 +4286,8 @@ export default function App() {
       setSwimmerSensaciones('');
       setSwimmerName('');
       setSwimmerIsOnlyMessage(false);
+      setSwimmerSentidoDeriva('none');
+      setSwimmerBiasChip(null);
       
       setTimeout(() => {
         fetchCalibrationHistory();
@@ -6617,6 +6813,42 @@ export default function App() {
                                 {adminRealOlas === 5 && "5/5 (1.20m) • Muy Duro / Rompiente: Impide nadar con normalidad"}
                               </div>
                             )}
+
+                            {/* Semáforo de Desvío en Vivo (Hito 47) */}
+                            {(() => {
+                              const adminObsWave = swimmerScaleToMeters(adminRealOlas) || 0.45;
+                              const adminAppWave = adminForecast ? adminForecast.swellH : 0.25;
+                              const waveDiff = Math.abs(adminObsWave - adminAppWave);
+                              const waveDiffPct = adminObsWave > 0 ? (waveDiff / adminObsWave) * 100 : 0;
+                              return (
+                                <div className="mt-2 p-2 rounded-xl border flex flex-col gap-1 transition-all bg-white border-slate-200/90 shadow-2xs">
+                                  <div className="flex items-center justify-between text-[10px] font-black">
+                                    <span className="text-slate-600">📊 Previsión app ({adminAppWave.toFixed(2)}m):</span>
+                                    {waveDiff <= 0.10 ? (
+                                      <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                        🟢 Muy precisa (Δ {waveDiff.toFixed(2)}m)
+                                      </span>
+                                    ) : waveDiff <= 0.20 ? (
+                                      <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                        🟡 Desvío moderado (Δ {waveDiff.toFixed(2)}m)
+                                      </span>
+                                    ) : (
+                                      <span className="text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                        🟠 Discrepancia notable (Δ {waveDiff.toFixed(2)}m • {waveDiffPct.toFixed(0)}%)
+                                      </span>
+                                    )}
+                                  </div>
+                                  {waveDiff > 0.20 && (
+                                    <p className="text-[8.5px] text-rose-600 font-bold">
+                                      ⚠️ Al guardar, se enviará automáticamente a la Caja Negra (LOG_ANOMALIAS_ATMOSFERICAS).
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
 
                           <div className="space-y-1">
@@ -6669,6 +6901,41 @@ export default function App() {
                                 {adminRealCorriente === 5 && "5/5 = Deriva extrema"}
                               </div>
                             )}
+
+                            {/* Sentido de la Corriente Admin (Hito 47) */}
+                            <div className="mt-2 pt-2 border-t border-slate-200/60">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[9.5px] font-black text-slate-600 uppercase">🧭 Sentido del arrastre / deriva:</span>
+                                <span className="text-[9px] font-extrabold text-indigo-700">
+                                  {adminSentidoDeriva === 'poniente' && '⬅️ Hacia Poniente (Torremolinos)'}
+                                  {adminSentidoDeriva === 'levante' && '➡️ Hacia Levante (Málaga/Puerto)'}
+                                  {adminSentidoDeriva === 'none' && '⚪ Sin deriva lateral'}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setAdminSentidoDeriva(adminSentidoDeriva === 'poniente' ? 'none' : 'poniente')}
+                                  className={`py-1.5 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer ${adminSentidoDeriva === 'poniente' ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'}`}
+                                >
+                                  ⬅️ Poniente
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAdminSentidoDeriva('none')}
+                                  className={`py-1.5 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer ${adminSentidoDeriva === 'none' ? 'bg-slate-700 text-white border-slate-800 shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'}`}
+                                >
+                                  ⚪ Sin Deriva
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAdminSentidoDeriva(adminSentidoDeriva === 'levante' ? 'none' : 'levante')}
+                                  className={`py-1.5 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer ${adminSentidoDeriva === 'levante' ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'}`}
+                                >
+                                  ➡️ Levante
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -6689,21 +6956,45 @@ export default function App() {
                       {/* --- SECCIÓN ASISTIDA DE BOYA REAL (PORTUS + CONVERSORES) (MODOS A Y B) --- */}
                       {adminReportMode !== 'alert' && (
                         <div className="bg-gradient-to-br from-blue-50/70 to-indigo-50/40 p-3.5 rounded-2xl border border-blue-200/70 space-y-3 text-left shadow-xs">
-                          <div className="flex justify-between items-center">
+                          <div className="flex flex-wrap items-center justify-between gap-1.5">
                             <div className="flex items-center gap-1.5">
                               <Anchor size={14} className="text-blue-600 shrink-0" />
                               <span className="text-[10px] font-black text-blue-800 uppercase tracking-wider">
                                 ⚓ Datos de Boya Real Portus (Málaga 2056)
                               </span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => setShowAdminPortusWidget(!showAdminPortusWidget)}
-                              className="text-[9px] font-black bg-white hover:bg-blue-50 text-blue-700 border border-blue-300 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
-                            >
-                              {showAdminPortusWidget ? '▲ Ocultar Portus' : '👁️ Ver Widget Portus'}
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={handleAdminAutoFillBuoy}
+                                className="text-[9px] font-black bg-blue-600 hover:bg-blue-700 text-white border border-blue-700 px-2 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                                title="Auto-rellena altura, periodo, temperatura y viento con la lectura oficial de la Boya para esa hora"
+                              >
+                                <Zap size={11} className="text-amber-300" />
+                                <span>⚡ Cargar Datos Oficiales</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setShowAdminPortusWidget(!showAdminPortusWidget)}
+                                className="text-[9px] font-black bg-white hover:bg-blue-50 text-blue-700 border border-blue-300 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                              >
+                                {showAdminPortusWidget ? '▲ Ocultar' : '👁️ Ver Portus'}
+                              </button>
+                            </div>
                           </div>
+
+                          {/* FEEDBACK STATUS DE CARGA ASISTIDA */}
+                          {adminAutoLoadStatus && (
+                            <div className={`p-2 rounded-xl text-[10px] font-bold border transition-all animate-in fade-in duration-150 ${
+                              adminAutoLoadStatus.type === 'success' 
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300' 
+                                : adminAutoLoadStatus.type === 'info' 
+                                  ? 'bg-blue-50 text-blue-800 border-blue-300' 
+                                  : 'bg-amber-50 text-amber-800 border-amber-300'
+                            }`}>
+                              {adminAutoLoadStatus.text}
+                            </div>
+                          )}
 
                           {/* VISOR PLEGABLE PORTUS EN VIVO */}
                           {showAdminPortusWidget && (
@@ -9797,6 +10088,47 @@ export default function App() {
                         {swimmerRealOlas === 5 && "5/5 (1.20m) • Muy Duro / Rompiente: Impide nadar con normalidad"}
                       </div>
                     )}
+
+                    {/* Previsión Contextual + Micro-chips de Sesgo Rápido (Hito 47) */}
+                    <div className="mt-2 p-2 rounded-xl bg-blue-50/70 border border-blue-200/60 flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-blue-900">
+                        <span className="flex items-center gap-1">
+                          💡 <span>La app preveía para esa hora:</span>
+                        </span>
+                        <span className="font-black text-blue-700 bg-white px-2 py-0.5 rounded-full border border-blue-200 shadow-2xs">
+                          {swimmerForecast ? `${swimmerForecast.swellH.toFixed(2)} m` : '0.25 m'}
+                        </span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pt-1 border-t border-blue-200/50">
+                        <span className="text-[9px] font-bold text-slate-500">¿Cómo la viste respecto a la previsión?</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setSwimmerBiasChip(swimmerBiasChip === 'over' ? null : 'over')}
+                            className={`px-2 py-0.5 rounded-lg text-[9px] font-black transition-all border cursor-pointer ${swimmerBiasChip === 'over' ? 'bg-amber-600 text-white border-amber-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-amber-50 border-slate-200'}`}
+                            title="La app daba más ola de la que realmente había"
+                          >
+                            📈 Sobredimensionada
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSwimmerBiasChip(swimmerBiasChip === 'accurate' ? null : 'accurate')}
+                            className={`px-2 py-0.5 rounded-lg text-[9px] font-black transition-all border cursor-pointer ${swimmerBiasChip === 'accurate' ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-emerald-50 border-slate-200'}`}
+                            title="La altura coincidía exactamente con lo previsto"
+                          >
+                            🎯 Clavada
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSwimmerBiasChip(swimmerBiasChip === 'under' ? null : 'under')}
+                            className={`px-2 py-0.5 rounded-lg text-[9px] font-black transition-all border cursor-pointer ${swimmerBiasChip === 'under' ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'}`}
+                            title="Había más ola de la que marcaba la app"
+                          >
+                            📉 Subdimensionada
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Resaca */}
@@ -9851,6 +10183,41 @@ export default function App() {
                         {swimmerRealCorriente === 5 && "5/5 = Corriente extrema"}
                       </div>
                     )}
+
+                    {/* Sentido de la Corriente Swimmer (Hito 47) */}
+                    <div className="mt-2 pt-2 border-t border-slate-200/60">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[9.5px] font-black text-slate-600 uppercase">🧭 Sentido del arrastre / deriva:</span>
+                        <span className="text-[9px] font-extrabold text-indigo-700">
+                          {swimmerSentidoDeriva === 'poniente' && '⬅️ Hacia Poniente (Torremolinos)'}
+                          {swimmerSentidoDeriva === 'levante' && '➡️ Hacia Levante (Málaga/Puerto)'}
+                          {swimmerSentidoDeriva === 'none' && '⚪ Sin deriva lateral'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setSwimmerSentidoDeriva(swimmerSentidoDeriva === 'poniente' ? 'none' : 'poniente')}
+                          className={`py-1.5 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer ${swimmerSentidoDeriva === 'poniente' ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'}`}
+                        >
+                          ⬅️ Poniente
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSwimmerSentidoDeriva('none')}
+                          className={`py-1.5 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer ${swimmerSentidoDeriva === 'none' ? 'bg-slate-700 text-white border-slate-800 shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'}`}
+                        >
+                          ⚪ Sin Deriva
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSwimmerSentidoDeriva(swimmerSentidoDeriva === 'levante' ? 'none' : 'levante')}
+                          className={`py-1.5 px-1 rounded-xl text-[9.5px] font-black transition-all border text-center cursor-pointer ${swimmerSentidoDeriva === 'levante' ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs' : 'bg-white text-slate-600 hover:bg-indigo-50 border-slate-200'}`}
+                        >
+                          ➡️ Levante
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Medusas */}
