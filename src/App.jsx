@@ -2360,6 +2360,55 @@ export default function App() {
   const swimmerForecast = useMemo(() => getForecastForSlot(swimmerPlaya, swimmerFechaNado, swimmerHoraNado, beachData, comparisonForecast, selectedBeach), [swimmerPlaya, swimmerFechaNado, swimmerHoraNado, beachData, comparisonForecast, selectedBeach]);
   const adminForecast = useMemo(() => getForecastForSlot(adminPlaya, adminFechaNado, adminHoraNado, beachData, comparisonForecast, selectedBeach), [adminPlaya, adminFechaNado, adminHoraNado, beachData, comparisonForecast, selectedBeach]);
 
+  // Telemetría activa resuelta de Boya y Estación Meteorológica (Fail-safe contra lecturas parciales / lags de publicación)
+  const activeBuoyReading = useMemo(() => {
+    // 1. Prioridad: portusRealData si tiene altura válida y no es parcial
+    if (portusRealData && portusRealData.altura !== null && portusRealData.altura !== undefined && portusRealData.altura !== '' && !String(portusRealData.altura).toLowerCase().includes('parcial')) {
+      return {
+        altura: Number(String(portusRealData.altura).replace(',', '.')),
+        periodo: portusRealData.periodoPico || portusRealData.periodoMedio || null,
+        dirOleaje: portusRealData.dirOleaje !== null && portusRealData.dirOleaje !== undefined && portusRealData.dirOleaje !== '' ? Number(portusRealData.dirOleaje) : null,
+        tempAgua: portusRealData.tempAgua !== null && portusRealData.tempAgua !== undefined && portusRealData.tempAgua !== '' ? Number(String(portusRealData.tempAgua).replace(',', '.')) : null,
+        vientoNudos: portusRealData.vientoNudos !== null && portusRealData.vientoNudos !== undefined && portusRealData.vientoNudos !== '' ? Number(portusRealData.vientoNudos) : null,
+        vientoMs: portusRealData.vientoMs !== null && portusRealData.vientoMs !== undefined && portusRealData.vientoMs !== '' ? Number(portusRealData.vientoMs) : null,
+        dirViento: portusRealData.dirViento,
+        horaStr: portusRealData.hora || portusRealData.fechaHora || '',
+        fuente: '📡 Boya 1514 + Dique 4505 (En vivo)'
+      };
+    }
+    // 2. Si portusRealData fue parcial o sin altura, buscar en boyaRealHourlyHistory el registro con oleaje válido más reciente
+    if (boyaRealHourlyHistory && boyaRealHourlyHistory.length > 0) {
+      for (let i = boyaRealHourlyHistory.length - 1; i >= 0; i--) {
+        const item = boyaRealHourlyHistory[i];
+        if (item && item.altura !== null && item.altura !== undefined && item.altura !== '' && !isNaN(Number(String(item.altura).replace(',', '.')))) {
+          return {
+            altura: Number(String(item.altura).replace(',', '.')),
+            periodo: item.periodoPico || item.periodoMedio || null,
+            dirOleaje: item.dirOleaje !== null && item.dirOleaje !== undefined && item.dirOleaje !== '' ? Number(item.dirOleaje) : null,
+            tempAgua: item.tempAgua !== null && item.tempAgua !== undefined && item.tempAgua !== '' ? Number(String(item.tempAgua).replace(',', '.')) : null,
+            vientoNudos: portusRealData?.vientoNudos || item.vientoNudos || null,
+            vientoMs: portusRealData?.vientoMs || item.vientoMs || null,
+            dirViento: portusRealData?.dirViento || item.dirViento || null,
+            horaStr: item.hora || item.fechaHora || '',
+            fuente: '📡 Boya 1514 + Dique 4505'
+          };
+        }
+      }
+    }
+    // 3. Fallback a calibraciones manuales previas sólo si no existe telemetría real
+    return {
+      altura: latestBuoyHeight ? Number(String(latestBuoyHeight).replace(',', '.')) : null,
+      periodo: latestBuoyPeriod ? Number(latestBuoyPeriod) : null,
+      dirOleaje: latestBuoyDir !== null && latestBuoyDir !== undefined ? Number(latestBuoyDir) : null,
+      tempAgua: latestBuoyTemp ? Number(String(latestBuoyTemp).replace(',', '.')) : null,
+      vientoNudos: latestBuoyWindSpeed ? Number(String(latestBuoyWindSpeed).replace(/[^0-9.]/g, '')) : null,
+      vientoMs: null,
+      dirViento: latestBuoyWindDir,
+      horaStr: latestBuoyDate ? formatFriendlyDate(latestBuoyDate) : '',
+      fuente: latestBuoySource || 'Calibración previa'
+    };
+  }, [portusRealData, boyaRealHourlyHistory, latestBuoyHeight, latestBuoyPeriod, latestBuoyDir, latestBuoyTemp, latestBuoyWindSpeed, latestBuoyWindDir, latestBuoyDate, latestBuoySource]);
+
   // Helper para interpretar marcas de tiempo de logs en diversos formatos, priorizando la fecha y hora REAL de la sesión
   function parseLogTimestamp(log) {
     if (!log) return 0;
@@ -4801,39 +4850,36 @@ export default function App() {
                       <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Altura Olas (Hm0)</span>
                         <strong className="text-lg font-black text-cyan-300 block mt-0.5">
-                          {portusRealData && portusRealData.altura !== null && portusRealData.altura !== undefined && portusRealData.altura !== ''
-                            ? `${Number(portusRealData.altura).toFixed(2)}m`
-                            : (latestBuoyHeight ? `${Number(latestBuoyHeight.toString().replace(",", ".")).toFixed(2)}m` : '—')}
+                          {activeBuoyReading && activeBuoyReading.altura !== null
+                            ? `${activeBuoyReading.altura.toFixed(2)}m`
+                            : '—'}
                         </strong>
                       </div>
 
                       <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Periodo (Tp / Tm)</span>
                         <strong className="text-lg font-black text-indigo-300 block mt-0.5">
-                          {portusRealData && portusRealData.periodoPico
-                            ? `${portusRealData.periodoPico}s`
-                            : (latestBuoyPeriod ? `${latestBuoyPeriod}s` : '—')}
+                          {activeBuoyReading && activeBuoyReading.periodo
+                            ? `${activeBuoyReading.periodo}s`
+                            : '—'}
                         </strong>
                       </div>
 
                       <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Dirección Oleaje</span>
                         <strong className="text-xs font-extrabold text-amber-300 block mt-1 truncate">
-                          {(() => {
-                            const dir = portusRealData && portusRealData.dirOleaje !== null && portusRealData.dirOleaje !== undefined && portusRealData.dirOleaje !== ''
-                              ? Number(portusRealData.dirOleaje)
-                              : (latestBuoyDir !== null && latestBuoyDir !== undefined ? Number(latestBuoyDir) : null);
-                            return dir !== null ? `${getWindDirection(dir)} (${Math.round(dir)}°)` : '—';
-                          })()}
+                          {activeBuoyReading && activeBuoyReading.dirOleaje !== null
+                            ? `${getWindDirection(activeBuoyReading.dirOleaje)} (${Math.round(activeBuoyReading.dirOleaje)}°)`
+                            : '—'}
                         </strong>
                       </div>
 
                       <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/70">
                         <span className="text-[9px] font-bold text-slate-400 uppercase block">Temp. Agua Real</span>
                         <strong className="text-xs font-extrabold text-emerald-300 block mt-1">
-                          {portusRealData && portusRealData.tempAgua !== null && portusRealData.tempAgua !== undefined && portusRealData.tempAgua !== ''
-                            ? `${portusRealData.tempAgua}°C`
-                            : (latestBuoyTemp ? `${latestBuoyTemp}°C` : '—')}
+                          {activeBuoyReading && activeBuoyReading.tempAgua !== null
+                            ? `${activeBuoyReading.tempAgua}°C`
+                            : '—'}
                         </strong>
                       </div>
 
@@ -4846,12 +4892,12 @@ export default function App() {
                           <div className="truncate">
                             <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Viento Dique Levante</span>
                             <strong className="text-xs font-black text-cyan-300 block truncate">
-                              {portusRealData && portusRealData.vientoNudos !== null && portusRealData.vientoNudos !== undefined && portusRealData.vientoNudos !== ''
-                                ? `${portusRealData.vientoNudos} kts (${portusRealData.vientoMs || Math.round(portusRealData.vientoNudos / 1.944 * 10)/10} m/s)`
-                                : (latestBuoyWindSpeed || '—')}
-                              {portusRealData && portusRealData.dirViento
-                                ? ` · ${getWindDirection(Number(portusRealData.dirViento))} (${Math.round(Number(portusRealData.dirViento))}°)`
-                                : (latestBuoyWindDir ? ` · ${latestBuoyWindDir}` : '')}
+                              {activeBuoyReading && activeBuoyReading.vientoNudos !== null
+                                ? `${activeBuoyReading.vientoNudos} kts (${activeBuoyReading.vientoMs ? activeBuoyReading.vientoMs : Math.round(activeBuoyReading.vientoNudos / 1.944 * 10)/10} m/s)`
+                                : '—'}
+                              {activeBuoyReading && activeBuoyReading.dirViento
+                                ? ` · ${getWindDirection(Number(activeBuoyReading.dirViento))} (${Math.round(Number(activeBuoyReading.dirViento))}°)`
+                                : ''}
                             </strong>
                           </div>
                         </div>
@@ -4864,20 +4910,15 @@ export default function App() {
 
                   <div className="flex justify-between items-center text-[9px] text-slate-400 pt-1 border-t border-cyan-800/40">
                     <span className="truncate">
-                      Origen: {showPuertosIframe ? '📡 Puertos del Estado (Estación 2056 - Málaga)' : '📡 Boya 1514 + Dique 4505'}
+                      Origen: {showPuertosIframe ? '📡 Puertos del Estado (Estación 2056 - Málaga)' : activeBuoyReading?.fuente || '📡 Boya 1514 + Dique 4505'}
                     </span>
                     <span className="shrink-0 font-medium text-slate-300">
                       Última lectura: {(() => {
-                        if (!portusRealData) return (latestBuoyDate ? `${formatFriendlyDate(latestBuoyDate)}` : 'Hoy, 08:00h');
-                        const h = String(portusRealData.hora || portusRealData.fechaHora || '');
-                        if (h.includes('T')) {
-                          const timePart = h.split('T')[1].substring(0, 5);
-                          return `Hoy, ${timePart}h`;
-                        }
-                        if (h.includes(':')) {
-                          return `Hoy, ${h.substring(0, 5)}h`;
-                        }
-                        return `Hoy, ${h || '08:00h'}`;
+                        const rawH = activeBuoyReading?.horaStr || '';
+                        if (!rawH) return 'Hoy, 08:00h';
+                        if (rawH.includes('T')) return `Hoy, ${rawH.split('T')[1].substring(0, 5)}h`;
+                        if (rawH.includes(':')) return `Hoy, ${rawH.substring(0, 5)}h`;
+                        return `Hoy, ${rawH}`;
                       })()}
                     </span>
                   </div>
