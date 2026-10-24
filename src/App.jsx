@@ -2234,10 +2234,6 @@ export default function App() {
   const [adminAlertSeverity, setAdminAlertSeverity] = useState('warning'); // 'warning' | 'danger' | 'info'
   const [visibleReportsCount, setVisibleReportsCount] = useState(3);
 
-  // Pronóstico contextual reactivo para los formularios de reporte (Hito 47)
-  const swimmerForecast = useMemo(() => getForecastForSlot(swimmerPlaya, swimmerFechaNado, swimmerHoraNado, beachData, comparisonForecast, selectedBeach), [swimmerPlaya, swimmerFechaNado, swimmerHoraNado, beachData, comparisonForecast, selectedBeach]);
-  const adminForecast = useMemo(() => getForecastForSlot(adminPlaya, adminFechaNado, adminHoraNado, beachData, comparisonForecast, selectedBeach), [adminPlaya, adminFechaNado, adminHoraNado, beachData, comparisonForecast, selectedBeach]);
-
   // Previsiones detalladas (comparador)
   const [comparisonForecast, setComparisonForecast] = useState(null);
   const [isCompLoading, setIsCompLoading] = useState(false);
@@ -2360,6 +2356,9 @@ export default function App() {
     setChartLayers(prev => ({ ...prev, [layerKey]: !prev[layerKey] }));
   };
 
+  // Pronóstico contextual reactivo para los formularios de reporte (Hito 47)
+  const swimmerForecast = useMemo(() => getForecastForSlot(swimmerPlaya, swimmerFechaNado, swimmerHoraNado, beachData, comparisonForecast, selectedBeach), [swimmerPlaya, swimmerFechaNado, swimmerHoraNado, beachData, comparisonForecast, selectedBeach]);
+  const adminForecast = useMemo(() => getForecastForSlot(adminPlaya, adminFechaNado, adminHoraNado, beachData, comparisonForecast, selectedBeach), [adminPlaya, adminFechaNado, adminHoraNado, beachData, comparisonForecast, selectedBeach]);
 
   // Helper para interpretar marcas de tiempo de logs en diversos formatos, priorizando la fecha y hora REAL de la sesión
   function parseLogTimestamp(log) {
