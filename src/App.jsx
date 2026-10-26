@@ -1900,12 +1900,12 @@ function PushNotificationModal({
 
   const handleSendRealCloudPushTest = async () => {
     setTestLoading(true);
-    setStatusMessage({ type: 'info', text: 'ðŸ“¡ Enviando alerta real por Vercel y Google FCM a este dispositivo...' });
+    setStatusMessage({ type: 'info', text: '📡 Enviando alerta real por Vercel y Google FCM a este dispositivo...' });
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (!sub) {
-        setStatusMessage({ type: 'error', text: 'No se encontrÃ³ suscripciÃ³n activa en este navegador. Pulsa Activar Alertas.' });
+        setStatusMessage({ type: 'error', text: 'No se encontró suscripción activa en este navegador. Pulsa Activar Alertas.' });
         return;
       }
       const subJson = sub.toJSON();
@@ -1918,8 +1918,8 @@ function PushNotificationModal({
           }
         }],
         payload: {
-          title: 'ðŸŒŠ Prueba Real por la Nube (FCM)',
-          body: 'âœ¨ Â¡ConexiÃ³n con Vercel y Google FCM 100% verificada! Tu dispositivo recibe alertas en la nube.',
+          title: '🌊 Prueba Real por la Nube (FCM)',
+          body: '✨ ¡Conexión con Vercel y Google FCM 100% verificada! Tu dispositivo recibe alertas en la nube.',
           icon: '/icon-192.png',
           badge: '/badge-72.png',
           url: '/'
@@ -1936,13 +1936,13 @@ function PushNotificationModal({
       if (data.sent > 0) {
         setStatusMessage({ 
           type: 'success', 
-          text: 'âœ… Â¡Entrega confirmada por Google FCM! La notificaciÃ³n ha sido despachada por la nube a tu dispositivo.' 
+          text: '✅ ¡Entrega confirmada por Google FCM! La notificación ha sido despachada por la nube a tu dispositivo.' 
         });
       } else {
         const errDetail = data.errors?.[0]?.error || (data.deadEndpoints?.length > 0 ? 'Clave caducada (HTTP 410 Gone)' : 'Error en servidor de notificaciones');
         setStatusMessage({ 
           type: 'error', 
-          text: âŒ Google FCM rechazÃ³ tu suscripciÃ³n: . Pulsa "Desactivar Alertas" y vuelve a "Activar" para regenerar tu clave. 
+          text: '❌ Google FCM rechazó tu suscripción: ' + errDetail + '. Pulsa "Desactivar Alertas" y vuelve a "Activar" para regenerar tu clave.' 
         });
       }
     } catch (err) {
@@ -2101,31 +2101,31 @@ function PushNotificationModal({
                     onClick={handleSendRealCloudPushTest}
                     disabled={testLoading}
                     className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-all shadow-sm"
-                    title="EnvÃ­a una notificaciÃ³n real a travÃ©s de Vercel y Google FCM para comprobar que este dispositivo estÃ¡ 100% conectado"
+                    title="Envía una notificación real a través de Vercel y Google FCM para comprobar que este dispositivo está 100% conectado"
                   >
                     {testLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                    <span>ðŸ§ª Probar EnvÃ­o Real por la Nube (FCM)</span>
+                    <span>🧪 Probar Envío Real por la Nube (FCM)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSendTestNotification(5)}
                     disabled={testLoading}
                     className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors border border-slate-200"
-                    title="Pulsa aquÃ­ y bloquea tu mÃ³vil inmediatamente para probar en reposo"
+                    title="Pulsa aquí y bloquea tu móvil inmediatamente para probar en reposo"
                   >
-                    <span>â±ï¸ Probar Local en 5s (Bloquea mÃ³vil para comprobar pantalla)</span>
+                    <span>⏱️ Probar Local en 5s (Bloquea móvil para comprobar pantalla)</span>
                   </button>
                 </div>
 
                 {/* Ayuda para pantalla de bloqueo y sonido */}
                 <div className="p-3 bg-amber-50/80 border border-amber-200/90 rounded-2xl text-[11px] text-amber-950 space-y-1 mt-1">
                   <div className="flex items-center gap-1 font-black text-amber-900">
-                    <span>ðŸ’¡ Â¿No suena o no enciende la pantalla al estar bloqueado?</span>
+                    <span>💡 ¿No suena o no enciende la pantalla al estar bloqueado?</span>
                   </div>
                   <ul className="list-disc pl-4 space-y-0.5 text-slate-600">
-                    <li><strong>Android:</strong> MantÃ©n pulsado el icono de Chrome &gt; <em>Info de app</em> &gt; <em>Notificaciones</em> &gt; <em>Alertas</em> &gt; Activa <strong>"Emergente en pantalla"</strong> y <strong>"Permitir sonido"</strong>.</li>
-                    <li><strong>PC (Windows):</strong> Comprueba que no tienes activo el modo <em>"No molestar / Asistente de concentraciÃ³n"</em> junto al reloj.</li>
-                    <li><strong>iPhone:</strong> Debes aÃ±adir la web a la pantalla de inicio desde Safari (<em>Compartir &gt; AÃ±adir a pantalla de inicio</em>).</li>
+                    <li><strong>Android:</strong> Mantén pulsado el icono de Chrome &gt; <em>Info de app</em> &gt; <em>Notificaciones</em> &gt; <em>Alertas</em> &gt; Activa <strong>"Emergente en pantalla"</strong> y <strong>"Permitir sonido"</strong>.</li>
+                    <li><strong>PC (Windows):</strong> Comprueba que no tienes activo el modo <em>"No molestar / Asistente de concentración"</em> junto al reloj.</li>
+                    <li><strong>iPhone:</strong> Debes añadir la web a la pantalla de inicio desde Safari (<em>Compartir &gt; Añadir a pantalla de inicio</em>).</li>
                   </ul>
                 </div>
 
