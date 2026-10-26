@@ -2,15 +2,25 @@
 // Despachador Serverless Vercel de Notificaciones Web Push (VAPID)
 import webpush from 'web-push';
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BBd2zgCtf2M_SnXfMy4WC6QScpQEt1R2317LqJiAWQbc19LBSIXcSsxLgRoZiNwz2ZNTw0JedEFnxuPRTVBWKh0";
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+const KNOWN_PUBLIC_KEY = "BBd2zgCtf2M_SnXfMy4WC6QScpQEt1R2317LqJiAWQbc19LBSIXcSsxLgRoZiNwz2ZNTw0JedEFnxuPRTVBWKh0";
+const KNOWN_PRIVATE_KEY = "zxjVf1yI590sCkQoBZGwpt0_gY-JzdQnG_LukMdfBsw";
+
+// Clave pública activa
+const VAPID_PUBLIC_KEY = (process.env.VAPID_PUBLIC_KEY || KNOWN_PUBLIC_KEY).trim();
+
+// Si la clave pública es la estándar de la app, garantizamos su clave privada matemáticamente emparejada.
+// Si se configuró otra pública en Vercel, usamos la privada del entorno.
+const VAPID_PRIVATE_KEY = (VAPID_PUBLIC_KEY === KNOWN_PUBLIC_KEY)
+  ? KNOWN_PRIVATE_KEY
+  : ((process.env.VAPID_PRIVATE_KEY || '').trim().replace(/^["']|["']$/g, '') || KNOWN_PRIVATE_KEY);
+
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:contacto@openwatertracker.es";
 
 let vapidConfigured = false;
 function ensureVapidConfig() {
   if (!vapidConfigured) {
     if (!VAPID_PRIVATE_KEY) {
-      throw new Error('Falta la variable de entorno secreta VAPID_PRIVATE_KEY en Vercel (Project Settings > Environment Variables).');
+      throw new Error('Falta la variable de entorno secreta VAPID_PRIVATE_KEY en Vercel.');
     }
     webpush.setVapidDetails(
       VAPID_SUBJECT,
@@ -32,8 +42,7 @@ export default async function handler(req, res) {
   );
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
@@ -75,9 +84,18 @@ export default async function handler(req, res) {
     results.forEach((r, idx) => {
       if (r.status === 'rejected') {
         const statusCode = r.reason?.statusCode || 500;
-        const msg = r.reason?.message || String(r.reason);
+        const rawBody = r.reason?.body;
+        const bodyStr = typeof rawBody === 'string' ? rawBody : (rawBody ? JSON.stringify(rawBody) : '');
         const ep = subscriptions[idx]?.endpoint || '';
-        failedDetails.push({ endpoint: ep, statusCode, error: msg });
+        
+        let errorDesc = `HTTP ${statusCode}`;
+        if (bodyStr) {
+          errorDesc += `: ${bodyStr}`;
+        } else if (r.reason?.message) {
+          errorDesc += `: ${r.reason.message}`;
+        }
+
+        failedDetails.push({ endpoint: ep, statusCode, error: errorDesc });
         if (statusCode === 410 || statusCode === 404) {
           deadEndpoints.push(ep);
         }
