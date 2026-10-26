@@ -2,7 +2,7 @@
 // Despachador Serverless Vercel de Notificaciones Web Push (VAPID)
 import webpush from 'web-push';
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BLrS1Zj7HbR_gN6sq9cWLgvcNOTpS5ECBGBQd65teg3VoZGRVnVvMNRvn_WRP0PsKgjKCa147lC6ZxBPskbimW4";
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BBd2zgCtf2M_SnXfMy4WC6QScpQEt1R2317LqJiAWQbc19LBSIXcSsxLgRoZiNwz2ZNTw0JedEFnxuPRTVBWKh0";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:contacto@openwatertracker.es";
 
@@ -69,11 +69,32 @@ export default async function handler(req, res) {
     const sent = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.filter(r => r.status === 'rejected').length;
 
+    const failedDetails = [];
+    const deadEndpoints = [];
+
+    results.forEach((r, idx) => {
+      if (r.status === 'rejected') {
+        const statusCode = r.reason?.statusCode || 500;
+        const msg = r.reason?.message || String(r.reason);
+        const ep = subscriptions[idx]?.endpoint || '';
+        failedDetails.push({ endpoint: ep, statusCode, error: msg });
+        if (statusCode === 410 || statusCode === 404) {
+          deadEndpoints.push(ep);
+        }
+      }
+    });
+
+    if (failedDetails.length > 0) {
+      console.warn(`[Vercel SendPush] ${failed} fallos de entrega detectados:`, JSON.stringify(failedDetails));
+    }
+
     return res.status(200).json({
       success: true,
       sent,
       failed,
-      total: subscriptions.length
+      total: subscriptions.length,
+      deadEndpoints,
+      errors: failedDetails.slice(0, 10)
     });
   } catch (error) {
     console.error('Error enviando web push:', error);
