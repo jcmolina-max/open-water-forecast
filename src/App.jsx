@@ -1939,10 +1939,19 @@ function PushNotificationModal({
           text: '✅ ¡Entrega confirmada por Google FCM! La notificación ha sido despachada por la nube a tu dispositivo.' 
         });
       } else {
-        const errDetail = data.errors?.[0]?.error || (data.deadEndpoints?.length > 0 ? 'Clave caducada (HTTP 410 Gone)' : 'Error en servidor de notificaciones');
-        setStatusMessage({ 
-          type: 'error', 
-          text: '❌ Google FCM rechazó tu suscripción: ' + errDetail + '. Pulsa "Desactivar Alertas" y vuelve a "Activar" para regenerar tu clave.' 
+        const errObj = data.errors?.[0];
+        const statusCode = errObj?.statusCode;
+        let errDetail = errObj?.error || (data.deadEndpoints?.length > 0 ? "Clave caducada (HTTP 410 Gone)" : (data.error || "Error en servidor de notificaciones"));
+
+        if (statusCode === 410 || statusCode === 404) {
+          errDetail = "Tu suscripci\u00F3n previa en Google FCM estaba caducada (HTTP 410). Pulsa abajo en \"Desactivar Alertas\" y luego \"Activar\" para renovar tu token.";
+        } else if (statusCode === 401) {
+          errDetail = "Error de autorizaci\u00F3n VAPID (HTTP 401 Unauthorized): Las claves VAPID no coinciden con Google FCM.";
+        }
+
+        setStatusMessage({
+          type: "error",
+          text: "\u274C Google FCM rechaz\u00F3 tu suscripci\u00F3n: " + errDetail
         });
       }
     } catch (err) {
