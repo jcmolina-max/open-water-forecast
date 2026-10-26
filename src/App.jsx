@@ -1898,6 +1898,60 @@ function PushNotificationModal({
     }, delaySeconds * 1000);
   };
 
+  const handleSendRealCloudPushTest = async () => {
+    setTestLoading(true);
+    setStatusMessage({ type: 'info', text: 'ðŸ“¡ Enviando alerta real por Vercel y Google FCM a este dispositivo...' });
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        setStatusMessage({ type: 'error', text: 'No se encontrÃ³ suscripciÃ³n activa en este navegador. Pulsa Activar Alertas.' });
+        return;
+      }
+      const subJson = sub.toJSON();
+      const payload = {
+        subscriptions: [{
+          endpoint: sub.endpoint,
+          keys: {
+            p256dh: subJson.keys?.p256dh || '',
+            auth: subJson.keys?.auth || ''
+          }
+        }],
+        payload: {
+          title: 'ðŸŒŠ Prueba Real por la Nube (FCM)',
+          body: 'âœ¨ Â¡ConexiÃ³n con Vercel y Google FCM 100% verificada! Tu dispositivo recibe alertas en la nube.',
+          icon: '/icon-192.png',
+          badge: '/badge-72.png',
+          url: '/'
+        }
+      };
+
+      const res = await fetch('/api/send-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (data.sent > 0) {
+        setStatusMessage({ 
+          type: 'success', 
+          text: 'âœ… Â¡Entrega confirmada por Google FCM! La notificaciÃ³n ha sido despachada por la nube a tu dispositivo.' 
+        });
+      } else {
+        const errDetail = data.errors?.[0]?.error || (data.deadEndpoints?.length > 0 ? 'Clave caducada (HTTP 410 Gone)' : 'Error en servidor de notificaciones');
+        setStatusMessage({ 
+          type: 'error', 
+          text: âŒ Google FCM rechazÃ³ tu suscripciÃ³n: . Pulsa "Desactivar Alertas" y vuelve a "Activar" para regenerar tu clave. 
+        });
+      }
+    } catch (err) {
+      setStatusMessage({ type: 'error', text: 'Error contactando con el despachador de Vercel: ' + err.message });
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -2041,31 +2095,45 @@ function PushNotificationModal({
               </button>
             ) : (
               <div className="flex-1 flex flex-col gap-2">
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col gap-2">
                   <button
                     type="button"
-                    onClick={() => handleSendTestNotification(0)}
+                    onClick={handleSendRealCloudPushTest}
                     disabled={testLoading}
-                    className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
+                    className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-all shadow-sm"
+                    title="EnvÃ­a una notificaciÃ³n real a travÃ©s de Vercel y Google FCM para comprobar que este dispositivo estÃ¡ 100% conectado"
                   >
                     {testLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                    <span>Probar Ahora</span>
+                    <span>ðŸ§ª Probar EnvÃ­o Real por la Nube (FCM)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSendTestNotification(5)}
                     disabled={testLoading}
-                    className="flex-1 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
-                    title="Pulsa aquí y bloquea tu móvil inmediatamente para probar en reposo"
+                    className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors border border-slate-200"
+                    title="Pulsa aquÃ­ y bloquea tu mÃ³vil inmediatamente para probar en reposo"
                   >
-                    <span>⏱️ Probar en 5s (Bloquea móvil)</span>
+                    <span>â±ï¸ Probar Local en 5s (Bloquea mÃ³vil para comprobar pantalla)</span>
                   </button>
                 </div>
+
+                {/* Ayuda para pantalla de bloqueo y sonido */}
+                <div className="p-3 bg-amber-50/80 border border-amber-200/90 rounded-2xl text-[11px] text-amber-950 space-y-1 mt-1">
+                  <div className="flex items-center gap-1 font-black text-amber-900">
+                    <span>ðŸ’¡ Â¿No suena o no enciende la pantalla al estar bloqueado?</span>
+                  </div>
+                  <ul className="list-disc pl-4 space-y-0.5 text-slate-600">
+                    <li><strong>Android:</strong> MantÃ©n pulsado el icono de Chrome &gt; <em>Info de app</em> &gt; <em>Notificaciones</em> &gt; <em>Alertas</em> &gt; Activa <strong>"Emergente en pantalla"</strong> y <strong>"Permitir sonido"</strong>.</li>
+                    <li><strong>PC (Windows):</strong> Comprueba que no tienes activo el modo <em>"No molestar / Asistente de concentraciÃ³n"</em> junto al reloj.</li>
+                    <li><strong>iPhone:</strong> Debes aÃ±adir la web a la pantalla de inicio desde Safari (<em>Compartir &gt; AÃ±adir a pantalla de inicio</em>).</li>
+                  </ul>
+                </div>
+
                 <button
                   type="button"
                   onClick={handleUnsubscribe}
                   disabled={loading || testLoading}
-                  className="w-full py-2 px-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-500 rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors border border-slate-200"
+                  className="w-full py-2 px-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-500 rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors border border-slate-200 mt-1"
                 >
                   <BellOff size={14} />
                   <span>Desactivar Alertas en este dispositivo</span>
