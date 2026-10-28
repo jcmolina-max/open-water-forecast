@@ -1787,13 +1787,20 @@ function PushNotificationModal({
       const reg = await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
 
-      if (!sub) {
-        const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: convertedKey
-        });
+      // Cancelar suscripciÃ³n previa si existÃ­a para forzar renovaciÃ³n limpia emparejada con la clave VAPID actual
+      if (sub) {
+        try {
+          await sub.unsubscribe();
+        } catch (unsubErr) {
+          console.warn("Aviso al cancelar suscripciÃ³n push previa:", unsubErr);
+        }
       }
+
+      const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedKey
+      });
 
       const subJson = sub.toJSON();
 
@@ -10698,7 +10705,7 @@ export default function App() {
                     placeholder={swimmerIsOnlyMessage ? "Ej. '¿Quién se apunta a nadar a las 19:00?' o 'Mar de fondo fuerte, precaución hoy...'" : "Ej. 'El agua estaba plato pero fría, no hay medusas hoy...'"}
                     required={swimmerIsOnlyMessage}
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-blue-500"
-                    maxLength={350}
+                    maxLength={1500}
                   />
                 </div>
 
