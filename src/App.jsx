@@ -46,13 +46,13 @@ import {
 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
-// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 47 - Triangulación Continua y Enriquecimiento Ergonómico)
+// CONTROL DE VERSIÓN Y HITO ACTIVO EN CÓDIGO (Hito 48 - Triangulación Asimétrica 75/25 y Análisis Cruzado Cuádruple por Hora)
 const APP_BUILD_INFO = {
-  version: "v9.4.47",
-  hito: "HITO_47",
-  nombreHito: "Triangulación Continua y Enriquecimiento Ergonómico de Reportes",
+  version: "v9.4.48",
+  hito: "HITO_48",
+  nombreHito: "Triangulación Asimétrica 75/25 y Análisis Cruzado Cuádruple por Hora",
   rama: "MEJORAS",
-  fechaBuild: "2026-10-24"
+  fechaBuild: "2026-11-01"
 };
 
 const APPS_SCRIPT_WEBHOOK = "https://script.google.com/macros/s/AKfycbxj05C1DArK4ZQyQ16NNXlLnCWVbPdpLMz4TUOXhyA-6IEpALmofqfRzQ3fR7oJBsgd/exec";
@@ -1787,13 +1787,20 @@ function PushNotificationModal({
       const reg = await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
 
-      if (!sub) {
-        const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: convertedKey
-        });
+      // Cancelar suscripciÃ³n previa si existÃ­a para forzar renovaciÃ³n limpia emparejada con la clave VAPID actual
+      if (sub) {
+        try {
+          await sub.unsubscribe();
+        } catch (unsubErr) {
+          console.warn("Aviso al cancelar suscripciÃ³n push previa:", unsubErr);
+        }
       }
+
+      const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedKey
+      });
 
       const subJson = sub.toJSON();
 
@@ -1896,6 +1903,69 @@ function PushNotificationModal({
         setTestLoading(false);
       }
     }, delaySeconds * 1000);
+  };
+
+  const handleSendRealCloudPushTest = async () => {
+    setTestLoading(true);
+    setStatusMessage({ type: 'info', text: '📡 Enviando alerta real por Vercel y Google FCM a este dispositivo...' });
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        setStatusMessage({ type: 'error', text: 'No se encontró suscripción activa en este navegador. Pulsa Activar Alertas.' });
+        return;
+      }
+      const subJson = sub.toJSON();
+      const payload = {
+        subscriptions: [{
+          endpoint: sub.endpoint,
+          keys: {
+            p256dh: subJson.keys?.p256dh || '',
+            auth: subJson.keys?.auth || ''
+          }
+        }],
+        payload: {
+          title: '🌊 Prueba Real por la Nube (FCM)',
+          body: '✨ ¡Conexión con Vercel y Google FCM 100% verificada! Tu dispositivo recibe alertas en la nube.',
+          icon: '/icon-192.png',
+          badge: '/badge-72.png',
+          url: '/'
+        }
+      };
+
+      const res = await fetch('/api/send-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (data.sent > 0) {
+        setStatusMessage({ 
+          type: 'success', 
+          text: '✅ ¡Entrega confirmada por Google FCM! La notificación ha sido despachada por la nube a tu dispositivo.' 
+        });
+      } else {
+        const errObj = data.errors?.[0];
+        const statusCode = errObj?.statusCode;
+        let errDetail = errObj?.error || (data.deadEndpoints?.length > 0 ? "Clave caducada (HTTP 410 Gone)" : (data.error || "Error en servidor de notificaciones"));
+
+        if (statusCode === 410 || statusCode === 404) {
+          errDetail = "Tu suscripci\u00F3n previa en Google FCM estaba caducada (HTTP 410). Pulsa abajo en \"Desactivar Alertas\" y luego \"Activar\" para renovar tu token.";
+        } else if (statusCode === 401) {
+          errDetail = "Error de autorizaci\u00F3n VAPID (HTTP 401 Unauthorized): Las claves VAPID no coinciden con Google FCM.";
+        }
+
+        setStatusMessage({
+          type: "error",
+          text: "\u274C Google FCM rechaz\u00F3 tu suscripci\u00F3n: " + errDetail
+        });
+      }
+    } catch (err) {
+      setStatusMessage({ type: 'error', text: 'Error contactando con el despachador de Vercel: ' + err.message });
+    } finally {
+      setTestLoading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -2041,31 +2111,45 @@ function PushNotificationModal({
               </button>
             ) : (
               <div className="flex-1 flex flex-col gap-2">
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col gap-2">
                   <button
                     type="button"
-                    onClick={() => handleSendTestNotification(0)}
+                    onClick={handleSendRealCloudPushTest}
                     disabled={testLoading}
-                    className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
+                    className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-all shadow-sm"
+                    title="Envía una notificación real a través de Vercel y Google FCM para comprobar que este dispositivo está 100% conectado"
                   >
                     {testLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                    <span>Probar Ahora</span>
+                    <span>🧪 Probar Envío Real por la Nube (FCM)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSendTestNotification(5)}
                     disabled={testLoading}
-                    className="flex-1 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
+                    className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors border border-slate-200"
                     title="Pulsa aquí y bloquea tu móvil inmediatamente para probar en reposo"
                   >
-                    <span>⏱️ Probar en 5s (Bloquea móvil)</span>
+                    <span>⏱️ Probar Local en 5s (Bloquea móvil para comprobar pantalla)</span>
                   </button>
                 </div>
+
+                {/* Ayuda para pantalla de bloqueo y sonido */}
+                <div className="p-3 bg-amber-50/80 border border-amber-200/90 rounded-2xl text-[11px] text-amber-950 space-y-1 mt-1">
+                  <div className="flex items-center gap-1 font-black text-amber-900">
+                    <span>💡 ¿No suena o no enciende la pantalla al estar bloqueado?</span>
+                  </div>
+                  <ul className="list-disc pl-4 space-y-0.5 text-slate-600">
+                    <li><strong>Android:</strong> Mantén pulsado el icono de Chrome &gt; <em>Info de app</em> &gt; <em>Notificaciones</em> &gt; <em>Alertas</em> &gt; Activa <strong>"Emergente en pantalla"</strong> y <strong>"Permitir sonido"</strong>.</li>
+                    <li><strong>PC (Windows):</strong> Comprueba que no tienes activo el modo <em>"No molestar / Asistente de concentración"</em> junto al reloj.</li>
+                    <li><strong>iPhone:</strong> Debes añadir la web a la pantalla de inicio desde Safari (<em>Compartir &gt; Añadir a pantalla de inicio</em>).</li>
+                  </ul>
+                </div>
+
                 <button
                   type="button"
                   onClick={handleUnsubscribe}
                   disabled={loading || testLoading}
-                  className="w-full py-2 px-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-500 rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors border border-slate-200"
+                  className="w-full py-2 px-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-500 rounded-2xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors border border-slate-200 mt-1"
                 >
                   <BellOff size={14} />
                   <span>Desactivar Alertas en este dispositivo</span>
@@ -2402,6 +2486,13 @@ export default function App() {
       return {};
     }
   });
+
+  // Estados para la pestaña de Análisis Cruzado Cuádruple por Hora y Playa (Hito 48)
+  const [crossBeach, setCrossBeach] = useState('misericordia');
+  const [crossDateFilter, setCrossDateFilter] = useState('last_3d'); // 'today' | 'yesterday' | 'last_3d' | 'last_7d' | 'all'
+  const [crossOnlyWithReports, setCrossOnlyWithReports] = useState(false);
+  const [crossOnlyAnomalies, setCrossOnlyAnomalies] = useState(false);
+  const [crossMetric, setCrossMetric] = useState('waves'); // 'waves' | 'temp' | 'wind'
 
   // Estados para el Dashboard de Triangulación de 4 Curvas (Hito 47)
   const [chartBeach, setChartBeach] = useState('misericordia');
@@ -6718,6 +6809,13 @@ export default function App() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => setAdminTab('cross_analysis')}
+                      className={`flex-1 py-2 px-2 rounded-xl font-extrabold text-[11px] transition-all flex items-center justify-center gap-1 shrink-0 cursor-pointer ${adminTab === 'cross_analysis' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      🔀 Análisis Cruzado
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setAdminTab('compass')}
                       className={`flex-1 py-2 px-2 rounded-xl font-extrabold text-[11px] transition-all flex items-center justify-center gap-1 shrink-0 cursor-pointer ${adminTab === 'compass' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'}`}
                     >
@@ -8181,7 +8279,10 @@ export default function App() {
                         let rawContinuousPoints = [];
 
                         // 1.0 Generar histórico ampliado (hasta 7 días hacia atrás) cuando se selecciona '7d' o 'todo' (Hito 47)
-                        const extraPastOffsets = (chartRange === '7d' || chartRange === 'todo') ? [-6, -5, -4, -3, -2] : [];
+                        // Histórico ampliado con distribución asimétrica 75% Pasado (Hito 48)
+                        const extraPastOffsets = (chartRange === '7d' || chartRange === 'all' || chartRange === 'todo')
+                          ? [-6, -5, -4, -3, -2, -1]
+                          : (chartRange === '3d' ? [-2, -1] : []);
                         if (extraPastOffsets.length > 0) {
                           const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
                           const factorRatio = (chartBeach === 'malagueta' || chartBeach === 'pedregalejo') ? 0.70 : (chartBeach === 'los_alamos' || chartBeach === 'bajondillo') ? 1.05 : 0.90;
@@ -8489,19 +8590,22 @@ export default function App() {
                           });
                         }
 
-                        // Filtrar por rango temporal
+                        // Filtrar por rango temporal con distribución asimétrica (75% Pasado / 25% Futuro - Hito 48)
                         let chartPoints = [];
                         if (chartRange === '24h') {
-                          chartPoints = rawContinuousPoints.filter(p => p.timestamp >= nowTs - 12 * 3600 * 1000 && p.timestamp <= nowTs + 12 * 3600 * 1000);
+                          // -18h pasado (75%) / +6h futuro (25%) -> total 24h
+                          chartPoints = rawContinuousPoints.filter(p => p.timestamp >= nowTs - 18 * 3600 * 1000 && p.timestamp <= nowTs + 6 * 3600 * 1000);
                         } else if (chartRange === '3d') {
+                          // -54h pasado (75%) / +18h futuro (25%) -> total 72h
                           chartPoints = rawContinuousPoints.filter(p => {
                             const hNum = parseInt((p.hourStr || '0').split(':')[0]);
-                            return p.timestamp >= nowTs - 28 * 3600 * 1000 && p.timestamp <= nowTs + 44 * 3600 * 1000 && (hNum % 2 === 0);
+                            return p.timestamp >= nowTs - 54 * 3600 * 1000 && p.timestamp <= nowTs + 18 * 3600 * 1000 && (hNum % 2 === 0 || p.swimmerWave !== null);
                           });
                         } else if (chartRange === '7d') {
+                          // -120h pasado (~5 días / 75%) / +40h futuro (~1.7 días / 25%) -> total 160h
                           chartPoints = rawContinuousPoints.filter(p => {
                             const hNum = parseInt((p.hourStr || '0').split(':')[0]);
-                            return (hNum % 3 === 0 || p.swimmerWave !== null);
+                            return p.timestamp >= nowTs - 120 * 3600 * 1000 && p.timestamp <= nowTs + 40 * 3600 * 1000 && (hNum % 3 === 0 || p.swimmerWave !== null);
                           });
                         } else {
                           chartPoints = rawContinuousPoints;
@@ -8751,13 +8855,13 @@ export default function App() {
                                       <text
                                         x={padL + 6}
                                         y={padT + 12}
-                                        fill="#64748b"
+                                        fill="#94a3b8"
                                         fontSize="7.5"
                                         fontWeight="bold"
                                         textAnchor="start"
                                         letterSpacing="0.5"
                                       >
-                                        PASADO (AUDITORÍA)
+                                        PASADO (AUDITORÍA HISTÓRICA — 75% DEL ESPACIO)
                                       </text>
                                       {nowX + 6 < W - padR && (
                                         <text
@@ -8769,7 +8873,7 @@ export default function App() {
                                           textAnchor="start"
                                           letterSpacing="0.5"
                                         >
-                                          FUTURO (PREVISIÓN)
+                                          FUTURO (25%)
                                         </text>
                                       )}
                                     </g>
@@ -9104,6 +9208,673 @@ export default function App() {
                     </div>
                   )}
 
+
+
+                  {/* PESTAÑA: ANÁLISIS CRUZADO CUÁDRUPLE POR HORA Y PLAYA (HITO 48) */}
+                  {adminTab === 'cross_analysis' && (
+                    <div className="text-left space-y-4 animate-in fade-in duration-300">
+                      {/* Cabecera y Controles */}
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200 pb-3">
+                        <div>
+                          <h4 className="text-xs font-black uppercase text-indigo-800 tracking-wider flex items-center gap-1.5">
+                            <Activity size={16} className="text-indigo-600" />
+                            <span>Análisis Cruzado Cuádruple por Hora y Playa</span>
+                          </h4>
+                          <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                            Cruce temporal síncrono: Previsión Satélite (ECMWF) • Previsión App • Boya 1514 • Reportes de Nadadores
+                          </p>
+                        </div>
+
+                        {/* Selector de Rango de Fechas */}
+                        <div className="flex bg-slate-100 p-0.5 rounded-xl gap-0.5 self-stretch sm:self-auto flex-wrap">
+                          {[
+                            { id: 'today',     label: 'Hoy' },
+                            { id: 'yesterday', label: 'Ayer' },
+                            { id: 'last_3d',   label: '3 Días' },
+                            { id: 'last_7d',   label: '7 Días' },
+                            { id: 'all',       label: 'Todo' }
+                          ].map(d => (
+                            <button
+                              key={d.id}
+                              type="button"
+                              onClick={() => setCrossDateFilter(d.id)}
+                              className={`flex-1 sm:flex-none px-2.5 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
+                                crossDateFilter === d.id ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                              }`}
+                            >
+                              {d.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Selectores de Playa, Métrica y Filtros Rápidos */}
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                        {/* Selector de Playa */}
+                        <div className="sm:col-span-5 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
+                          <label className="block text-[9px] font-black text-slate-500 uppercase mb-1">
+                            Playa de Análisis
+                          </label>
+                          <select
+                            value={crossBeach}
+                            onChange={(e) => setCrossBeach(e.target.value)}
+                            className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+                          >
+                            <option value="misericordia">La Misericordia (Málaga)</option>
+                            <option value="malagueta">La Malagueta (Málaga)</option>
+                            <option value="pedregalejo">Pedregalejo (Málaga)</option>
+                            <option value="los_alamos">Los Álamos (Torremolinos)</option>
+                            <option value="bajondillo">El Bajondillo (Torremolinos)</option>
+                            <option value="cala_del_moral">La Cala del Moral</option>
+                            <option value="rincon_victoria">Rincón de la Victoria</option>
+                          </select>
+                        </div>
+
+                        {/* Selector de Métrica */}
+                        <div className="sm:col-span-4 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
+                          <label className="block text-[9px] font-black text-slate-500 uppercase mb-1">
+                            Variable Oceanográfica
+                          </label>
+                          <div className="grid grid-cols-3 gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setCrossMetric('waves')}
+                              className={`py-1.5 px-1 rounded-lg text-[10px] font-extrabold transition-all text-center flex items-center justify-center gap-0.5 cursor-pointer ${
+                                crossMetric === 'waves' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                              }`}
+                            >
+                              🌊 Oleaje
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCrossMetric('temp')}
+                              className={`py-1.5 px-1 rounded-lg text-[10px] font-extrabold transition-all text-center flex items-center justify-center gap-0.5 cursor-pointer ${
+                                crossMetric === 'temp' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                              }`}
+                            >
+                              🌡️ Agua
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCrossMetric('wind')}
+                              className={`py-1.5 px-1 rounded-lg text-[10px] font-extrabold transition-all text-center flex items-center justify-center gap-0.5 cursor-pointer ${
+                                crossMetric === 'wind' ? 'bg-cyan-600 text-white shadow-xs' : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                              }`}
+                            >
+                              💨 Viento
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Filtros Rápidos (Toggles) */}
+                        <div className="sm:col-span-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex flex-col justify-center gap-1.5">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={crossOnlyWithReports}
+                              onChange={(e) => setCrossOnlyWithReports(e.target.checked)}
+                              className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <span className="text-[10px] font-bold text-slate-700">Solo con Nadadores 🟢</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={crossOnlyAnomalies}
+                              onChange={(e) => setCrossOnlyAnomalies(e.target.checked)}
+                              className="rounded text-amber-600 focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <span className="text-[10px] font-bold text-slate-700">Solo Anomalías ⚠️</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* PROCESAMIENTO Y CRUCE SINCRONIZADO POR HORA (HITO 48) */}
+                      {(() => {
+                        const nowTs = Date.now();
+                        const nowDate = new Date();
+
+                        // 1. Delimitar ventana temporal según crossDateFilter
+                        let startTs = 0;
+                        let endTs = nowTs + 24 * 3600 * 1000;
+
+                        const startOfToday = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate()).getTime();
+                        if (crossDateFilter === 'today') {
+                          startTs = startOfToday;
+                          endTs = startOfToday + 86400000;
+                        } else if (crossDateFilter === 'yesterday') {
+                          startTs = startOfToday - 86400000;
+                          endTs = startOfToday;
+                        } else if (crossDateFilter === 'last_3d') {
+                          startTs = startOfToday - 2 * 86400000;
+                          endTs = nowTs + 18 * 3600 * 1000;
+                        } else if (crossDateFilter === 'last_7d') {
+                          startTs = startOfToday - 6 * 86400000;
+                          endTs = nowTs + 18 * 3600 * 1000;
+                        } else {
+                          startTs = startOfToday - 14 * 86400000;
+                          endTs = nowTs + 48 * 3600 * 1000;
+                        }
+
+                        // 2. Filtrar logs de calibración y reportes de nadadores
+                        const relevantLogs = calibrationHistory.filter(l => {
+                          const orig = String(l.origenDato || '').trim();
+                          if (orig.includes('Alerta') || orig.includes('Copernicus') || orig.includes('[ALERTA_OFICIAL]')) return false;
+                          const bNorm = String(l.playa || '').toLowerCase().replace(/_/g, '').replace(/ /g, '');
+                          const targetNorm = crossBeach.replace(/_/g, '').replace(/ /g, '');
+                          if (bNorm && !bNorm.includes(targetNorm) && !targetNorm.includes(bNorm)) return false;
+                          return true;
+                        });
+
+                        // 3. Generar ranuras horarias completas para la ventana
+                        const factorRatio = (crossBeach === 'malagueta' || crossBeach === 'pedregalejo') ? 0.70 : (crossBeach === 'los_alamos' || crossBeach === 'bajondillo') ? 1.05 : 0.90;
+                        const dayStepMs = 86400000;
+                        const firstDayTs = new Date(new Date(startTs).getFullYear(), new Date(startTs).getMonth(), new Date(startTs).getDate()).getTime();
+                        const lastDayTs = new Date(new Date(endTs).getFullYear(), new Date(endTs).getMonth(), new Date(endTs).getDate()).getTime();
+
+                        let crossHourlyRows = [];
+
+                        for (let curDay = firstDayTs; curDay <= lastDayTs; curDay += dayStepMs) {
+                          const dObj = new Date(curDay);
+                          const dStr = dObj.toISOString().split('T')[0];
+                          const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                          const dayLabel = `${dayNames[dObj.getDay()]} ${dObj.getDate()}/${dObj.getMonth() + 1}`;
+
+                          for (let h = 0; h < 24; h++) {
+                            const hClean = `${String(h).padStart(2, '0')}:00`;
+                            const slotIso = `${dStr}T${hClean}`;
+                            const slotTs = new Date(`${dStr}T${hClean}:00`).getTime();
+
+                            if (slotTs < startTs || slotTs > endTs) continue;
+
+                            // A. Previsión Satélite (ECMWF)
+                            let satWave = null;
+                            let satTemp = null;
+                            let satWind = null;
+
+                            if (rawMarineData && rawMarineData.hourly && Array.isArray(rawMarineData.hourly.time)) {
+                              const mIdx = rawMarineData.hourly.time.indexOf(slotIso);
+                              if (mIdx !== -1) {
+                                satWave = parseFloat(rawMarineData.hourly.wave_height?.[mIdx] || 0.25) || 0.25;
+                                satTemp = parseFloat(rawMarineData.hourly.sea_surface_temperature?.[mIdx] || 21.5) || 21.5;
+                                satWind = parseFloat(rawMarineData.hourly.wind_speed_10m?.[mIdx] || 6.0) || 6.0;
+                              }
+                            }
+
+                            // B. Boya Real 1514 (Málaga) y Estación Meteo 4505 (Dique Levante)
+                            let buoyWave = null;
+                            let buoyTp = null;
+                            let buoyTemp = null;
+                            let buoyWind = null;
+                            let buoyWindDir = null;
+                            let buoySource = null;
+
+                            const matchedHourly = boyaRealHourlyHistory.find(b => {
+                              if (b.iso) {
+                                const bTs = new Date(b.iso).getTime();
+                                if (!isNaN(bTs) && Math.abs(bTs - slotTs) <= 45 * 60 * 1000) return true;
+                              }
+                              if (b.fechaHora) {
+                                const cleanFh = String(b.fechaHora).trim().replace(' ', 'T');
+                                const bTs = new Date(cleanFh.length === 16 ? `${cleanFh}:00` : cleanFh).getTime();
+                                if (!isNaN(bTs) && Math.abs(bTs - slotTs) <= 45 * 60 * 1000) return true;
+                              }
+                              if (b.fecha && b.hora) {
+                                const cleanH = cleanHourString(b.hora);
+                                const bTs = new Date(`${b.fecha}T${cleanH}:00`).getTime();
+                                if (!isNaN(bTs) && Math.abs(bTs - slotTs) <= 45 * 60 * 1000) return true;
+                              }
+                              return false;
+                            });
+
+                            if (matchedHourly) {
+                              if (matchedHourly.altura !== null && !isNaN(matchedHourly.altura)) buoyWave = parseBoyaNum(matchedHourly.altura, 0.01, 2.5);
+                              if (matchedHourly.periodo !== null && !isNaN(matchedHourly.periodo)) buoyTp = parseBoyaNum(matchedHourly.periodo, 1.0, 20.0);
+                              if (matchedHourly.tempAgua !== null && !isNaN(matchedHourly.tempAgua)) buoyTemp = parseBoyaNum(matchedHourly.tempAgua, 10, 35);
+                              if (matchedHourly.vientoKnots !== null && !isNaN(matchedHourly.vientoKnots)) buoyWind = parseBoyaNum(matchedHourly.vientoKnots, 0, 60);
+                              if (matchedHourly.vientoDir) buoyWindDir = matchedHourly.vientoDir;
+                              buoySource = 'Boya 1514 (Oficial)';
+                            }
+
+                            // Fallback de boya en logs históricos
+                            if (buoyWave === null) {
+                              const matchedLog = relevantLogs.find(l => {
+                                const lTs = parseLogTimestamp(l);
+                                return Math.abs(lTs - slotTs) <= 45 * 60 * 1000;
+                              });
+                              if (matchedLog) {
+                                const buoyInfo = getBuoyReadingForLog(matchedLog);
+                                buoyWave = parseBoyaNum(buoyInfo.height || matchedLog.boyaAltura, 0.01, 2.5);
+                                if (buoyTemp === null) buoyTemp = parseBoyaNum(matchedLog.boyaTemp, 10, 35);
+                                if (buoyWind === null) buoyWind = parseBoyaNum(matchedLog.boyaVientoKnots || matchedLog.boyaViento, 0, 60);
+                                buoySource = 'Log Sheets';
+                              }
+                            }
+
+                            // C. Previsión Calibrada de la App
+                            let appWave = satWave !== null ? parseFloat((satWave * factorRatio).toFixed(2)) : null;
+                            let appTemp = satTemp;
+                            let appWind = satWind;
+
+                            // D. Observación Real de Nadadores (Orilla)
+                            let swWave = null;
+                            let swName = null;
+                            let swNotes = null;
+                            let swMedusas = null;
+                            let swAgua = null;
+
+                            const swLog = relevantLogs.find(l => {
+                              const origLower = String(l.origenDato || '').toLowerCase();
+                              const isSw = origLower.includes('nadador') || origLower.includes('admin') || origLower.includes('calibraci') || (l.sensaciones && String(l.sensaciones).includes('[Nombre:'));
+                              if (!isSw) return false;
+                              const lTs = parseLogTimestamp(l);
+                              return Math.abs(lTs - slotTs) <= 45 * 60 * 1000;
+                            });
+
+                            if (swLog) {
+                              const rawW = swLog.realOlas || swLog.orillaOlaNadador;
+                              if (rawW) swWave = swimmerScaleToMeters(rawW);
+                              const sens = String(swLog.sensaciones || '');
+                              if (sens.includes('[Nombre:')) {
+                                const m = sens.match(/\[Nombre:\s*([^|\]]+)/);
+                                if (m && m[1]) swName = m[1].trim();
+                              } else if (String(swLog.origenDato || '').includes('Admin')) {
+                                swName = 'Admin';
+                              } else {
+                                swName = 'Nadador';
+                              }
+                              swNotes = sens;
+                              const parsedDet = parseSensacionesDetails(sens);
+                              if (parsedDet.medusas) swMedusas = parsedDet.medusas;
+                              if (parsedDet.agua) swAgua = parsedDet.agua;
+                            }
+
+                            // E. Cálculo de Desvíos y Diagnósticos
+                            const devSatBuoy = (satWave !== null && buoyWave !== null) ? parseFloat((satWave - buoyWave).toFixed(2)) : null;
+                            const devAppSwimmer = (appWave !== null && swWave !== null) ? parseFloat((appWave - swWave).toFixed(2)) : null;
+
+                            // Factor Real Observado: Swimmer / Buoy
+                            const realEmpiricalFactor = (swWave !== null && buoyWave !== null && buoyWave > 0)
+                              ? parseFloat((swWave / buoyWave).toFixed(2))
+                              : null;
+
+                            // Criterio de Anomalía
+                            let anomalyStatus = 'normal'; // 'normal' | 'warning' | 'critical' | 'none'
+                            const absDevSatBuoy = devSatBuoy !== null ? Math.abs(devSatBuoy) : 0;
+                            const absDevAppSwimmer = devAppSwimmer !== null ? Math.abs(devAppSwimmer) : 0;
+
+                            if (absDevSatBuoy >= 0.35 || absDevAppSwimmer >= 0.30) {
+                              anomalyStatus = 'critical';
+                            } else if (absDevSatBuoy >= 0.18 || absDevAppSwimmer >= 0.15) {
+                              anomalyStatus = 'warning';
+                            } else if (buoyWave === null && swWave === null) {
+                              anomalyStatus = 'no_data';
+                            }
+
+                            crossHourlyRows.push({
+                              id: `cross-${slotIso}`,
+                              slotIso,
+                              slotTs,
+                              isPast: slotTs <= nowTs,
+                              dayLabel,
+                              dStr,
+                              hClean,
+                              satWave,
+                              satTemp,
+                              satWind,
+                              buoyWave,
+                              buoyTp,
+                              buoyTemp,
+                              buoyWind,
+                              buoyWindDir,
+                              buoySource,
+                              appWave,
+                              appTemp,
+                              appWind,
+                              swWave,
+                              swName,
+                              swNotes,
+                              swMedusas,
+                              swAgua,
+                              devSatBuoy,
+                              devAppSwimmer,
+                              realEmpiricalFactor,
+                              anomalyStatus,
+                              hasSwimmer: swWave !== null,
+                              hasBuoy: buoyWave !== null,
+                              hasAnomaly: anomalyStatus === 'warning' || anomalyStatus === 'critical'
+                            });
+                          }
+                        }
+
+                        // Ordenar cronológicamente (pasado primero)
+                        crossHourlyRows.sort((a, b) => a.slotTs - b.slotTs);
+
+                        // Aplicar filtros activos
+                        let filteredRows = crossHourlyRows;
+                        if (crossOnlyWithReports) {
+                          filteredRows = filteredRows.filter(r => r.hasSwimmer);
+                        }
+                        if (crossOnlyAnomalies) {
+                          filteredRows = filteredRows.filter(r => r.hasAnomaly);
+                        }
+
+                        // Métricas estadísticas agregadas
+                        const rowsWithSatBuoy = crossHourlyRows.filter(r => r.devSatBuoy !== null);
+                        const rowsWithAppSwimmer = crossHourlyRows.filter(r => r.devAppSwimmer !== null);
+                        const rowsWithRealFactor = crossHourlyRows.filter(r => r.realEmpiricalFactor !== null);
+
+                        const maeSatBuoy = rowsWithSatBuoy.length > 0
+                          ? (rowsWithSatBuoy.reduce((acc, r) => acc + Math.abs(r.devSatBuoy), 0) / rowsWithSatBuoy.length).toFixed(2)
+                          : null;
+                        const biasSatBuoy = rowsWithSatBuoy.length > 0
+                          ? (rowsWithSatBuoy.reduce((acc, r) => acc + r.devSatBuoy, 0) / rowsWithSatBuoy.length).toFixed(2)
+                          : null;
+
+                        const maeAppSwimmer = rowsWithAppSwimmer.length > 0
+                          ? (rowsWithAppSwimmer.reduce((acc, r) => acc + Math.abs(r.devAppSwimmer), 0) / rowsWithAppSwimmer.length).toFixed(2)
+                          : null;
+                        const biasAppSwimmer = rowsWithAppSwimmer.length > 0
+                          ? (rowsWithAppSwimmer.reduce((acc, r) => acc + r.devAppSwimmer, 0) / rowsWithAppSwimmer.length).toFixed(2)
+                          : null;
+
+                        const avgEmpiricalFactor = rowsWithRealFactor.length > 0
+                          ? (rowsWithRealFactor.reduce((acc, r) => acc + r.realEmpiricalFactor, 0) / rowsWithRealFactor.length).toFixed(2)
+                          : null;
+
+                        return (
+                          <div className="space-y-4">
+                            {/* 4 TARJETAS DE SÍNTESIS ESTADÍSTICA Y DIAGNÓSTICO ALGORÍTMICO */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                              {/* Tarjeta 1: Cobertura Temporal */}
+                              <div className="bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs space-y-1">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wide block">
+                                  Cobertura de Muestras
+                                </span>
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className="text-xl font-black text-slate-800">{crossHourlyRows.length}h</span>
+                                  <span className="text-[10px] text-slate-500 font-bold">horas analizadas</span>
+                                </div>
+                                <div className="text-[9.5px] text-slate-500 font-semibold flex items-center justify-between pt-1 border-t border-slate-100">
+                                  <span>Boya Real: <b>{rowsWithSatBuoy.length}h</b></span>
+                                  <span>Nadadores: <b>{rowsWithAppSwimmer.length}h</b></span>
+                                </div>
+                              </div>
+
+                              {/* Tarjeta 2: Mar Abierto (Satélite vs Boya 1514) */}
+                              <div className="bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs space-y-1">
+                                <span className="text-[9px] font-black text-indigo-500 uppercase tracking-wide block">
+                                  Satélite vs Boya (Mar Abierto)
+                                </span>
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className="text-xl font-black text-indigo-700">
+                                    {maeSatBuoy !== null ? `±${maeSatBuoy}m` : 'Sin datos'}
+                                  </span>
+                                  <span className="text-[9.5px] text-slate-500 font-bold">MAE</span>
+                                </div>
+                                <div className="text-[9.5px] text-slate-500 font-semibold pt-1 border-t border-slate-100">
+                                  Sesgo: {biasSatBuoy !== null ? (
+                                    <b className={parseFloat(biasSatBuoy) > 0 ? 'text-amber-600' : 'text-blue-600'}>
+                                      {parseFloat(biasSatBuoy) > 0 ? `+${biasSatBuoy}m (Sobrestima)` : `${biasSatBuoy}m (Subestima)`}
+                                    </b>
+                                  ) : '—'}
+                                </div>
+                              </div>
+
+                              {/* Tarjeta 3: Orilla Costera (App vs Nadadores) */}
+                              <div className="bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs space-y-1">
+                                <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wide block">
+                                  App vs Nadador (Orilla)
+                                </span>
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className="text-xl font-black text-emerald-700">
+                                    {maeAppSwimmer !== null ? `±${maeAppSwimmer}m` : 'Sin datos'}
+                                  </span>
+                                  <span className="text-[9.5px] text-slate-500 font-bold">MAE</span>
+                                </div>
+                                <div className="text-[9.5px] text-slate-500 font-semibold pt-1 border-t border-slate-100">
+                                  Sesgo: {biasAppSwimmer !== null ? (
+                                    <b className={parseFloat(biasAppSwimmer) > 0 ? 'text-amber-600' : 'text-emerald-600'}>
+                                      {parseFloat(biasAppSwimmer) > 0 ? `+${biasAppSwimmer}m (App alta)` : `${biasAppSwimmer}m (App conservadora)`}
+                                    </b>
+                                  ) : '—'}
+                                </div>
+                              </div>
+
+                              {/* Tarjeta 4: Factor Empírico Observado */}
+                              <div className="bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs space-y-1">
+                                <span className="text-[9px] font-black text-purple-600 uppercase tracking-wide block">
+                                  Ajuste de Algoritmo
+                                </span>
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className="text-xl font-black text-purple-700">
+                                    {avgEmpiricalFactor !== null ? `F = ${avgEmpiricalFactor}` : `Teórico: ${factorRatio}`}
+                                  </span>
+                                  <span className="text-[9px] text-slate-400 font-bold">Factor Real</span>
+                                </div>
+                                <div className="text-[9.5px] text-slate-500 font-semibold pt-1 border-t border-slate-100 flex items-center justify-between">
+                                  <span>Actual: <b>{factorRatio}</b></span>
+                                  {avgEmpiricalFactor !== null && Math.abs(parseFloat(avgEmpiricalFactor) - factorRatio) > 0.08 ? (
+                                    <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                                      Ajustar en Factores
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                      Calibrado
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* BANNER DE AUDITORÍA DE ANOMALÍAS (CRITERIO OBJETIVO) */}
+                            <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-3 text-xs text-indigo-900 space-y-1.5">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <span className="font-extrabold flex items-center gap-1.5">
+                                  <AlertCircle size={14} className="text-indigo-600" />
+                                  <span>Auditoría de Anomalías Integrada: Criterio Objetivo y Diagnóstico</span>
+                                </span>
+                                <span className="text-[9.5px] bg-white border border-indigo-200 px-2 py-0.5 rounded-full font-bold text-indigo-700">
+                                  {crossHourlyRows.filter(r => r.hasAnomaly).length} horas con anomalía detectadas
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-indigo-800/80 leading-relaxed">
+                                <b>Criterio de clasificación:</b> 🔴 <b>Crítica:</b> Divergencia $\ge 0.35$m en mar abierto o $\ge 0.30$m en orilla. 🟡 <b>Desvío Moderado:</b> Desvío entre $0.18$m y $0.35$m. 🟢 <b>En Tolerancia:</b> Concordancia estricta. 
+                                La anterior pestaña pasiva de «Anomalías» en Sheets solo registraba discrepancias manuales de viento $\ge 6$ kn; este panel la complementa con auditoría continua multi-fuente en tiempo real.
+                              </p>
+                            </div>
+
+                            {/* TABLA HORARIA SINCRONIZADA */}
+                            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+                              <div className="overflow-x-auto max-h-[560px]">
+                                <table className="w-full text-left border-collapse text-[11px]">
+                                  <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 text-[9.5px] font-black text-slate-500 uppercase tracking-wider">
+                                    <tr>
+                                      <th className="py-2.5 px-3">Fecha / Hora</th>
+                                      <th className="py-2.5 px-3 text-indigo-700">Satélite (ECMWF)</th>
+                                      <th className="py-2.5 px-3 text-blue-700">Boya 1514 & Meteo</th>
+                                      <th className="py-2.5 px-3 text-purple-700">Nuestra App</th>
+                                      <th className="py-2.5 px-3 text-emerald-700">Nadador (Orilla)</th>
+                                      <th className="py-2.5 px-3 text-center">Δ Sat-Boya</th>
+                                      <th className="py-2.5 px-3 text-center">Δ App-Nadador</th>
+                                      <th className="py-2.5 px-3 text-center">Factor Real</th>
+                                      <th className="py-2.5 px-3 text-center">Estado</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100 font-medium">
+                                    {filteredRows.length === 0 ? (
+                                      <tr>
+                                        <td colSpan={9} className="py-8 text-center text-slate-400 font-semibold">
+                                          No se encontraron registros horarios con los filtros seleccionados.
+                                        </td>
+                                      </tr>
+                                    ) : (
+                                      filteredRows.map(row => (
+                                        <tr 
+                                          key={row.id}
+                                          className={`hover:bg-slate-50/80 transition-colors ${
+                                            row.anomalyStatus === 'critical' ? 'bg-red-50/30' : row.anomalyStatus === 'warning' ? 'bg-amber-50/20' : ''
+                                          }`}
+                                        >
+                                          {/* Fecha / Hora */}
+                                          <td className="py-2 px-3 whitespace-nowrap">
+                                            <div className="font-bold text-slate-800">{row.hClean}</div>
+                                            <div className="text-[9px] text-slate-400 font-semibold">{row.dayLabel}</div>
+                                          </td>
+
+                                          {/* Satélite (ECMWF) */}
+                                          <td className="py-2 px-3 whitespace-nowrap">
+                                            {crossMetric === 'waves' ? (
+                                              <div>
+                                                <span className="font-bold text-slate-800">{row.satWave !== null ? `${row.satWave.toFixed(2)}m` : '—'}</span>
+                                                <span className="text-[9px] text-slate-400 block font-normal">Mar Abierto</span>
+                                              </div>
+                                            ) : crossMetric === 'temp' ? (
+                                              <span className="font-bold text-slate-800">{row.satTemp !== null ? `${row.satTemp.toFixed(1)}ºC` : '—'}</span>
+                                            ) : (
+                                              <span className="font-bold text-slate-800">{row.satWind !== null ? `${row.satWind.toFixed(1)}kn` : '—'}</span>
+                                            )}
+                                          </td>
+
+                                          {/* Boya 1514 & Meteo */}
+                                          <td className="py-2 px-3 whitespace-nowrap">
+                                            {crossMetric === 'waves' ? (
+                                              row.buoyWave !== null ? (
+                                                <div>
+                                                  <span className="font-bold text-blue-700">{row.buoyWave.toFixed(2)}m</span>
+                                                  {row.buoyTp && <span className="text-[9px] text-slate-400 ml-1 font-normal">Tp:{row.buoyTp}s</span>}
+                                                  <span className="text-[8.5px] text-blue-500 font-semibold block">{row.buoySource}</span>
+                                                </div>
+                                              ) : (
+                                                <span className="text-slate-300 font-semibold italic text-[10px]">Sin boya</span>
+                                              )
+                                            ) : crossMetric === 'temp' ? (
+                                              row.buoyTemp !== null ? (
+                                                <span className="font-bold text-blue-700">{row.buoyTemp.toFixed(1)}ºC</span>
+                                              ) : <span className="text-slate-300 italic text-[10px]">Sin boya</span>
+                                            ) : (
+                                              row.buoyWind !== null ? (
+                                                <span className="font-bold text-blue-700">
+                                                  {row.buoyWind.toFixed(1)}kn {row.buoyWindDir ? `(${row.buoyWindDir})` : ''}
+                                                </span>
+                                              ) : <span className="text-slate-300 italic text-[10px]">Sin estación</span>
+                                            )}
+                                          </td>
+
+                                          {/* Nuestra App Calibrada */}
+                                          <td className="py-2 px-3 whitespace-nowrap">
+                                            {crossMetric === 'waves' ? (
+                                              row.appWave !== null ? (
+                                                <div>
+                                                  <span className="font-bold text-purple-700">{row.appWave.toFixed(2)}m</span>
+                                                  <span className="text-[9px] text-slate-400 block font-normal">F={factorRatio}</span>
+                                                </div>
+                                              ) : '—'
+                                            ) : crossMetric === 'temp' ? (
+                                              <span className="font-bold text-purple-700">{row.appTemp !== null ? `${row.appTemp.toFixed(1)}ºC` : '—'}</span>
+                                            ) : (
+                                              <span className="font-bold text-purple-700">{row.appWind !== null ? `${row.appWind.toFixed(1)}kn` : '—'}</span>
+                                            )}
+                                          </td>
+
+                                          {/* Nadador (Orilla) */}
+                                          <td className="py-2 px-3">
+                                            {row.swWave !== null ? (
+                                              <div className="max-w-[170px]">
+                                                <div className="flex items-center gap-1">
+                                                  <span className="font-black text-emerald-700">{row.swWave.toFixed(2)}m</span>
+                                                  <span className="text-[9px] font-bold text-slate-500 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full truncate">
+                                                    {row.swName}
+                                                  </span>
+                                                </div>
+                                                {row.swNotes && (
+                                                  <div className="text-[9px] text-slate-500 italic truncate mt-0.5" title={row.swNotes}>
+                                                    "{row.swNotes.replace(/\[.*?\]/g, '').trim()}"
+                                                  </div>
+                                                )}
+                                                {(row.swMedusas || row.swAgua) && (
+                                                  <div className="text-[8px] text-slate-400 flex gap-1 mt-0.5">
+                                                    {row.swMedusas && <span>🪼 {row.swMedusas}</span>}
+                                                    {row.swAgua && <span>💧 {row.swAgua}</span>}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            ) : (
+                                              <span className="text-slate-300 font-semibold italic text-[10px]">Sin reporte</span>
+                                            )}
+                                          </td>
+
+                                          {/* Δ Sat-Boya */}
+                                          <td className="py-2 px-3 text-center whitespace-nowrap">
+                                            {row.devSatBuoy !== null ? (
+                                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
+                                                Math.abs(row.devSatBuoy) < 0.12 ? 'bg-emerald-100 text-emerald-800' :
+                                                Math.abs(row.devSatBuoy) < 0.25 ? 'bg-amber-100 text-amber-800' :
+                                                'bg-red-100 text-red-800'
+                                              }`}>
+                                                {row.devSatBuoy > 0 ? `+${row.devSatBuoy.toFixed(2)}m` : `${row.devSatBuoy.toFixed(2)}m`}
+                                              </span>
+                                            ) : (
+                                              <span className="text-slate-300">—</span>
+                                            )}
+                                          </td>
+
+                                          {/* Δ App-Nadador */}
+                                          <td className="py-2 px-3 text-center whitespace-nowrap">
+                                            {row.devAppSwimmer !== null ? (
+                                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
+                                                Math.abs(row.devAppSwimmer) < 0.10 ? 'bg-emerald-100 text-emerald-800' :
+                                                Math.abs(row.devAppSwimmer) < 0.22 ? 'bg-amber-100 text-amber-800' :
+                                                'bg-red-100 text-red-800'
+                                              }`}>
+                                                {row.devAppSwimmer > 0 ? `+${row.devAppSwimmer.toFixed(2)}m` : `${row.devAppSwimmer.toFixed(2)}m`}
+                                              </span>
+                                            ) : (
+                                              <span className="text-slate-300">—</span>
+                                            )}
+                                          </td>
+
+                                          {/* Factor Real Observado */}
+                                          <td className="py-2 px-3 text-center whitespace-nowrap">
+                                            {row.realEmpiricalFactor !== null ? (
+                                              <span className="bg-purple-50 text-purple-800 border border-purple-200 px-1.5 py-0.5 rounded font-black text-[10px]">
+                                                {row.realEmpiricalFactor}
+                                              </span>
+                                            ) : (
+                                              <span className="text-slate-300">—</span>
+                                            )}
+                                          </td>
+
+                                          {/* Estado / Badge de Anomalía */}
+                                          <td className="py-2 px-3 text-center whitespace-nowrap">
+                                            {row.anomalyStatus === 'critical' ? (
+                                              <span className="bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-black text-[9px] inline-flex items-center gap-1">
+                                                🔴 Crítica
+                                              </span>
+                                            ) : row.anomalyStatus === 'warning' ? (
+                                              <span className="bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-black text-[9px] inline-flex items-center gap-1">
+                                                🟡 Desvío
+                                              </span>
+                                            ) : row.anomalyStatus === 'normal' ? (
+                                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-bold text-[9px] inline-flex items-center gap-1">
+                                                🟢 Tolerancia
+                                              </span>
+                                            ) : (
+                                              <span className="text-slate-300 text-[9px]">⚪ Sin datos</span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      ))
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
 
 
                   {/* PESTAÑA: LABORATORIO DE RE-EVALUACIÓN HISTÓRICA DE REPORTES EN PARALELO (HITO 40) */}
@@ -10621,7 +11392,7 @@ export default function App() {
                     placeholder={swimmerIsOnlyMessage ? "Ej. '¿Quién se apunta a nadar a las 19:00?' o 'Mar de fondo fuerte, precaución hoy...'" : "Ej. 'El agua estaba plato pero fría, no hay medusas hoy...'"}
                     required={swimmerIsOnlyMessage}
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 h-16 outline-none focus:border-blue-500"
-                    maxLength={350}
+                    maxLength={1500}
                   />
                 </div>
 
