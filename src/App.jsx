@@ -1362,6 +1362,7 @@ function getWindDirectionFullName(degrees) {
 };
 
 function parseSwimmerSensaciones(textVal) {
+
   const text = textVal !== null && textVal !== undefined ? String(textVal) : '';
   if (!text) return { nombre: 'Anónimo', medusas: 'Ninguna', agua: 'Limpia', comentario: '' };
   
@@ -1392,6 +1393,8 @@ function parseSwimmerSensaciones(textVal) {
     comentario: text
   };
 };
+
+const parseSensacionesDetails = parseSwimmerSensaciones;
 
 function getIsoDateString(dateObj = new Date()) {
   const d = new Date(dateObj);
@@ -9484,7 +9487,7 @@ export default function App() {
                                 swName = 'Nadador';
                               }
                               swNotes = sens;
-                              const parsedDet = parseSensacionesDetails(sens);
+                              const parsedDet = parseSwimmerSensaciones(sens);
                               if (parsedDet.medusas) swMedusas = parsedDet.medusas;
                               if (parsedDet.agua) swAgua = parsedDet.agua;
                             }
