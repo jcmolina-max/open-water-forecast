@@ -1446,11 +1446,7 @@ function formatFriendlyDate(dateString) {
 function cleanHourString(raw) {
   if (!raw) return '';
   const str = String(raw).trim();
-  if (/^\d{4}-\d{2}-\d{2}[ T](\d{1,2}:\d{2})/.test(str)) {
-    const m = str.match(/^\d{4}-\d{2}-\d{2}[ T](\d{1,2}:\d{2})/);
-    if (m && m[1]) return m[1].padStart(5, '0');
-  }
-  if (str.includes('1899') || str.includes('GMT') || str.includes('T')) {
+  if (str.includes('1899') || str.includes('GMT') || /\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:?\d{2})$/i.test(str)) {
     const d = new Date(raw);
     if (!isNaN(d.getTime())) {
       const hh = String(d.getHours()).padStart(2, '0');
@@ -1458,6 +1454,16 @@ function cleanHourString(raw) {
       return `${hh}:${mm}`;
     }
   }
+  if (/^\d{4}-\d{2}-\d{2}[ T](\d{1,2}:\d{2})/.test(str)) {
+    const m = str.match(/^\d{4}-\d{2}-\d{2}[ T](\d{1,2}:\d{2})/);
+    if (m && m[1]) return m[1].padStart(5, '0');
+  }
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}[ T]+(\d{1,2}:\d{2})/.test(str)) {
+    const m = str.match(/^\d{1,2}\/\d{1,2}\/\d{4}[ T]+(\d{1,2}:\d{2})/);
+    if (m && m[1]) return m[1].padStart(5, '0');
+  }
+  const timeOnly = str.match(/^(\d{1,2}:\d{2})/);
+  if (timeOnly) return timeOnly[1].padStart(5, '0');
   return str.length >= 5 ? str.substring(0, 5) : str;
 }
 
@@ -1465,9 +1471,32 @@ function formatSwimFriendly(dateVal, swimHourRaw) {
   let rawDateStr = String(dateVal || '').trim();
   const rawHourStr = String(swimHourRaw || '').trim();
   
-  // Si swimHourRaw contiene la fecha real del nado (ej: "2026-08-11 21:00"), esa es la fecha REAL de la sesión
-  if (/^\d{4}-\d{2}-\d{2}/.test(rawHourStr)) {
+  // Si swimHourRaw contiene fecha ISO con zona horaria o GMT, convertir a fecha local primero
+  if (rawHourStr.includes('GMT') || /\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:?\d{2})$/i.test(rawHourStr)) {
+    const dParsed = new Date(rawHourStr);
+    if (!isNaN(dParsed.getTime()) && dParsed.getFullYear() > 1970) {
+      rawDateStr = getIsoDateString(dParsed);
+    }
+  } else if (/^\d{4}-\d{2}-\d{2}/.test(rawHourStr)) {
     rawDateStr = rawHourStr.split(' ')[0].split('T')[0];
+  } else if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(rawHourStr)) {
+    const euMatch = rawHourStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (euMatch) {
+      rawDateStr = `${euMatch[3]}-${euMatch[2].padStart(2, '0')}-${euMatch[1].padStart(2, '0')}`;
+    }
+  }
+
+  // Normalizar rawDateStr europeo DD/MM/YYYY o ISO con zona horaria
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(rawDateStr)) {
+    const euMatch = rawDateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (euMatch) {
+      rawDateStr = `${euMatch[3]}-${euMatch[2].padStart(2, '0')}-${euMatch[1].padStart(2, '0')}`;
+    }
+  } else if (rawDateStr.includes('GMT') || /^\d{4}-\d{2}-\d{2}T/.test(rawDateStr)) {
+    const dParsed = new Date(rawDateStr);
+    if (!isNaN(dParsed.getTime())) {
+      rawDateStr = getIsoDateString(dParsed);
+    }
   }
 
   const swimHour = cleanHourString(rawHourStr);
@@ -1586,7 +1615,7 @@ function getForecastForSlot(beachKey, dateStr, hourStr, beachData, comparisonFor
       targetDay = beachData[0];
     } else if (dateStr === todayStr) {
       targetDay = beachData[1];
-    } else if (beachData[2] && dateStr === new Date(Date.now() + 86400000).toISOString().split('T')[0]) {
+    } else if (beachData[2] && dateStr === getIsoDateString(new Date(Date.now() + 86400000))) {
       targetDay = beachData[2];
     } else {
       targetDay = beachData[1] || beachData[0];
@@ -2579,6 +2608,16 @@ export default function App() {
     
     // 1. Prioridad: ¿Viene la fecha completa en horaNado o fechaHora? (Formato habitual en Google Sheets: "YYYY-MM-DD HH:mm")
     const rawHora = String(log.horaNado || log.hora || log.fechaHora || '').trim();
+    if (rawHora.includes('GMT') || /^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:?\d{2})$/i.test(rawHora)) {
+      const parsedIso = Date.parse(rawHora);
+      if (!isNaN(parsedIso) && new Date(parsedIso).getFullYear() > 1970) return parsedIso;
+    }
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(rawHora)) {
+      const euM = rawHora.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T]+(\d{1,2}):(\d{2}))?/);
+      if (euM) {
+        return new Date(parseInt(euM[3], 10), parseInt(euM[2], 10) - 1, parseInt(euM[1], 10), parseInt(euM[4] || '12', 10), parseInt(euM[5] || '0', 10)).getTime();
+      }
+    }
     if (/^\d{4}-\d{2}-\d{2}/.test(rawHora)) {
       const parts = rawHora.split(/[ T]/);
       const datePart = parts[0];
@@ -2627,6 +2666,12 @@ export default function App() {
     if (!raw) return 0;
     if (!isNaN(Number(raw)) && Number(raw) > 1000000000) return Number(raw);
 
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(String(raw).trim())) {
+      const euF = String(raw).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[, T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+      if (euF) {
+        return new Date(parseInt(euF[3], 10), parseInt(euF[2], 10) - 1, parseInt(euF[1], 10), parseInt(euF[4] || '0', 10), parseInt(euF[5] || '0', 10), parseInt(euF[6] || '0', 10)).getTime();
+      }
+    }
     const direct = Date.parse(raw);
     if (!isNaN(direct)) return direct;
 
@@ -5687,7 +5732,7 @@ export default function App() {
                             const sensPreview = cleanSens ? ` - "${cleanSens}"` : '';
                             return (
                               <option key={idx} value={idx}>
-                                {formatSwimFriendly(item.fechaRegistro || item.fecha, item.horaNado)} - {BEACHES[item.playa]?.name.split(',')[0] || item.playa || 'Misericordia'}{sensPreview}
+                                {formatSwimFriendly(item.fechaNado || item.fechaRegistro || item.timestamp || item.fecha, item.horaNado)} - {BEACHES[item.playa]?.name.split(',')[0] || item.playa || 'Misericordia'}{sensPreview}
                               </option>
                             );
                           })}
@@ -8288,7 +8333,7 @@ export default function App() {
 
                           extraPastOffsets.forEach(dOff => {
                             const dDate = new Date(nowTs + dOff * 86400000);
-                            const dStr = dDate.toISOString().split('T')[0];
+                            const dStr = getIsoDateString(dDate);
                             const dPrefix = `${dayNames[dDate.getDay()]} ${dDate.getDate()}`;
 
                             const sampleHours = [8, 11, 14, 17, 20];
@@ -8296,7 +8341,7 @@ export default function App() {
                             // Incluir cualquier hora con reporte de nadador en ese día
                             const daySwimmerLogs = relevantLogs.filter(l => {
                               const lTs = parseLogTimestamp(l);
-                              return lTs > 0 && new Date(lTs).toISOString().split('T')[0] === dStr;
+                              return lTs > 0 && getIsoDateString(new Date(lTs)) === dStr;
                             });
                             daySwimmerLogs.forEach(sl => {
                               const rawH = sl.horaNado || sl.hora;
@@ -8418,8 +8463,8 @@ export default function App() {
                           const dayDates = [
                             getYesterdayIsoString(),
                             getIsoDateString(),
-                            new Date(nowTs + 86400000).toISOString().split('T')[0],
-                            new Date(nowTs + 2 * 86400000).toISOString().split('T')[0]
+                            getIsoDateString(new Date(nowTs + 86400000)),
+                            getIsoDateString(new Date(nowTs + 2 * 86400000))
                           ];
 
                           beachData.forEach((dayObj, dIdx) => {
@@ -8573,7 +8618,7 @@ export default function App() {
                               timestamp: ts,
                               isPast: ts <= nowTs,
                               label,
-                              dateStr: dObj.toISOString().split('T')[0],
+                              dateStr: getIsoDateString(dObj),
                               hourStr: hClean,
                               rawSatWave: parseFloat(rawSat.toFixed(2)),
                               ourAppWave: parseFloat(ourApp.toFixed(2)),
@@ -9335,26 +9380,26 @@ export default function App() {
                         const nowTs = Date.now();
                         const nowDate = new Date();
 
-                        // 1. Delimitar ventana temporal según crossDateFilter
+                        // 1. Delimitar ventana temporal estrictamente histórica según crossDateFilter (Cero horas a futuro)
                         let startTs = 0;
-                        let endTs = nowTs + 24 * 3600 * 1000;
+                        let endTs = nowTs;
 
                         const startOfToday = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate()).getTime();
                         if (crossDateFilter === 'today') {
                           startTs = startOfToday;
-                          endTs = startOfToday + 86400000;
+                          endTs = nowTs;
                         } else if (crossDateFilter === 'yesterday') {
                           startTs = startOfToday - 86400000;
-                          endTs = startOfToday;
+                          endTs = startOfToday - 1;
                         } else if (crossDateFilter === 'last_3d') {
                           startTs = startOfToday - 2 * 86400000;
-                          endTs = nowTs + 18 * 3600 * 1000;
+                          endTs = nowTs;
                         } else if (crossDateFilter === 'last_7d') {
                           startTs = startOfToday - 6 * 86400000;
-                          endTs = nowTs + 18 * 3600 * 1000;
+                          endTs = nowTs;
                         } else {
                           startTs = startOfToday - 14 * 86400000;
-                          endTs = nowTs + 48 * 3600 * 1000;
+                          endTs = nowTs;
                         }
 
                         // 2. Filtrar logs de calibración y reportes de nadadores
@@ -9376,7 +9421,7 @@ export default function App() {
 
                         for (let curDay = firstDayTs; curDay <= lastDayTs; curDay += dayStepMs) {
                           const dObj = new Date(curDay);
-                          const dStr = dObj.toISOString().split('T')[0];
+                          const dStr = getIsoDateString(dObj);
                           const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
                           const dayLabel = `${dayNames[dObj.getDay()]} ${dObj.getDate()}/${dObj.getMonth() + 1}`;
 
@@ -9472,7 +9517,7 @@ export default function App() {
                             let appTemp = satTemp;
                             let appWind = satWind;
 
-                            // D. Observación Real de Nadadores (Orilla) con Frente B (Detección de Descarte)
+                            // D. Observación Real de Nadadores (Orilla) con soporte Multireporte + Frente B
                             let swWave = null;
                             let swName = null;
                             let swNotes = null;
@@ -9481,7 +9526,7 @@ export default function App() {
                             let swLogId = null;
                             let isSwDiscarded = false;
 
-                            const swLog = relevantLogs.find(l => {
+                            const swLogs = relevantLogs.filter(l => {
                               const origLower = String(l.origenDato || '').toLowerCase();
                               const isSw = origLower.includes('nadador') || origLower.includes('admin') || origLower.includes('calibraci') || (l.sensaciones && String(l.sensaciones).includes('[Nombre:'));
                               if (!isSw) return false;
@@ -9489,24 +9534,47 @@ export default function App() {
                               return Math.abs(lTs - slotTs) <= 45 * 60 * 1000;
                             });
 
-                            if (swLog) {
-                              swLogId = String(swLog.idRegistro || swLog.timestamp || swLog.horaNado || swLog.fechaHora || slotIso);
-                              isSwDiscarded = discardedReportIds.includes(swLogId) || String(swLog.auditStatus || swLog.origenDato || swLog.notas || '').toUpperCase().includes("DESCARTADO");
-
-                              const rawW = swLog.realOlas || swLog.orillaOlaNadador;
-                              if (rawW) swWave = swimmerScaleToMeters(rawW);
-                              const sens = String(swLog.sensaciones || '');
+                            const swEntries = swLogs.map((sItem) => {
+                              const sId = String(sItem.idRegistro || sItem.timestamp || sItem.horaNado || sItem.fechaHora || slotIso);
+                              const sDisc = discardedReportIds.includes(sId) || String(sItem.auditStatus || sItem.origenDato || sItem.notas || '').toUpperCase().includes("DESCARTADO");
+                              const rawW = sItem.realOlas || sItem.orillaOlaNadador;
+                              const wVal = rawW ? swimmerScaleToMeters(rawW) : null;
+                              const sens = String(sItem.sensaciones || '');
                               const parsedDet = parseSwimmerSensaciones(sens);
+                              let nameVal = 'Nadador';
                               if (parsedDet.nombre && parsedDet.nombre !== 'Anónimo') {
-                                swName = parsedDet.nombre;
-                              } else if (String(swLog.origenDato || '').includes('Admin')) {
-                                swName = 'Admin';
-                              } else {
-                                swName = 'Nadador';
+                                nameVal = parsedDet.nombre;
+                              } else if (String(sItem.origenDato || '').includes('Admin')) {
+                                nameVal = 'Admin';
                               }
-                              swNotes = parsedDet.comentario || sens;
-                              if (parsedDet.medusas) swMedusas = parsedDet.medusas;
-                              if (parsedDet.agua) swAgua = parsedDet.agua;
+                              return {
+                                swLogId: sId,
+                                isSwDiscarded: sDisc,
+                                swWave: wVal,
+                                swName: nameVal,
+                                swNotes: parsedDet.comentario || sens,
+                                swMedusas: parsedDet.medusas || null,
+                                swAgua: parsedDet.agua || null
+                              };
+                            });
+
+                            const validWaveEntries = swEntries.filter(e => e.swWave !== null && !e.isSwDiscarded);
+                            const anyWaveEntries = swEntries.filter(e => e.swWave !== null);
+                            const primaryEntry = validWaveEntries[0] || anyWaveEntries[0] || swEntries[0] || null;
+
+                            if (primaryEntry) {
+                              swLogId = primaryEntry.swLogId;
+                              isSwDiscarded = validWaveEntries.length === 0 && anyWaveEntries.length > 0 && primaryEntry.isSwDiscarded;
+                              if (validWaveEntries.length > 0) {
+                                const avgW = validWaveEntries.reduce((acc, e) => acc + e.swWave, 0) / validWaveEntries.length;
+                                swWave = parseFloat(avgW.toFixed(2));
+                              } else if (anyWaveEntries.length > 0) {
+                                swWave = primaryEntry.swWave;
+                              }
+                              swName = primaryEntry.swName;
+                              swNotes = primaryEntry.swNotes;
+                              swMedusas = primaryEntry.swMedusas;
+                              swAgua = primaryEntry.swAgua;
                             }
 
                             // E. Cálculo de Desvíos, Factor Real y Filas de Oro (Excluyendo Descartados)
@@ -9565,21 +9633,22 @@ export default function App() {
                               swMedusas,
                               swAgua,
                               swLogId,
+                              swEntries,
                               isSwDiscarded,
                               isGoldRow,
                               devSatBuoy,
                               devAppSwimmer,
                               realEmpiricalFactor,
                               anomalyStatus,
-                              hasSwimmer: swWave !== null,
+                              hasSwimmer: swWave !== null || swEntries.length > 0,
                               hasBuoy: buoyWave !== null,
                               hasAnomaly: anomalyStatus === 'warning' || anomalyStatus === 'critical'
                             });
                           }
                         }
 
-                        // Ordenar cronológicamente (pasado primero)
-                        crossHourlyRows.sort((a, b) => a.slotTs - b.slotTs);
+                        // Ordenar cronológicamente (lo más reciente arriba para auditoría inmediata)
+                        crossHourlyRows.sort((a, b) => b.slotTs - a.slotTs);
 
                         // Aplicar filtros activos
                         let filteredRows = crossHourlyRows;
@@ -9847,50 +9916,62 @@ export default function App() {
                                             )}
                                           </td>
 
-                                          {/* Nadador (Orilla) con Frente B: Botón Descartar Outlier */}
+                                          {/* Nadador (Orilla) con soporte Multireporte + Frente B */}
                                           <td className="py-2 px-3">
-                                            {row.swWave !== null ? (
-                                              <div className="max-w-[190px]">
-                                                <div className="flex items-center justify-between gap-1">
-                                                  <div className="flex items-center gap-1">
-                                                    <span className={`font-black ${row.isSwDiscarded ? 'line-through text-slate-400' : 'text-emerald-700'}`}>
-                                                      {row.swWave.toFixed(2)}m
-                                                    </span>
-                                                    <span className="text-[9px] font-bold text-slate-500 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full truncate">
-                                                      {row.swName}
-                                                    </span>
-                                                  </div>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => toggleDiscardReport(row.swLogId)}
-                                                    title={row.isSwDiscarded ? "Restaurar este reporte" : "Descartar reporte por error humano / outlier"}
-                                                    className={`text-[9.5px] px-1.5 py-0.5 rounded cursor-pointer transition-all ${
-                                                      row.isSwDiscarded 
-                                                        ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 font-bold' 
-                                                        : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-                                                    }`}
-                                                  >
-                                                    {row.isSwDiscarded ? '↩️ Restaurar' : '🗑️'}
-                                                  </button>
-                                                </div>
+                                            {row.swEntries && row.swEntries.length > 0 ? (
+                                              <div className="space-y-1.5 max-w-[205px]">
+                                                {row.swEntries.map((entry, eIdx) => (
+                                                  <div key={entry.swLogId || eIdx} className={eIdx > 0 ? 'pt-1.5 border-t border-slate-100' : ''}>
+                                                    <div className="flex items-center justify-between gap-1">
+                                                      <div className="flex items-center gap-1 min-w-0">
+                                                        {entry.swWave !== null ? (
+                                                          <span className={`font-black ${entry.isSwDiscarded ? 'line-through text-slate-400' : 'text-emerald-700'}`}>
+                                                            {entry.swWave.toFixed(2)}m
+                                                          </span>
+                                                        ) : (
+                                                          <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-1 py-0.2 rounded">
+                                                            💬 Nota
+                                                          </span>
+                                                        )}
+                                                        <span className="text-[9px] font-bold text-slate-500 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full truncate">
+                                                          {entry.swName}
+                                                        </span>
+                                                      </div>
+                                                      {entry.swWave !== null && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => toggleDiscardReport(entry.swLogId)}
+                                                          title={entry.isSwDiscarded ? "Restaurar este reporte" : "Descartar reporte por error humano / outlier"}
+                                                          className={`text-[9.5px] px-1.5 py-0.5 rounded cursor-pointer transition-all shrink-0 ${
+                                                            entry.isSwDiscarded 
+                                                              ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 font-bold' 
+                                                              : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                                                          }`}
+                                                        >
+                                                          {entry.isSwDiscarded ? '↩️ Restaurar' : '🗑️'}
+                                                        </button>
+                                                      )}
+                                                    </div>
 
-                                                {row.isSwDiscarded && (
-                                                  <span className="inline-block text-[8px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.2 rounded mt-0.5">
-                                                    ⚠️ Omitido: Error Humano
-                                                  </span>
-                                                )}
+                                                    {entry.isSwDiscarded && (
+                                                      <span className="inline-block text-[8px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.2 rounded mt-0.5">
+                                                        ⚠️ Omitido: Error Humano
+                                                      </span>
+                                                    )}
 
-                                                {row.swNotes && !row.isSwDiscarded && (
-                                                  <div className="text-[9px] text-slate-500 italic truncate mt-0.5" title={row.swNotes}>
-                                                    "{row.swNotes.replace(/\[.*?\]/g, '').trim()}"
+                                                    {entry.swNotes && !entry.isSwDiscarded && (
+                                                      <div className="text-[9px] text-slate-500 italic truncate mt-0.5" title={entry.swNotes}>
+                                                        "{entry.swNotes.replace(/\[.*?\]/g, '').trim()}"
+                                                      </div>
+                                                    )}
+                                                    {(entry.swMedusas || entry.swAgua) && !entry.isSwDiscarded && entry.swMedusas !== '-' && (
+                                                      <div className="text-[8px] text-slate-400 flex gap-1 mt-0.5">
+                                                        {entry.swMedusas && <span>🪼 {entry.swMedusas}</span>}
+                                                        {entry.swAgua && <span>💧 {entry.swAgua}</span>}
+                                                      </div>
+                                                    )}
                                                   </div>
-                                                )}
-                                                {(row.swMedusas || row.swAgua) && !row.isSwDiscarded && (
-                                                  <div className="text-[8px] text-slate-400 flex gap-1 mt-0.5">
-                                                    {row.swMedusas && <span>🪼 {row.swMedusas}</span>}
-                                                    {row.swAgua && <span>💧 {row.swAgua}</span>}
-                                                  </div>
-                                                )}
+                                                ))}
                                               </div>
                                             ) : (
                                               <span className="text-slate-300 font-semibold italic text-[10px]">Sin reporte</span>
