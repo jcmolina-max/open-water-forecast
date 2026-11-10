@@ -1573,7 +1573,7 @@ function swimmerScaleToMeters(v) {
 /**
  * HITO 47: Consulta reactiva del pronóstico de la app para una playa, fecha y hora específicas
  */
-function getForecastForSlot(beachKey, dateStr, hourStr, beachData, comparisonForecast, selectedBeach) {
+function getForecastForSlot(beachKey, dateStr, hourStr, beachData, comparisonForecast, selectedBeach, cloudConfigSectores = null) {
   if (!hourStr) return null;
   const cleanH = cleanHourString(hourStr);
   const hourPrefix = cleanH.split(':')[0].padStart(2, '0');
@@ -1603,7 +1603,14 @@ function getForecastForSlot(beachKey, dateStr, hourStr, beachData, comparisonFor
     let ourWave = parseFloat(hourItem.swellH || 0.20) || 0.20;
         if (beachKey && selectedBeach && beachKey !== selectedBeach) {
       const activeSecs = cloudConfigSectores && cloudConfigSectores[beachKey]?.sectors;
-      const factorRatio = (activeSecs && activeSecs.find(s => s.id === 'levante')?.factor_suave) || ((beachKey === 'malagueta' || beachKey === 'pedregalejo') ? 0.70 : 0.70);
+      const wDirDeg = Number(hourItem.windDir ?? hourItem.swellDir ?? 110);
+      const isFuerte = Number(hourItem.windS || 6.5) >= 12.0;
+      const matchedSec = Array.isArray(activeSecs)
+        ? (activeSecs.find(s => !isNaN(wDirDeg) && s.min !== null && s.max !== null && wDirDeg >= s.min && wDirDeg <= s.max) || activeSecs.find(s => s.id === 'levante'))
+        : null;
+      const rawSecFactor = matchedSec ? (isFuerte ? matchedSec.factor_fuerte : matchedSec.factor_suave) : null;
+      const parsedSecFactor = (rawSecFactor !== null && rawSecFactor !== undefined && rawSecFactor !== '') ? Number(String(rawSecFactor).replace(',', '.').trim()) : NaN;
+      const factorRatio = !isNaN(parsedSecFactor) ? parsedSecFactor : ((beachKey === 'malagueta' || beachKey === 'pedregalejo') ? 0.70 : 0.70);
       ourWave = parseFloat((rawSat * factorRatio).toFixed(2));
     }
 
@@ -2514,8 +2521,8 @@ export default function App() {
   };
 
   // Pronóstico contextual reactivo para los formularios de reporte (Hito 47)
-  const swimmerForecast = useMemo(() => getForecastForSlot(swimmerPlaya, swimmerFechaNado, swimmerHoraNado, beachData, comparisonForecast, selectedBeach), [swimmerPlaya, swimmerFechaNado, swimmerHoraNado, beachData, comparisonForecast, selectedBeach]);
-  const adminForecast = useMemo(() => getForecastForSlot(adminPlaya, adminFechaNado, adminHoraNado, beachData, comparisonForecast, selectedBeach), [adminPlaya, adminFechaNado, adminHoraNado, beachData, comparisonForecast, selectedBeach]);
+  const swimmerForecast = useMemo(() => getForecastForSlot(swimmerPlaya, swimmerFechaNado, swimmerHoraNado, beachData, comparisonForecast, selectedBeach, cloudConfigSectores), [swimmerPlaya, swimmerFechaNado, swimmerHoraNado, beachData, comparisonForecast, selectedBeach, cloudConfigSectores]);
+  const adminForecast = useMemo(() => getForecastForSlot(adminPlaya, adminFechaNado, adminHoraNado, beachData, comparisonForecast, selectedBeach, cloudConfigSectores), [adminPlaya, adminFechaNado, adminHoraNado, beachData, comparisonForecast, selectedBeach, cloudConfigSectores]);
 
   // Telemetría activa resuelta de Boya y Estación Meteorológica (Fail-safe contra lecturas parciales / lags de publicación)
   const activeBuoyReading = useMemo(() => {
