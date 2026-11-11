@@ -2,9 +2,10 @@
 // Despachador Serverless Vercel de Notificaciones Web Push (VAPID)
 import webpush from 'web-push';
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BLrS1Zj7HbR_gN6sq9cWLgvcNOTpS5ECBGBQd65teg3VoZGRVnVvMNRvn_WRP0PsKgjKCa147lC6ZxBPskbimW4";
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:contacto@openwatertracker.es";
+const VAPID_PUBLIC_KEY = (process.env.VAPID_PUBLIC_KEY || "BBd2zgCtf2M_SnXfMy4WC6QScpQEt1R2317LqJiAWQbc19LBSIXcSsxLgRoZiNwz2ZNTw0JedEFnxuPRTVBWKh0").trim();
+// La clave privada se lee EXCLUSIVAMENTE de las variables de entorno secretas de Vercel (limpia de comillas y espacios)
+const VAPID_PRIVATE_KEY = (process.env.VAPID_PRIVATE_KEY || '').trim().replace(/^["']|["']$/g, '');
+const VAPID_SUBJECT = (process.env.VAPID_SUBJECT || "mailto:contacto@openwatertracker.es").trim();
 
 let vapidConfigured = false;
 function ensureVapidConfig() {
@@ -69,11 +70,41 @@ export default async function handler(req, res) {
     const sent = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.filter(r => r.status === 'rejected').length;
 
+    const failedDetails = [];
+    const deadEndpoints = [];
+
+    results.forEach((r, idx) => {
+      if (r.status === 'rejected') {
+        const statusCode = r.reason?.statusCode || 500;
+        const rawBody = r.reason?.body;
+        const bodyStr = typeof rawBody === 'string' ? rawBody : (rawBody ? JSON.stringify(rawBody) : '');
+        const ep = subscriptions[idx]?.endpoint || '';
+        
+        let errorDesc = `HTTP ${statusCode}`;
+        if (bodyStr) {
+          errorDesc += `: ${bodyStr}`;
+        } else if (r.reason?.message) {
+          errorDesc += `: ${r.reason.message}`;
+        }
+
+        failedDetails.push({ endpoint: ep, statusCode, error: errorDesc });
+        if (statusCode === 410 || statusCode === 404) {
+          deadEndpoints.push(ep);
+        }
+      }
+    });
+
+    if (failedDetails.length > 0) {
+      console.warn(`[Vercel SendPush] ${failed} fallos de entrega detectados:`, JSON.stringify(failedDetails));
+    }
+
     return res.status(200).json({
       success: true,
       sent,
       failed,
-      total: subscriptions.length
+      total: subscriptions.length,
+      deadEndpoints,
+      errors: failedDetails.slice(0, 10)
     });
   } catch (error) {
     console.error('Error enviando web push:', error);
